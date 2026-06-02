@@ -20,6 +20,8 @@ type Client = {
   league: string | null
   season: string | null
   logo_url: string | null
+  primary_contact_name: string | null
+  primary_contact_email: string | null
   trips: ClientTrip[]
 }
 
@@ -94,17 +96,20 @@ function LeagueBadge({ league }: { league: string | null }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
+const LEAGUES = ['NBA', 'NFL', 'MLB', 'NHL', 'WNBA', 'MLS']
+
 export default function ClientsList() {
   const [clients, setClients] = useState<Client[] | null>(null)
   const [selected, setSelected] = useState<Client | null>(null)
   const [search, setSearch] = useState('')
+  const [leagueFilter, setLeagueFilter] = useState<string>('all')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     supabase
       .from('clients')
       .select(
-        'id, team_name, league, season, logo_url, trips(id, opponent_label, arrival_date, city, status)',
+        'id, team_name, league, season, logo_url, primary_contact_name, primary_contact_email, trips(id, opponent_label, arrival_date, city, status)',
       )
       .order('team_name')
       .then(({ data, error }) => {
@@ -123,8 +128,9 @@ export default function ClientsList() {
 
   const filtered = clients.filter(
     (c) =>
-      c.team_name.toLowerCase().includes(search.toLowerCase()) ||
-      (c.league ?? '').toLowerCase().includes(search.toLowerCase()),
+      (leagueFilter === 'all' || (c.league ?? '').toUpperCase() === leagueFilter) &&
+      (c.team_name.toLowerCase().includes(search.toLowerCase()) ||
+        (c.league ?? '').toLowerCase().includes(search.toLowerCase())),
   )
 
   const totalTrips = clients.reduce((n, c) => n + c.trips.length, 0)
@@ -173,7 +179,7 @@ export default function ClientsList() {
           {/* Left — client list */}
           <div className="flex w-72 shrink-0 flex-col border-r border-slate-200">
             {/* Search */}
-            <div className="border-b border-slate-200 px-4 py-3">
+            <div className="border-b border-slate-200 px-4 py-3 space-y-2">
               <input
                 type="text"
                 placeholder="Search teams..."
@@ -181,6 +187,16 @@ export default function ClientsList() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm placeholder-slate-400 focus:border-[#1C1008]/30 focus:outline-none focus:ring-1 focus:ring-[#1C1008]/20"
               />
+              <select
+                value={leagueFilter}
+                onChange={(e) => setLeagueFilter(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 focus:border-[#1C1008]/30 focus:outline-none focus:ring-1 focus:ring-[#1C1008]/20"
+              >
+                <option value="all">All leagues</option>
+                {LEAGUES.map((l) => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
             </div>
 
             {/* List */}
@@ -218,6 +234,12 @@ export default function ClientsList() {
                             <span className="text-xs text-slate-400">{c.season}</span>
                           )}
                         </div>
+                        {c.primary_contact_name && (
+                          <p className="mt-0.5 truncate text-xs text-slate-400">
+                            {c.primary_contact_name}
+                            {c.primary_contact_email && ` · ${c.primary_contact_email}`}
+                          </p>
+                        )}
                       </div>
                       <div className="shrink-0 text-right">
                         {active > 0 ? (

@@ -14,6 +14,12 @@ type Hotel = {
   notes: string | null
 }
 
+type HotelNote = {
+  id: string
+  note: string
+  created_at: string
+}
+
 type TripUsage = {
   id: string
   opponent_label: string | null
@@ -22,6 +28,8 @@ type TripUsage = {
   status: string
   clients: { team_name: string } | null
 }
+
+type SortBy = 'brand' | 'city' | 'name'
 
 // Chain color avatars (fallback when no logo)
 const CHAIN_COLORS: Record<string, { bg: string; text: string; initials: string }> = {
@@ -243,6 +251,24 @@ function HotelDetail({
 }) {
   const [trips, setTrips] = useState<TripUsage[]>([])
   const [loadingTrips, setLoadingTrips] = useState(true)
+  const [hotelNotes, setHotelNotes] = useState<HotelNote[]>([])
+  const [loadingNotes, setLoadingNotes] = useState(true)
+  const [showAddNote, setShowAddNote] = useState(false)
+  const [newNote, setNewNote] = useState('')
+  const [savingNote, setSavingNote] = useState(false)
+
+  const loadNotes = () => {
+    setLoadingNotes(true)
+    supabase
+      .from('hotel_notes')
+      .select('id, note, created_at')
+      .eq('hotel_id', hotel.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        setHotelNotes((data as HotelNote[]) ?? [])
+        setLoadingNotes(false)
+      })
+  }
 
   useEffect(() => {
     setLoadingTrips(true)
@@ -260,7 +286,32 @@ function HotelDetail({
         setTrips(unique)
         setLoadingTrips(false)
       })
+    loadNotes()
   }, [hotel.id, hotel.name])
+
+  const saveNote = async () => {
+    if (!newNote.trim()) return
+    setSavingNote(true)
+    const { data: profile } = await supabase.from('profiles').select('id').single()
+    await supabase.from('hotel_notes').insert({
+      hotel_id: hotel.id,
+      note: newNote.trim(),
+      created_by: profile?.id ?? null,
+    })
+    setSavingNote(false)
+    setNewNote('')
+    setShowAddNote(false)
+    loadNotes()
+  }
+
+  const deleteNote = async (noteId: string) => {
+    if (!confirm('Delete this note?')) return
+    await supabase.from('hotel_notes').delete().eq('id', noteId)
+    loadNotes()
+  }
+
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -324,13 +375,89 @@ function HotelDetail({
           )}
         </div>
 
-        {/* Notes */}
+        {/* Notes (general) */}
         {hotel.notes && (
           <div className="px-6 py-5">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Notes</h3>
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">General Notes</h3>
             <p className="text-sm text-slate-600">{hotel.notes}</p>
           </div>
         )}
+
+        {/* Issues & Notes log */}
+        <div className="px-6 py-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Issues &amp; Notes
+              {hotelNotes.length > 0 && (
+                <span className="ml-2 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 normal-case">
+                  {hotelNotes.length}
+                </span>
+              )}
+            </h3>
+            {!showAddNote && (
+              <button
+                onClick={() => setShowAddNote(true)}
+                className="text-xs font-medium text-[#1C1008] hover:underline transition-colors"
+              >
+                + Add note
+              </button>
+            )}
+          </div>
+
+          {/* Add note form */}
+          {showAddNote && (
+            <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <textarea
+                autoFocus
+                className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008] resize-none"
+                rows={3}
+                placeholder="Describe what happened — e.g. room shortage, billing dispute, late checkout issue…"
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+              />
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={saveNote}
+                  disabled={savingNote || !newNote.trim()}
+                  className="rounded bg-[#1C1008] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#2d1e0e] disabled:opacity-50"
+                >
+                  {savingNote ? 'Saving…' : 'Save note'}
+                </button>
+                <button
+                  onClick={() => { setShowAddNote(false); setNewNote('') }}
+                  className="rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-500 hover:bg-white"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Notes timeline */}
+          {loadingNotes ? (
+            <p className="text-xs text-slate-400">Loading…</p>
+          ) : hotelNotes.length === 0 ? (
+            <p className="text-xs text-slate-400">No issues or notes logged yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {hotelNotes.map((n) => (
+                <div key={n.id} className="relative pl-4 before:absolute before:left-1 before:top-2 before:h-1.5 before:w-1.5 before:rounded-full before:bg-amber-400">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm text-slate-700 leading-snug">{n.note}</p>
+                    <button
+                      onClick={() => deleteNote(n.id)}
+                      className="shrink-0 text-xs text-slate-300 hover:text-red-400 transition-colors"
+                      title="Delete note"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-slate-400">{fmtDate(n.created_at)}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Trip history */}
         <div className="px-6 py-5">
@@ -372,6 +499,7 @@ export default function HotelsList() {
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [mode, setMode] = useState<'view' | 'add' | 'edit'>('view')
+  const [sortBy, setSortBy] = useState<SortBy>('brand')
 
   const load = () => {
     supabase.from('hotels').select('*').order('name')
@@ -438,17 +566,67 @@ export default function HotelsList() {
             />
           </div>
 
-          {/* Grouped list */}
+          {/* Sort toggle */}
+          <div className="flex items-center gap-1 border-b border-slate-100 px-3 py-2">
+            <span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Sort:</span>
+            {(['brand', 'city', 'name'] as SortBy[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => setSortBy(s)}
+                className={`rounded px-2 py-0.5 text-xs font-medium transition-colors capitalize ${
+                  sortBy === s
+                    ? 'bg-[#1C1008] text-white'
+                    : 'text-slate-500 hover:bg-slate-100'
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+
+          {/* Hotel list */}
           <div className="flex-1 overflow-y-auto">
             {filtered.length === 0 && (
               <p className="px-4 py-6 text-center text-xs text-slate-400">No hotels found.</p>
             )}
-            {sortedChains.map(([chain, chainHotels]) => (
-              <div key={chain}>
-                <div className="sticky top-0 bg-slate-50 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-100">
-                  {chain}
+
+            {sortBy === 'brand' ? (
+              /* Grouped by chain */
+              sortedChains.map(([chain, chainHotels]) => (
+                <div key={chain}>
+                  <div className="sticky top-0 bg-slate-50 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-100">
+                    {chain}
+                  </div>
+                  {chainHotels.map((hotel) => {
+                    const isSelected = hotel.id === selectedId && mode !== 'add'
+                    return (
+                      <button
+                        key={hotel.id}
+                        onClick={() => { setSelectedId(hotel.id); setMode('view') }}
+                        className={`flex w-full items-center gap-3 border-b border-slate-50 px-4 py-3 text-left transition-colors ${
+                          isSelected ? 'bg-slate-100' : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <HotelAvatar chain={hotel.chain} name={hotel.name} logoUrl={hotel.logo_url} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-slate-800">{hotel.name}</p>
+                          <p className="truncate text-xs text-slate-400">{hotel.city ?? '—'}</p>
+                        </div>
+                        {isSelected && <span className="text-slate-300 shrink-0">›</span>}
+                      </button>
+                    )
+                  })}
                 </div>
-                {chainHotels.map((hotel) => {
+              ))
+            ) : (
+              /* Flat list sorted by city or name */
+              [...filtered]
+                .sort((a, b) => {
+                  const va = sortBy === 'city' ? (a.city ?? '') : a.name
+                  const vb = sortBy === 'city' ? (b.city ?? '') : b.name
+                  return va.localeCompare(vb)
+                })
+                .map((hotel) => {
                   const isSelected = hotel.id === selectedId && mode !== 'add'
                   return (
                     <button
@@ -461,14 +639,17 @@ export default function HotelsList() {
                       <HotelAvatar chain={hotel.chain} name={hotel.name} logoUrl={hotel.logo_url} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-slate-800">{hotel.name}</p>
-                        <p className="truncate text-xs text-slate-400">{hotel.city ?? '—'}</p>
+                        <p className="truncate text-xs text-slate-400">
+                          {sortBy === 'city'
+                            ? (hotel.city ?? '—')
+                            : [hotel.chain, hotel.city].filter(Boolean).join(' · ') || '—'}
+                        </p>
                       </div>
                       {isSelected && <span className="text-slate-300 shrink-0">›</span>}
                     </button>
                   )
-                })}
-              </div>
-            ))}
+                })
+            )}
           </div>
         </div>
 
