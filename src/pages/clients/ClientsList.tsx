@@ -21,7 +21,9 @@ type Client = {
   season: string | null
   logo_url: string | null
   primary_contact_name: string | null
+  primary_contact_title: string | null
   primary_contact_email: string | null
+  primary_contact_phone: string | null
   trips: ClientTrip[]
 }
 
@@ -109,7 +111,7 @@ export default function ClientsList() {
     supabase
       .from('clients')
       .select(
-        'id, team_name, league, season, logo_url, primary_contact_name, primary_contact_email, trips(id, opponent_label, arrival_date, city, status)',
+        'id, team_name, league, season, logo_url, primary_contact_name, primary_contact_title, primary_contact_email, primary_contact_phone, trips(id, opponent_label, arrival_date, city, status)',
       )
       .order('team_name')
       .then(({ data, error }) => {
@@ -319,6 +321,65 @@ export default function ClientsList() {
                   ))}
                 </div>
               </div>
+
+              {/* Primary contact card */}
+              {(selected.primary_contact_name || selected.primary_contact_email) && (
+                <div className="border-b border-slate-200 px-6 py-5">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Primary Contact
+                  </h3>
+                  <div className="flex items-start gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+                    {/* Avatar */}
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1C1008] text-sm font-bold text-white">
+                      {(selected.primary_contact_name ?? '?')
+                        .split(' ')
+                        .slice(0, 2)
+                        .map((w) => w[0] ?? '')
+                        .join('')
+                        .toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      {selected.primary_contact_name && (
+                        <p className="text-sm font-semibold text-slate-900">
+                          {selected.primary_contact_name}
+                        </p>
+                      )}
+                      {selected.primary_contact_title && (
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {selected.primary_contact_title}
+                        </p>
+                      )}
+                      <div className="mt-2 flex flex-col gap-1">
+                        {selected.primary_contact_email && (
+                          <a
+                            href={`mailto:${selected.primary_contact_email}`}
+                            className="flex items-center gap-1.5 text-xs text-[#1C1008] hover:underline"
+                          >
+                            <span>✉</span>
+                            {selected.primary_contact_email}
+                          </a>
+                        )}
+                        {selected.primary_contact_phone && (
+                          <a
+                            href={`tel:${selected.primary_contact_phone}`}
+                            className="flex items-center gap-1.5 text-xs text-slate-600 hover:underline"
+                          >
+                            <span>📞</span>
+                            {selected.primary_contact_phone}
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                    <Link
+                      to={`/clients/${selected.id}/edit`}
+                      className="shrink-0 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                      title="Edit contact info"
+                    >
+                      ✎
+                    </Link>
+                  </div>
+                </div>
+              )}
 
               {/* Trips list */}
               <div className="px-6 py-5">
