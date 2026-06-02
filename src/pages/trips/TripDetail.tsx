@@ -189,6 +189,7 @@ function HotelPanel({
   onSendEmail,
   onMarkUnavailable,
   onCopyLink,
+  onContactUpdated,
   sendingEmail,
   emailFlash,
   copied,
@@ -199,6 +200,7 @@ function HotelPanel({
   onSendEmail: (inv: Invitation) => void
   onMarkUnavailable: (inv: Invitation) => void
   onCopyLink: (token: string) => void
+  onContactUpdated: (id: string, name: string | null, email: string | null) => void
   sendingEmail: string | null
   emailFlash: string | null
   copied: string | null
@@ -221,14 +223,16 @@ function HotelPanel({
 
   const saveContact = async () => {
     setSavingContact(true)
+    const newName = editName.trim() || null
+    const newEmail = editEmail.trim() || null
     await supabase.from('rfp_invitations').update({
-      hotel_contact_name: editName.trim() || null,
-      hotel_contact_email: editEmail.trim() || null,
+      hotel_contact_name: newName,
+      hotel_contact_email: newEmail,
     }).eq('id', inv.id)
     setSavingContact(false)
     setEditingContact(false)
-    // Reload the page data so the parent state updates
-    window.location.reload()
+    // Update parent state in-place — no page reload needed
+    onContactUpdated(inv.id, newName, newEmail)
   }
 
   useEffect(() => {
@@ -786,6 +790,15 @@ export default function TripDetail() {
               onSendEmail={sendEmail}
               onMarkUnavailable={markUnavailable}
               onCopyLink={copyLink}
+              onContactUpdated={(id, name, email) => {
+                setInvites((prev) =>
+                  prev?.map((i) =>
+                    i.id === id
+                      ? { ...i, hotel_contact_name: name, hotel_contact_email: email }
+                      : i
+                  ) ?? prev
+                )
+              }}
               sendingEmail={sendingEmail}
               emailFlash={emailFlash}
               copied={copied}
