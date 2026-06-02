@@ -132,26 +132,24 @@ export default function TemplateEditor() {
   const [adding, setAdding] = useState(false)
 
   useEffect(() => {
+    // Fetch org ID (needed for inserts) and items in parallel.
+    // Item loading does NOT gate on the profiles lookup —
+    // RLS already filters concession_items to the current org automatically.
     supabase
       .from('profiles')
       .select('organization_id')
       .single()
       .then(({ data }) => {
-        if (data?.organization_id) {
-          setOrgId(data.organization_id)
-          loadItems(data.organization_id)
-        } else {
-          setLoading(false)
-        }
+        if (data?.organization_id) setOrgId(data.organization_id)
       })
+    loadItems()
   }, [])
 
-  const loadItems = async (oid: string) => {
+  const loadItems = async () => {
     setLoading(true)
     const { data, error } = await supabase
       .from('concession_items')
       .select('id, sort_order, section, label, answer_type, requested_value, allow_comment')
-      .eq('organization_id', oid)
       .eq('archived', false)
       .order('sort_order')
     if (error) setError(error.message)
