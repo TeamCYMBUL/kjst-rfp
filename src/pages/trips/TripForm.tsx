@@ -1,0 +1,434 @@
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { supabase } from '../../lib/supabase'
+import type { Client, DefaultTerms, Trip, TripStatus } from '../../lib/types'
+import { nightsBetween } from '../../lib/format'
+import {
+  Button,
+  Card,
+  ErrorNote,
+  Loading,
+  PageHeader,
+  Select,
+  TextField,
+} from '../../components/ui'
+
+const blank = {
+  client_id: '',
+  city: '',
+  opponent_label: '',
+  arrival_date: '',
+  departure_date: '',
+  game_date: '',
+  game_time: '',
+  stay2_arrival_date: '',
+  stay2_departure_date: '',
+  stay2_game_date: '',
+  stay2_game_time: '',
+  king_rooms_requested: '',
+  suites_requested: '',
+  total_rooms_requested: '',
+  in_season_tournament_window: '',
+  postseason_window: '',
+  postseason_rooms_text: '',
+  status: 'draft' as TripStatus,
+  response_deadline: '',
+}
+
+type FormState = typeof blank
+
+function numOrNull(v: string): number | null {
+  if (v.trim() === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+export default function TripForm() {
+  const { id } = useParams()
+  const editing = Boolean(id)
+  const navigate = useNavigate()
+  const [search] = useSearchParams()
+  const presetClient = search.get('client') ?? ''
+
+  const [clients, setClients] = useState<Pick<Client, 'id' | 'team_name' | 'default_terms'>[]>([])
+  const [fields, setFields] = useState<FormState>({ ...blank, client_id: presetClient })
+  const [showStay2, setShowStay2] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Load the client list (for the selector and for default-term pre-fill).
+  useEffect(() => {
+    supabase
+      .from('clients')
+      .select('id, team_name, default_terms')
+      .order('team_name')
+      .then(({ data, error }) => {
+        if (error) setError(error.message)
+        else setClients(data as Pick<Client, 'id' | 'team_name' | 'default_terms'>[])
+        if (!editing) setLoading(false)
+      })
+  }, [editing])
+
+  // When editing, load the existing trip.
+  useEffect(() => {
+    if (!editing) return
+    supabase
+      .from('trips')
+      .select('*')
+      .eq('id', id)
+      .single()
+      .then(({ data, error }) => {
+        if (error) {
+          setError(error.message)
+        } else if (data) {
+          const t = data as Trip
+          if (t.stay2_arrival_date) setShowStay2(true)
+          setFields({
+            client_id: t.client_id,
+            city: t.city ?? '',
+            opponent_label: t.opponent_label ?? '',
+            arrival_date: t.arrival_date ?? '',
+            departure_date: t.departure_date ?? '',
+            game_date: t.game_date ?? '',
+            game_time: t.game_time ?? '',
+            stay2_arrival_date: t.stay2_arrival_date ?? '',
+            stay2_departure_date: t.stay2_departure_date ?? '',
+            stay2_game_date: t.stay2_game_date ?? '',
+            stay2_game_time: t.stay2_game_time ?? '',
+            king_rooms_requested: t.king_rooms_requested?.toString() ?? '',
+            suites_requested: t.suites_requested?.toString() ?? '',
+            total_rooms_requested: t.total_rooms_requested?.toString() ?? '',
+            in_season_tournament_window: t.in_season_tournament_window ?? '',
+            postseason_window: t.postseason_window ?? '',
+            postseason_rooms_text: t.postseason_rooms_text ?? '',
+            status: t.status,
+            response_deadline: t.response_deadline ?? '',
+          })
+        }
+        setLoading(false)
+      })
+  }, [editing, id])
+
+  // Pre-fill room counts / windows from the chosen client's default_terms.
+  // Only applies for NEW trips and only fills blanks (never clobbers typing).
+  const applyDefaults = (clientId: string) => {
+    const client = clients.find((c) => c.id === clientId)
+    const terms: DefaultTerms = client?.default_terms ?? {}
+    setFields((f) => ({
+      ...f,
+      client_id: clientId,
+      king_rooms_requested:
+        f.king_rooms_requested ||
+        (terms.default_king_rooms != null ? String(terms.default_king_rooms) : ''),
+      suites_requested:
+        f.suites_requested || (terms.default_suites != null ? String(terms.default_suites) : ''),
+      total_rooms_requested:
+        f.total_rooms_requested ||
+        (terms.default_total_rooms != null ? String(terms.default_total_rooms) : ''),
+      in_season_tournament_window:
+        f.in_season_tournament_window || terms.in_season_tournament_window || '',
+      postseason_window: f.postseason_window || terms.postseason_window || '',
+      postseason_rooms_text: f.postseason_rooms_text || terms.postseason_rooms_text || '',
+    }))
+  }
+
+  // Apply defaults once the client list arrives, when a client is preset via URL.
+  useEffect(() => {
+    if (!editing && presetClient && clients.length) applyDefaults(presetClient)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clients, editing, presetClient])
+
+  const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setFields((f) => ({ ...f, [k]: e.target.value }))
+
+  const nights = useMemo(
+    () => nightsBetween(fields.arrival_date, fields.departure_date),
+    [fields.arrival_date, fields.departure_date],
+  )
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!fields.client_id) {
+      setError('Please choose a client.')
+      return
+    }
+    setSaving(true)
+    setError(null)
+
+    const clean = (v: string) => (v.trim() === '' ? null : v.trim())
+    const payload = {
+      client_id: fields.client_id,
+      city: clean(fields.city),
+      opponent_label: clean(fields.opponent_label),
+      arrival_date: clean(fields.arrival_date),
+      departure_date: clean(fields.departure_date),
+      nights,
+      game_date: clean(fields.game_date),
+      game_time: clean(fields.game_time),
+      stay2_arrival_date: clean(fields.stay2_arrival_date),
+      stay2_departure_date: clean(fields.stay2_departure_date),
+      stay2_game_date: clean(fields.stay2_game_date),
+      stay2_game_time: clean(fields.stay2_game_time),
+      king_rooms_requested: numOrNull(fields.king_rooms_requested),
+      suites_requested: numOrNull(fields.suites_requested),
+      total_rooms_requested: numOrNull(fields.total_rooms_requested),
+      in_season_tournament_window: clean(fields.in_season_tournament_window),
+      postseason_window: clean(fields.postseason_window),
+      postseason_rooms_text: clean(fields.postseason_rooms_text),
+      status: fields.status,
+      response_deadline: clean(fields.response_deadline),
+    }
+
+    if (editing) {
+      const { error } = await supabase.from('trips').update(payload).eq('id', id)
+      if (error) {
+        setError(error.message)
+        setSaving(false)
+        return
+      }
+      navigate(`/trips/${id}`)
+    } else {
+      const { data, error } = await supabase.from('trips').insert(payload).select('id').single()
+      if (error) {
+        setError(error.message)
+        setSaving(false)
+        return
+      }
+      navigate(`/trips/${data!.id}`)
+    }
+  }
+
+  if (loading) return <Loading />
+
+  return (
+    <div>
+      <PageHeader
+        title={editing ? 'Edit Trip' : 'New Trip'}
+        subtitle="A road trip KJST is running a hotel RFP for."
+      />
+
+      {error && (
+        <div className="mb-4">
+          <ErrorNote message={error} />
+        </div>
+      )}
+
+      <form onSubmit={save} className="space-y-6">
+        <Card className="p-6">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Trip
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Select
+              label="Client"
+              value={fields.client_id}
+              onChange={(e) =>
+                editing
+                  ? setFields((f) => ({ ...f, client_id: e.target.value }))
+                  : applyDefaults(e.target.value)
+              }
+              required
+            >
+              <option value="">Choose a client…</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.team_name}
+                </option>
+              ))}
+            </Select>
+            <TextField
+              label="Opponent"
+              hint="e.g. at Boston Celtics"
+              value={fields.opponent_label}
+              onChange={set('opponent_label')}
+            />
+            <TextField label="City" value={fields.city} onChange={set('city')} />
+            <Select
+              label="Status"
+              value={fields.status}
+              onChange={(e) =>
+                setFields((f) => ({ ...f, status: e.target.value as TripStatus }))
+              }
+            >
+              <option value="draft">Draft</option>
+              <option value="sent">Sent</option>
+              <option value="collecting">Collecting</option>
+              <option value="closed">Closed</option>
+            </Select>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
+            {fields.stay2_arrival_date ? 'Stay 1' : 'Dates'}
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField
+              label="Arrival date"
+              type="date"
+              value={fields.arrival_date}
+              onChange={set('arrival_date')}
+            />
+            <TextField
+              label="Departure date"
+              type="date"
+              value={fields.departure_date}
+              onChange={set('departure_date')}
+              hint={nights != null ? `${nights} night${nights === 1 ? '' : 's'}` : undefined}
+            />
+            <TextField
+              label="Game date"
+              type="date"
+              value={fields.game_date}
+              onChange={set('game_date')}
+            />
+            <TextField
+              label="Game time"
+              value={fields.game_time}
+              onChange={set('game_time')}
+              hint="e.g. 7:30 PM"
+            />
+            <TextField
+              label="Response deadline"
+              type="date"
+              value={fields.response_deadline}
+              onChange={set('response_deadline')}
+            />
+          </div>
+        </Card>
+
+        {/* Second Stay */}
+        <Card className="p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              Stay 2 <span className="ml-1 font-normal normal-case text-slate-400">(optional — same city, different dates)</span>
+            </h2>
+            {showStay2 ? (
+              <button
+                type="button"
+                className="text-xs text-red-400 hover:text-red-600 hover:underline"
+                onClick={() => {
+                  setShowStay2(false)
+                  setFields((f) => ({
+                    ...f,
+                    stay2_arrival_date: '',
+                    stay2_departure_date: '',
+                    stay2_game_date: '',
+                    stay2_game_time: '',
+                  }))
+                }}
+              >
+                Remove stay 2
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="text-xs font-medium text-[#1C1008] hover:underline"
+                onClick={() => setShowStay2(true)}
+              >
+                + Add second stay
+              </button>
+            )}
+          </div>
+          {showStay2 ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextField
+                label="Arrival date (stay 2)"
+                type="date"
+                value={fields.stay2_arrival_date}
+                onChange={set('stay2_arrival_date')}
+              />
+              <TextField
+                label="Departure date (stay 2)"
+                type="date"
+                value={fields.stay2_departure_date}
+                onChange={set('stay2_departure_date')}
+              />
+              <TextField
+                label="Game date (stay 2)"
+                type="date"
+                value={fields.stay2_game_date}
+                onChange={set('stay2_game_date')}
+              />
+              <TextField
+                label="Game time (stay 2)"
+                value={fields.stay2_game_time}
+                onChange={set('stay2_game_time')}
+                hint="e.g. 7:30 PM"
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400">
+              Use this when the same RFP covers two separate visits to the same city — e.g. Atlanta #1 in November and Atlanta #2 in April.
+            </p>
+          )}
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Rooms requested
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <TextField
+              label="King rooms"
+              type="number"
+              value={fields.king_rooms_requested}
+              onChange={set('king_rooms_requested')}
+            />
+            <TextField
+              label="Suites"
+              type="number"
+              value={fields.suites_requested}
+              onChange={set('suites_requested')}
+            />
+            <TextField
+              label="Total rooms"
+              type="number"
+              value={fields.total_rooms_requested}
+              onChange={set('total_rooms_requested')}
+            />
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Special windows
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField
+              label="In-season tournament window"
+              value={fields.in_season_tournament_window}
+              onChange={set('in_season_tournament_window')}
+            />
+            <TextField
+              label="Postseason window"
+              value={fields.postseason_window}
+              onChange={set('postseason_window')}
+            />
+            <div className="sm:col-span-2">
+              <TextField
+                label="Postseason rooms"
+                value={fields.postseason_rooms_text}
+                onChange={set('postseason_rooms_text')}
+              />
+            </div>
+          </div>
+        </Card>
+
+        <div className="flex items-center gap-3">
+          <Button type="submit" disabled={saving}>
+            {saving ? 'Saving…' : editing ? 'Save changes' : 'Create trip'}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => navigate(editing ? `/trips/${id}` : '/trips')}
+          >
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </div>
+  )
+}

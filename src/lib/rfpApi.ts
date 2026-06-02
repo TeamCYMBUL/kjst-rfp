@@ -1,0 +1,137 @@
+// Typed wrappers for the two hotel-facing Edge Functions.
+// These are called by unauthenticated hotel users — no Supabase client needed.
+
+const BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
+
+// ── Shape returned by rfp-get ─────────────────────────────────────────────────
+
+export type RfpTrip = {
+  id: string
+  city: string | null
+  opponent_label: string | null
+  arrival_date: string | null
+  departure_date: string | null
+  nights: number | null
+  game_date: string | null
+  game_time: string | null
+  // Second stay
+  stay2_arrival_date: string | null
+  stay2_departure_date: string | null
+  stay2_game_date: string | null
+  stay2_game_time: string | null
+  king_rooms_requested: number | null
+  suites_requested: number | null
+  total_rooms_requested: number | null
+  in_season_tournament_window: string | null
+  postseason_window: string | null
+  postseason_rooms_text: string | null
+  response_deadline: string | null
+}
+
+export type RfpClient = {
+  id: string
+  team_name: string
+  league: string | null
+}
+
+export type RfpInvitation = {
+  id: string
+  hotel_name: string
+  hotel_contact_name: string | null
+  hotel_contact_email: string | null
+  status: string
+  submitted_at: string | null
+  trips: RfpTrip & { clients: RfpClient }
+}
+
+export type ConcessionItem = {
+  id: string
+  sort_order: number
+  section: 'concessions' | 'facilities' | 'in_season_tournament' | 'postseason'
+  label: string
+  answer_type: 'yes_no' | 'percent' | 'quantity' | 'currency' | 'text'
+  requested_value: string | null
+  allow_comment: boolean
+}
+
+export type ExistingResponse = {
+  id: string
+  completed_by_name: string | null
+  completed_date: string | null
+  best_king_rate: number | null
+  king_rate_notes: string | null
+  current_selling_rate: string | null
+  best_suite_rate: number | null
+  occupancy_tax: string | null
+  meeting_space_notes: string | null
+  general_comments: string | null
+  // Second stay rates
+  stay2_king_rate: number | null
+  stay2_suite_rate: number | null
+  stay2_selling_rate: string | null
+}
+
+export type ExistingAnswer = {
+  id: string
+  concession_item_id: string
+  answer_yes_no: boolean | null
+  answer_value: string | null
+  comment: string | null
+}
+
+export type RfpData = {
+  invitation: RfpInvitation
+  items: ConcessionItem[]
+  response: ExistingResponse | null
+  answers: ExistingAnswer[]
+}
+
+// ── Payloads sent to rfp-respond ──────────────────────────────────────────────
+
+export type ResponseFields = {
+  completed_by_name: string
+  completed_date: string
+  best_king_rate: number | null
+  king_rate_notes: string
+  current_selling_rate: string
+  best_suite_rate: number | null
+  occupancy_tax: string
+  meeting_space_notes: string
+  general_comments: string
+  // Second stay rates (null when trip has only one stay)
+  stay2_king_rate: number | null
+  stay2_suite_rate: number | null
+  stay2_selling_rate: string
+}
+
+export type AnswerPayload = {
+  concession_item_id: string
+  answer_yes_no: boolean | null
+  answer_value: string | null
+  comment: string | null
+}
+
+// ── API calls ─────────────────────────────────────────────────────────────────
+
+export async function getRfp(token: string): Promise<RfpData> {
+  const res = await fetch(`${BASE}/rfp-get?token=${encodeURIComponent(token)}`)
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error ?? 'Failed to load RFP')
+  return data as RfpData
+}
+
+export async function respondRfp(args: {
+  token: string
+  response: ResponseFields
+  answers: AnswerPayload[]
+  submit: boolean
+}): Promise<{ ok: boolean; response_id: string; submitted: boolean }> {
+  const res = await fetch(`${BASE}/rfp-respond`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(args),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error ?? 'Failed to save')
+  return data
+}
