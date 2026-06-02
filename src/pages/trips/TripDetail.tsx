@@ -207,6 +207,30 @@ function HotelPanel({
   const [answers, setAnswers] = useState<Answer[]>([])
   const [loadingBid, setLoadingBid] = useState(false)
 
+  // Inline contact editing
+  const [editingContact, setEditingContact] = useState(false)
+  const [editName, setEditName] = useState(inv.hotel_contact_name ?? '')
+  const [editEmail, setEditEmail] = useState(inv.hotel_contact_email ?? '')
+  const [savingContact, setSavingContact] = useState(false)
+
+  useEffect(() => {
+    setEditName(inv.hotel_contact_name ?? '')
+    setEditEmail(inv.hotel_contact_email ?? '')
+    setEditingContact(false)
+  }, [inv.id, inv.hotel_contact_name, inv.hotel_contact_email])
+
+  const saveContact = async () => {
+    setSavingContact(true)
+    await supabase.from('rfp_invitations').update({
+      hotel_contact_name: editName.trim() || null,
+      hotel_contact_email: editEmail.trim() || null,
+    }).eq('id', inv.id)
+    setSavingContact(false)
+    setEditingContact(false)
+    // Reload the page data so the parent state updates
+    window.location.reload()
+  }
+
   useEffect(() => {
     if (!['submitted', 'awarded'].includes(inv.status)) { setResponse(null); setAnswers([]); return }
     setLoadingBid(true)
@@ -246,10 +270,43 @@ function HotelPanel({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">{inv.hotel_name}</h2>
-            {(inv.hotel_contact_name || inv.hotel_contact_email) && (
-              <p className="mt-0.5 text-sm text-slate-500">
-                {[inv.hotel_contact_name, inv.hotel_contact_email].filter(Boolean).join(' · ')}
-              </p>
+            {editingContact ? (
+              <div className="mt-1.5 flex flex-col gap-1.5">
+                <input
+                  className="rounded border border-slate-300 px-2 py-1 text-sm focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008]"
+                  placeholder="Contact name"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                />
+                <input
+                  type="email"
+                  className="rounded border border-slate-300 px-2 py-1 text-sm focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008]"
+                  placeholder="Contact email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <button onClick={saveContact} disabled={savingContact}
+                    className="rounded bg-[#1C1008] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#2d1e0e] disabled:opacity-50">
+                    {savingContact ? 'Saving…' : 'Save'}
+                  </button>
+                  <button onClick={() => setEditingContact(false)}
+                    className="rounded border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:bg-slate-50">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-0.5 flex items-center gap-2">
+                <p className="text-sm text-slate-500">
+                  {[inv.hotel_contact_name, inv.hotel_contact_email].filter(Boolean).join(' · ') || <span className="italic text-slate-400">No contact info</span>}
+                </p>
+                <button onClick={() => setEditingContact(true)}
+                  className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                  title="Edit contact">
+                  ✎
+                </button>
+              </div>
             )}
             {inv.sent_at && (
               <p className="mt-0.5 text-xs text-slate-400">Emailed {formatDate(inv.sent_at)}</p>
