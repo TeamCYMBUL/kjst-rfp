@@ -134,6 +134,20 @@ export default function DashboardLayout() {
             <span className="mr-2">🏨</span>Hotels
           </NavLink>
 
+          {/* RFP Template */}
+          <NavLink
+            to="/template"
+            className={({ isActive }) =>
+              `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-white/15 text-white'
+                  : 'text-white/60 hover:bg-white/10 hover:text-white'
+              }`
+            }
+          >
+            <span className="mr-2">📋</span>RFP Template
+          </NavLink>
+
           {/* Team — admin only */}
           {isAdmin && (
             <NavLink
