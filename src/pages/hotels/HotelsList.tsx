@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { Loading, ErrorNote } from '../../components/ui'
 
@@ -471,7 +472,7 @@ function HotelDetail({
           ) : (
             <div className="space-y-2">
               {trips.map((t) => (
-                <a key={t.id} href={`/trips/${t.id}`}
+                <Link key={t.id} to={`/trips/${t.id}`}
                   className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50 transition-colors">
                   <div>
                     <p className="text-sm font-medium text-slate-800">{t.opponent_label || 'Untitled trip'}</p>
@@ -480,7 +481,7 @@ function HotelDetail({
                     </p>
                   </div>
                   <span className="text-xs text-slate-400">{t.arrival_date?.slice(0, 7) ?? ''}</span>
-                </a>
+                </Link>
               ))}
             </div>
           )}
