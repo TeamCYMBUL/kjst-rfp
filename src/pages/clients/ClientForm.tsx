@@ -153,7 +153,6 @@ export default function ClientForm() {
       assigned_to: fields.assigned_to || null,
       default_terms: {
         agreement_status: clean(terms.agreement_status ?? '') ?? undefined,
-        commission_pct: clean(terms.commission_pct ?? '') ?? undefined,
         attrition_pct: clean(terms.attrition_pct ?? '') ?? undefined,
         guarantee_language: clean(terms.guarantee_language ?? '') ?? undefined,
         default_king_rooms: numOrNull(String(terms.default_king_rooms ?? '')),
@@ -257,7 +256,22 @@ export default function ClientForm() {
               value={fields.legal_entity}
               onChange={set('legal_entity')}
             />
-            <TextField label="League" value={fields.league} onChange={set('league')} />
+            <Select
+              label="League"
+              value={fields.league}
+              onChange={(e) => setFields((f) => ({ ...f, league: e.target.value }))}
+            >
+              <option value="">—</option>
+              <option value="NBA">NBA</option>
+              <option value="MLB">MLB</option>
+              <option value="NFL">NFL</option>
+              <option value="NHL">NHL</option>
+              <option value="MLS">MLS</option>
+              <option value="WNBA">WNBA</option>
+              <option value="NCAA Basketball">NCAA Basketball</option>
+              <option value="NCAA Football">NCAA Football</option>
+              <option value="Other">Other</option>
+            </Select>
             <TextField
               label="Season"
               hint="e.g. 2025-2026"
@@ -335,11 +349,6 @@ export default function ClientForm() {
             city/opponent/dates.
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
-            <TextField
-              label="Commission %"
-              value={terms.commission_pct ?? ''}
-              onChange={setTerm('commission_pct')}
-            />
             <TextField
               label="Attrition %"
               value={terms.attrition_pct ?? ''}
