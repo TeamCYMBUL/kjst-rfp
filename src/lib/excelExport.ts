@@ -1,6 +1,8 @@
 // Produces the KJST comparison .xlsx matching their existing sheet layout.
 // Columns: row-label | Hotel 1 | Hotel 2 | …
 // Rows: trip header, then rates, then all 48 concession items in order.
+//
+// Also exports a stripped team-facing grid (no commission, no flex cancel, no internal info).
 
 import * as XLSX from 'xlsx'
 import type { ConcessionItem } from './rfpApi'
@@ -32,6 +34,7 @@ export type GridTrip = {
   king_rooms_requested: number | null
   suites_requested: number | null
   total_rooms_requested: number | null
+  client_name?: string | null
 }
 
 function fmt(v: string | null | undefined) {
@@ -135,4 +138,94 @@ export function exportComparisonXlsx(
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'RFP Comparison')
   XLSX.writeFile(wb, filename)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Team-facing stripped export
+// Columns: City | Check-in | Check-out | King Rate | Tax | Comp Suites (FREE) |
+//          Suite Upgrades at King Rate | Playoff Clause | Notes
+// NEVER includes: commission, flex cancel, full concession list, internal scores
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TeamGridHotel = {
+  hotel_name: string
+  status: string
+  best_king_rate: number | null
+  occupancy_tax: string | null
+  // Suite concession values (pre-extracted from answers)
+  comp_suites: string | null        // free suites quantity
+  suite_upgrades: string | null     // suite upgrades at king rate quantity
+  playoff_clause: boolean | null    // postseason clause answer
+  notes: string | null              // only exceptions (entered manually or auto-detected)
+}
+
+export type TeamGridTrip = {
+  city: string | null
+  arrival_date: string | null
+  departure_date: string | null
+  client_name: string | null
+}
+
+function fmtDate(d: string | null) {
+  if (!d) return '—'
+  const [y, m, day] = d.split('-')
+  return `${m}/${day}/${y}`
+}
+
+export function exportTeamGridXlsx(
+  trip: TeamGridTrip,
+  hotels: TeamGridHotel[],
+  filename?: string,
+) {
+  const clientStr = (trip.client_name ?? 'Team').replace(/\s+/g, '_')
+  const cityStr = (trip.city ?? 'City').replace(/\s+/g, '_')
+  const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const outputFile = filename ?? `${clientStr}_${cityStr}_Grid_Updated_${dateStr}.xlsx`
+
+  // Only include hotels that have submitted (no pending/declined)
+  const eligible = hotels.filter((h) => ['submitted', 'awarded'].includes(h.status))
+
+  const header = [
+    'Hotel',
+    'Check-in',
+    'Check-out',
+    'King Rate',
+    'Taxes & Fees',
+    'Comp Suites (FREE)',
+    'Suite Upgrades at King Rate',
+    'Playoff Clause',
+    'Notes',
+  ]
+
+  const rows = eligible.map((h) => [
+    h.hotel_name,
+    fmtDate(trip.arrival_date),
+    fmtDate(trip.departure_date),
+    h.best_king_rate != null ? h.best_king_rate : '—',
+    fmt(h.occupancy_tax),
+    h.comp_suites ?? '—',
+    h.suite_upgrades ?? '—',
+    h.playoff_clause === true ? 'Yes' : h.playoff_clause === false ? 'No' : '—',
+    h.notes ?? '',
+  ])
+
+  const sheetData = [header, ...rows]
+  const ws = XLSX.utils.aoa_to_sheet(sheetData)
+
+  // Column widths
+  ws['!cols'] = [
+    { wch: 30 }, // Hotel
+    { wch: 12 }, // Check-in
+    { wch: 12 }, // Check-out
+    { wch: 12 }, // King Rate
+    { wch: 16 }, // Taxes
+    { wch: 20 }, // Comp Suites
+    { wch: 28 }, // Suite Upgrades
+    { wch: 14 }, // Playoff
+    { wch: 40 }, // Notes
+  ]
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Team Grid')
+  XLSX.writeFile(wb, outputFile)
 }

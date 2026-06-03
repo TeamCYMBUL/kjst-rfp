@@ -5,6 +5,8 @@ import type { Client, Invitation, Trip } from '../../lib/types'
 import { formatDate, generateToken } from '../../lib/format'
 import { sendInvitationEmail, sendReminderEmails } from '../../lib/emailApi'
 import { Badge, ErrorNote, LinkButton, Loading } from '../../components/ui'
+import { exportTeamGridXlsx } from '../../lib/excelExport'
+import type { TeamGridHotel } from '../../lib/excelExport'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -963,6 +965,49 @@ export default function TripDetail() {
     else navigate('/trips')
   }
 
+  const exportForTeam = () => {
+    if (!trip || !invites) return
+    // Find key concession item IDs
+    const compSuitesItem = concessionItems.find((c) => c.label.toLowerCase().includes('complimentary one bedroom suites'))
+    const suiteUpgItem = concessionItems.find((c) => c.label.toLowerCase().includes('suite upgrades at the group'))
+    const playoffItem = concessionItems.find((c) => c.section === 'postseason')
+
+    const getAns = (invId: string, itemId: string | undefined) => {
+      if (!itemId) return null
+      return allAnswers.get(invId)?.find((a) => a.concession_item_id === itemId) ?? null
+    }
+
+    const hotels: TeamGridHotel[] = invites
+      .filter((i) => ['submitted', 'awarded'].includes(i.status))
+      .map((inv) => {
+        const resp = allResponses.get(inv.id)
+        const compAns = getAns(inv.id, compSuitesItem?.id)
+        const upgAns = getAns(inv.id, suiteUpgItem?.id)
+        const playoffAns = getAns(inv.id, playoffItem?.id)
+        return {
+          hotel_name: inv.hotel_name,
+          status: inv.status,
+          best_king_rate: resp?.best_king_rate ?? null,
+          occupancy_tax: resp?.occupancy_tax ?? null,
+          comp_suites: compAns?.answer_value ?? null,
+          suite_upgrades: upgAns?.answer_value ?? null,
+          playoff_clause: playoffAns?.answer_yes_no ?? null,
+          notes: null,
+        }
+      })
+
+    const tripData = trip as any
+    exportTeamGridXlsx(
+      {
+        city: trip.city,
+        arrival_date: trip.arrival_date,
+        departure_date: trip.departure_date,
+        client_name: tripData.clients?.team_name ?? null,
+      },
+      hotels,
+    )
+  }
+
   if (error && !trip) return <ErrorNote message={error} />
   if (!trip || !invites) return <Loading />
 
@@ -998,6 +1043,14 @@ export default function TripDetail() {
           </button>
           <button onClick={doSendReminders} disabled={sendingReminders} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors">
             {sendingReminders ? 'Sending…' : 'Send reminders'}
+          </button>
+          <button
+            onClick={exportForTeam}
+            disabled={!invites?.some((i) => ['submitted', 'awarded'].includes(i.status))}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
+            title="Export stripped grid for the team (no commission, no internal data)"
+          >
+            ↓ Team export
           </button>
           <LinkButton to={`/trips/${id}/grid`} variant="secondary">
             Full grid →

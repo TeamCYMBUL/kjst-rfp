@@ -8,6 +8,7 @@ import type {
   ExistingAnswer,
   ResponseFields,
   RfpData,
+  ScenarioRate,
 } from '../../lib/rfpApi'
 
 // ── Types for local form state ────────────────────────────────────────────────
@@ -32,7 +33,11 @@ type RespState = {
   best_suite_rate: string
   occupancy_tax: string
   meeting_space_notes: string
+  meeting_space_type: string
+  meeting_space_count: string
   general_comments: string
+  // Per-scenario rates keyed by night count string: {"1": {rate:"199", available:true}, "2": ...}
+  scenario_rates: Record<string, { rate: string; available: boolean }>
 }
 
 // ── Small presentational helpers ──────────────────────────────────────────────
@@ -381,7 +386,10 @@ export default function RfpForm() {
     best_suite_rate: '',
     occupancy_tax: '',
     meeting_space_notes: '',
+    meeting_space_type: '',
+    meeting_space_count: '',
     general_comments: '',
+    scenario_rates: {},
   })
   const [answers, setAnswers] = useState<Record<string, AnswerState>>({})
 
@@ -404,6 +412,13 @@ export default function RfpForm() {
         // Populate existing response if save-and-resume
         if (d.response) {
           const r = d.response
+          // Restore scenario rates from saved JSON
+          const savedScenarioRates: Record<string, { rate: string; available: boolean }> = {}
+          if (r.scenario_rates) {
+            for (const [k, v] of Object.entries(r.scenario_rates as Record<string, ScenarioRate>)) {
+              savedScenarioRates[k] = { rate: v.rate != null ? String(v.rate) : '', available: v.available }
+            }
+          }
           setResp({
             completed_by_name: r.completed_by_name ?? '',
             completed_date: r.completed_date ?? new Date().toISOString().slice(0, 10),
@@ -416,7 +431,10 @@ export default function RfpForm() {
             best_suite_rate: r.best_suite_rate != null ? String(r.best_suite_rate) : '',
             occupancy_tax: r.occupancy_tax ?? '',
             meeting_space_notes: r.meeting_space_notes ?? '',
+            meeting_space_type: r.meeting_space_type ?? '',
+            meeting_space_count: r.meeting_space_count != null ? String(r.meeting_space_count) : '',
             general_comments: r.general_comments ?? '',
+            scenario_rates: savedScenarioRates,
           })
         }
 
@@ -452,6 +470,17 @@ export default function RfpForm() {
         comment: state.comment.trim() || null,
       }))
 
+      // Convert scenario_rates string form to numeric
+      const scenarioRatesPayload: Record<string, ScenarioRate> | null =
+        Object.keys(r.scenario_rates).length > 0
+          ? Object.fromEntries(
+              Object.entries(r.scenario_rates).map(([k, v]) => [
+                k,
+                { rate: v.rate ? Number(v.rate) : null, available: v.available },
+              ]),
+            )
+          : null
+
       const responsePayload: ResponseFields = {
         completed_by_name: r.completed_by_name,
         completed_date: r.completed_date,
@@ -464,7 +493,10 @@ export default function RfpForm() {
         best_suite_rate: r.best_suite_rate ? Number(r.best_suite_rate) : null,
         occupancy_tax: r.occupancy_tax,
         meeting_space_notes: r.meeting_space_notes,
+        meeting_space_type: r.meeting_space_type || null,
+        meeting_space_count: r.meeting_space_count ? Number(r.meeting_space_count) : null,
         general_comments: r.general_comments,
+        scenario_rates: scenarioRatesPayload,
       }
 
       try {
@@ -511,9 +543,33 @@ export default function RfpForm() {
       setValidationError('Please enter the name of the person completing this form.')
       return
     }
-    if (!resp.best_king_rate.trim()) {
+    const scenarios = data?.invitation.trips.night_scenarios ?? [1]
+    const isMultiScenario = scenarios.length > 1
+    if (!isMultiScenario && !resp.best_king_rate.trim()) {
       setValidationError('Best Available King Rate is required before submitting.')
       return
+    }
+    if (isMultiScenario) {
+      const availableScenarios = scenarios.filter((n) => resp.scenario_rates[String(n)]?.available !== false)
+      const missingRates = availableScenarios.filter((n) => !resp.scenario_rates[String(n)]?.rate?.trim())
+      if (missingRates.length > 0) {
+        setValidationError(`Please enter king rates for all available scenarios (missing: ${missingRates.map((n) => `${n} night${n > 1 ? 's' : ''}`).join(', ')}).`)
+        return
+      }
+    }
+
+    // Warn if commission is zero
+    const commissionItem = data?.items.find(
+      (i) => i.answer_type === 'percent' && (i.label.toLowerCase().includes('commissionable') || i.label.toLowerCase().includes('commission')),
+    )
+    if (commissionItem) {
+      const commVal = answers[commissionItem.id]?.answer_value?.trim() ?? ''
+      if (commVal === '0' || commVal === '') {
+        const ok = window.confirm(
+          'Commission is set to 0% (or not filled in).\n\nZero-commission bids cannot be represented by KJST — your bid will be flagged as ineligible for team selection.\n\nAre you sure you want to submit with 0% commission?'
+        )
+        if (!ok) return
+      }
     }
 
     // Warn about unanswered Yes/No items
@@ -666,125 +722,144 @@ export default function RfpForm() {
           {(() => {
             const trip = data.invitation.trips
             const hasStay2 = Boolean(trip.stay2_arrival_date)
+            const scenarios = trip.night_scenarios ?? [1]
+            const isMultiScenario = scenarios.length > 1
+
+            const setScenarioRate = (n: number, field: 'rate' | 'available', value: string | boolean) => {
+              setResp((r) => ({
+                ...r,
+                scenario_rates: {
+                  ...r.scenario_rates,
+                  [String(n)]: {
+                    rate: r.scenario_rates[String(n)]?.rate ?? '',
+                    available: r.scenario_rates[String(n)]?.available ?? true,
+                    [field]: value,
+                  },
+                },
+              }))
+            }
+
             return (
               <div className="rounded-xl border border-slate-200 bg-white p-6">
                 <SectionHeading>Rates</SectionHeading>
 
-                {hasStay2 && (
+                {isMultiScenario && (
+                  <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    <strong>Multiple night scenarios requested.</strong> Please provide a King rate for each scenario and indicate whether you can accommodate that length of stay.
+                  </div>
+                )}
+
+                {hasStay2 && !isMultiScenario && (
                   <div className="mb-4 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">
-                    This trip covers <strong>2 stays</strong> — please provide separate King rates for each stay date.
+                    This trip covers <strong>2 separate visits</strong> — please provide separate King rates for each visit's dates.
+                  </div>
+                )}
+
+                {/* Multi-scenario rate table */}
+                {isMultiScenario ? (
+                  <div className="mb-5">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-200">
+                          <th className="pb-2 text-left text-xs font-semibold text-slate-500">Scenario</th>
+                          <th className="pb-2 text-left text-xs font-semibold text-slate-500">King Rate (per night)</th>
+                          <th className="pb-2 text-left text-xs font-semibold text-slate-500">Available?</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {scenarios.sort((a, b) => a - b).map((n) => {
+                          const sr = resp.scenario_rates[String(n)] ?? { rate: '', available: true }
+                          return (
+                            <tr key={n} className="py-3">
+                              <td className="py-3 pr-4">
+                                <span className="font-medium text-slate-700">{n} night{n > 1 ? 's' : ''}</span>
+                              </td>
+                              <td className="py-3 pr-4">
+                                <div className="flex items-center">
+                                  <span className="rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">$</span>
+                                  <input
+                                    type="number" min="0" step="0.01"
+                                    className={`${inputCls} rounded-l-none`}
+                                    value={sr.rate}
+                                    onChange={(e) => setScenarioRate(n, 'rate', e.target.value)}
+                                    disabled={isReadOnly || !sr.available}
+                                    placeholder="0.00"
+                                  />
+                                </div>
+                              </td>
+                              <td className="py-3">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-slate-300 accent-[#1C1008]"
+                                    checked={sr.available}
+                                    onChange={(e) => setScenarioRate(n, 'available', e.target.checked)}
+                                    disabled={isReadOnly}
+                                  />
+                                  <span className={`text-sm ${sr.available ? 'text-slate-700' : 'text-slate-400'}`}>
+                                    {sr.available ? 'Yes, available' : 'Not available'}
+                                  </span>
+                                </label>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  /* Single-scenario king rate */
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <FieldLabel required htmlFor="rfp-king-rate">
+                        {hasStay2 ? 'King Rate — Visit 1 ($)' : 'Best Available King Rate ($)'}
+                      </FieldLabel>
+                      <div className="flex items-center">
+                        <span className="rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">$</span>
+                        <input
+                          id="rfp-king-rate"
+                          type="number" min="0" step="0.01"
+                          className={`${inputCls} rounded-l-none`}
+                          value={resp.best_king_rate}
+                          onChange={setRespField('best_king_rate')}
+                          disabled={isReadOnly}
+                          placeholder="0.00"
+                          aria-required="true"
+                        />
+                      </div>
+                      {hasStay2 && (
+                        <p className="mt-1 text-xs text-slate-400">
+                          {formatDate(trip.arrival_date)} – {formatDate(trip.departure_date)}
+                        </p>
+                      )}
+                    </div>
+                    <div className="sm:col-span-1" />
                   </div>
                 )}
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {/* Stay 1 King Rate */}
-                  <div>
-                    <FieldLabel required htmlFor="rfp-king-rate">
-                      {hasStay2 ? 'King Rate — Stay 1 ($)' : 'Best Available King Rate ($)'}
-                    </FieldLabel>
-                    <div className="flex items-center">
-                      <span className="rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">$</span>
+                  {/* Suite rate and selling rate always shown */}
+                  {!isMultiScenario && (
+                    <div>
+                      <FieldLabel htmlFor="rfp-selling-rate">
+                        {hasStay2 ? 'Current Selling Rate — Visit 1' : 'Current Selling Rate'}
+                      </FieldLabel>
                       <input
-                        id="rfp-king-rate"
-                        type="number" min="0" step="0.01"
-                        className={`${inputCls} rounded-l-none`}
-                        value={resp.best_king_rate}
-                        onChange={setRespField('best_king_rate')}
+                        id="rfp-selling-rate"
+                        type="text"
+                        className={inputCls}
+                        value={resp.current_selling_rate}
+                        onChange={setRespField('current_selling_rate')}
                         disabled={isReadOnly}
-                        placeholder="0.00"
-                        aria-required="true"
+                        placeholder="e.g. $595"
                       />
                     </div>
-                    {hasStay2 && (
-                      <p className="mt-1 text-xs text-slate-400">
-                        {formatDate(trip.arrival_date)} – {formatDate(trip.departure_date)}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Stay 1 Selling Rate */}
-                  <div>
-                    <FieldLabel htmlFor="rfp-selling-rate">
-                      {hasStay2 ? 'Current Selling Rate — Stay 1' : 'Current Selling Rate'}
-                    </FieldLabel>
-                    <input
-                      id="rfp-selling-rate"
-                      type="text"
-                      className={inputCls}
-                      value={resp.current_selling_rate}
-                      onChange={setRespField('current_selling_rate')}
-                      disabled={isReadOnly}
-                      placeholder="e.g. $595"
-                    />
-                  </div>
-
-                  {/* Stay 2 rates — only shown when trip has a second stay */}
-                  {hasStay2 && (
-                    <>
-                      <div>
-                        <FieldLabel htmlFor="rfp-stay2-king">King Rate — Stay 2 ($)</FieldLabel>
-                        <div className="flex items-center">
-                          <span className="rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">$</span>
-                          <input
-                            id="rfp-stay2-king"
-                            type="number" min="0" step="0.01"
-                            className={`${inputCls} rounded-l-none`}
-                            value={resp.stay2_king_rate}
-                            onChange={setRespField('stay2_king_rate')}
-                            disabled={isReadOnly}
-                            placeholder="0.00"
-                          />
-                        </div>
-                        <p className="mt-1 text-xs text-slate-400">
-                          {formatDate(trip.stay2_arrival_date)} – {formatDate(trip.stay2_departure_date)}
-                        </p>
-                      </div>
-                      <div>
-                        <FieldLabel htmlFor="rfp-stay2-selling">Current Selling Rate — Stay 2</FieldLabel>
-                        <input
-                          id="rfp-stay2-selling"
-                          type="text"
-                          className={inputCls}
-                          value={resp.stay2_selling_rate}
-                          onChange={setRespField('stay2_selling_rate')}
-                          disabled={isReadOnly}
-                          placeholder="e.g. $685"
-                        />
-                      </div>
-                      <div>
-                        <FieldLabel htmlFor="rfp-stay2-suite">Suite Rate — Stay 2 ($)</FieldLabel>
-                        <div className="flex items-center">
-                          <span className="rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">$</span>
-                          <input
-                            id="rfp-stay2-suite"
-                            type="number" min="0" step="0.01"
-                            className={`${inputCls} rounded-l-none`}
-                            value={resp.stay2_suite_rate}
-                            onChange={setRespField('stay2_suite_rate')}
-                            disabled={isReadOnly}
-                            placeholder="0.00"
-                          />
-                        </div>
-                      </div>
-                      <div className="sm:col-span-1">
-                        <FieldLabel htmlFor="rfp-king-notes">Rate Notes</FieldLabel>
-                        <input
-                          id="rfp-king-notes"
-                          type="text"
-                          className={inputCls}
-                          value={resp.king_rate_notes}
-                          onChange={setRespField('king_rate_notes')}
-                          disabled={isReadOnly}
-                          placeholder="Any notes on rate variances…"
-                        />
-                      </div>
-                    </>
                   )}
 
-                  {/* Suite Rate (stay 1 / single stay) */}
+                  {/* Suite Rate */}
                   <div>
                     <FieldLabel htmlFor="rfp-suite-rate">
-                      {hasStay2 ? 'Suite Rate — Stay 1 ($)' : 'Best Suite Rate ($)'}
+                      {hasStay2 ? 'Suite Rate — Visit 1 ($)' : 'Best Suite Rate ($)'}
                     </FieldLabel>
                     <div className="flex items-center">
                       <span className="rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">$</span>
@@ -814,20 +889,71 @@ export default function RfpForm() {
                     />
                   </div>
 
-                  {/* King rate notes for single-stay trips */}
-                  {!hasStay2 && (
-                    <div className="sm:col-span-2">
-                      <FieldLabel htmlFor="rfp-king-notes">Rate Notes <span className="font-normal text-slate-400">(optional)</span></FieldLabel>
-                      <input
-                        id="rfp-king-notes"
-                        type="text"
-                        className={inputCls}
-                        value={resp.king_rate_notes}
-                        onChange={setRespField('king_rate_notes')}
-                        disabled={isReadOnly}
-                        placeholder="Any notes on rate variances, special pricing…"
-                      />
-                    </div>
+                  {/* King rate notes */}
+                  <div className="sm:col-span-2">
+                    <FieldLabel htmlFor="rfp-king-notes">Rate Notes <span className="font-normal text-slate-400">(optional)</span></FieldLabel>
+                    <input
+                      id="rfp-king-notes"
+                      type="text"
+                      className={inputCls}
+                      value={resp.king_rate_notes}
+                      onChange={setRespField('king_rate_notes')}
+                      disabled={isReadOnly}
+                      placeholder="Any notes on rate variances, availability constraints, special pricing…"
+                    />
+                  </div>
+
+                  {/* Stay 2 (second separate visit) rates */}
+                  {hasStay2 && (
+                    <>
+                      <div className="sm:col-span-2 mt-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          Visit 2 · {formatDate(trip.stay2_arrival_date)} – {formatDate(trip.stay2_departure_date)}
+                        </p>
+                      </div>
+                      <div>
+                        <FieldLabel htmlFor="rfp-stay2-king">King Rate — Visit 2 ($)</FieldLabel>
+                        <div className="flex items-center">
+                          <span className="rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">$</span>
+                          <input
+                            id="rfp-stay2-king"
+                            type="number" min="0" step="0.01"
+                            className={`${inputCls} rounded-l-none`}
+                            value={resp.stay2_king_rate}
+                            onChange={setRespField('stay2_king_rate')}
+                            disabled={isReadOnly}
+                            placeholder="0.00"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <FieldLabel htmlFor="rfp-stay2-selling">Current Selling Rate — Visit 2</FieldLabel>
+                        <input
+                          id="rfp-stay2-selling"
+                          type="text"
+                          className={inputCls}
+                          value={resp.stay2_selling_rate}
+                          onChange={setRespField('stay2_selling_rate')}
+                          disabled={isReadOnly}
+                          placeholder="e.g. $685"
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel htmlFor="rfp-stay2-suite">Suite Rate — Visit 2 ($)</FieldLabel>
+                        <div className="flex items-center">
+                          <span className="rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">$</span>
+                          <input
+                            id="rfp-stay2-suite"
+                            type="number" min="0" step="0.01"
+                            className={`${inputCls} rounded-l-none`}
+                            value={resp.stay2_suite_rate}
+                            onChange={setRespField('stay2_suite_rate')}
+                            disabled={isReadOnly}
+                            placeholder="0.00"
+                          />
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -877,12 +1003,53 @@ export default function RfpForm() {
             )
           })}
 
-          {/* ── Section 7: Meeting space + general comments ─── */}
+          {/* ── Section 7: Meeting Space ─── */}
           <div className="rounded-xl border border-slate-200 bg-white p-6">
-            <SectionHeading>Additional Information</SectionHeading>
+            <SectionHeading>Meeting Space</SectionHeading>
+            <p className="mb-4 text-sm text-slate-500">
+              Teams use meeting space for massage tables, recovery equipment, and trainer setups. Only traditional function rooms or ballrooms are eligible — restaurants and suites with furniture removed do not qualify.
+            </p>
             <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <FieldLabel htmlFor="rfp-meeting-type">Type of meeting space available</FieldLabel>
+                  <select
+                    id="rfp-meeting-type"
+                    className={inputCls}
+                    value={resp.meeting_space_type}
+                    onChange={(e) => setResp((r) => ({ ...r, meeting_space_type: e.target.value }))}
+                    disabled={isReadOnly}
+                  >
+                    <option value="">Select type…</option>
+                    <option value="function_room">✅ Function Room / Ballroom (eligible)</option>
+                    <option value="restaurant">❌ Restaurant (not eligible)</option>
+                    <option value="suite_converted">❌ Suite with furniture removed (not eligible)</option>
+                    <option value="none">❌ No meeting space available</option>
+                    <option value="other">Other — explain in notes below</option>
+                  </select>
+                  {resp.meeting_space_type === 'restaurant' && !isReadOnly && (
+                    <p className="mt-1.5 text-xs text-red-600 font-medium">Restaurants are not eligible meeting spaces for team stays.</p>
+                  )}
+                  {resp.meeting_space_type === 'suite_converted' && !isReadOnly && (
+                    <p className="mt-1.5 text-xs text-red-600 font-medium">Suites with furniture removed do not provide enough space for team equipment.</p>
+                  )}
+                </div>
+                <div>
+                  <FieldLabel htmlFor="rfp-meeting-count">Number of spaces available</FieldLabel>
+                  <input
+                    id="rfp-meeting-count"
+                    type="number"
+                    min="0"
+                    className={inputCls}
+                    value={resp.meeting_space_count}
+                    onChange={(e) => setResp((r) => ({ ...r, meeting_space_count: e.target.value }))}
+                    disabled={isReadOnly}
+                    placeholder="e.g. 2"
+                  />
+                </div>
+              </div>
               <div>
-                <FieldLabel htmlFor="rfp-meeting-notes">Meeting space (names, sq ft)</FieldLabel>
+                <FieldLabel htmlFor="rfp-meeting-notes">Meeting space details (names, dimensions, F&B minimum)</FieldLabel>
                 <textarea
                   id="rfp-meeting-notes"
                   className={`${inputCls} resize-none`}
@@ -890,22 +1057,24 @@ export default function RfpForm() {
                   value={resp.meeting_space_notes}
                   onChange={setRespField('meeting_space_notes')}
                   disabled={isReadOnly}
-                  placeholder="List available meeting rooms with dimensions…"
-                />
-              </div>
-              <div>
-                <FieldLabel htmlFor="rfp-general-comments">General comments</FieldLabel>
-                <textarea
-                  id="rfp-general-comments"
-                  className={`${inputCls} resize-none`}
-                  rows={3}
-                  value={resp.general_comments}
-                  onChange={setRespField('general_comments')}
-                  disabled={isReadOnly}
-                  placeholder="Any additional notes, clarifications, or offers…"
+                  placeholder="Room names, square footage, any food & beverage minimum requirement…"
                 />
               </div>
             </div>
+          </div>
+
+          {/* ── Section 8: General comments ─── */}
+          <div className="rounded-xl border border-slate-200 bg-white p-6">
+            <SectionHeading>General Comments</SectionHeading>
+            <textarea
+              id="rfp-general-comments"
+              className={`${inputCls} resize-none`}
+              rows={4}
+              value={resp.general_comments}
+              onChange={setRespField('general_comments')}
+              disabled={isReadOnly}
+              placeholder="Any additional notes, clarifications, or offers not covered above…"
+            />
           </div>
 
           {/* ── Validation error + Submit ─── */}

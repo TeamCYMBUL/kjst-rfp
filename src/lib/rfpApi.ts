@@ -14,7 +14,7 @@ export type RfpTrip = {
   nights: number | null
   game_date: string | null
   game_time: string | null
-  // Second stay
+  // Second stay (separate visit, different dates)
   stay2_arrival_date: string | null
   stay2_departure_date: string | null
   stay2_game_date: string | null
@@ -26,6 +26,8 @@ export type RfpTrip = {
   postseason_window: string | null
   postseason_rooms_text: string | null
   response_deadline: string | null
+  // Night scenarios — which night-count options to quote rates for (e.g. [1,2])
+  night_scenarios: number[] | null
 }
 
 export type RfpClient = {
@@ -54,6 +56,8 @@ export type ConcessionItem = {
   allow_comment: boolean
 }
 
+export type ScenarioRate = { rate: number | null; available: boolean }
+
 export type ExistingResponse = {
   id: string
   completed_by_name: string | null
@@ -64,11 +68,15 @@ export type ExistingResponse = {
   best_suite_rate: number | null
   occupancy_tax: string | null
   meeting_space_notes: string | null
+  meeting_space_type: string | null
+  meeting_space_count: number | null
   general_comments: string | null
-  // Second stay rates
+  // Second stay rates (separate visit)
   stay2_king_rate: number | null
   stay2_suite_rate: number | null
   stay2_selling_rate: string | null
+  // Per-scenario rates: {"1": {rate: 199, available: true}, "2": {rate: 189, available: true}}
+  scenario_rates: Record<string, ScenarioRate> | null
 }
 
 export type ExistingAnswer = {
@@ -97,11 +105,15 @@ export type ResponseFields = {
   best_suite_rate: number | null
   occupancy_tax: string
   meeting_space_notes: string
+  meeting_space_type: string | null
+  meeting_space_count: number | null
   general_comments: string
   // Second stay rates (null when trip has only one stay)
   stay2_king_rate: number | null
   stay2_suite_rate: number | null
   stay2_selling_rate: string
+  // Per-scenario rates (null when trip has only one night scenario)
+  scenario_rates: Record<string, ScenarioRate> | null
 }
 
 export type AnswerPayload = {

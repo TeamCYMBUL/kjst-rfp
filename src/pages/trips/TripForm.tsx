@@ -53,6 +53,7 @@ export default function TripForm() {
   const [clients, setClients] = useState<Pick<Client, 'id' | 'team_name' | 'default_terms'>[]>([])
   const [fields, setFields] = useState<FormState>({ ...blank, client_id: presetClient })
   const [showStay2, setShowStay2] = useState(false)
+  const [nightScenarios, setNightScenarios] = useState<number[]>([1])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -84,6 +85,7 @@ export default function TripForm() {
         } else if (data) {
           const t = data as Trip
           if (t.stay2_arrival_date) setShowStay2(true)
+          if ((t as any).night_scenarios?.length) setNightScenarios((t as any).night_scenarios)
           setFields({
             client_id: t.client_id,
             city: t.city ?? '',
@@ -178,6 +180,7 @@ export default function TripForm() {
       postseason_rooms_text: clean(fields.postseason_rooms_text),
       status: fields.status,
       response_deadline: clean(fields.response_deadline),
+      night_scenarios: nightScenarios.length > 0 ? nightScenarios : [1],
     }
 
     if (editing) {
@@ -261,7 +264,7 @@ export default function TripForm() {
 
         <Card className="p-6">
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            {fields.stay2_arrival_date ? 'Stay 1' : 'Dates'}
+            {fields.stay2_arrival_date ? 'Visit 1 Dates' : 'Dates'}
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <TextField
@@ -298,11 +301,57 @@ export default function TripForm() {
           </div>
         </Card>
 
-        {/* Second Stay */}
+        {/* Night Scenarios */}
+        <Card className="p-6">
+          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Night Scenarios
+          </h2>
+          <p className="mb-4 text-xs text-slate-400">
+            How many nights might the team stay? Check all that apply — hotels will quote rates for each scenario. Most trips are 1 night. Select 2 or 3 if the travel schedule hasn't been finalized yet.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {[1, 2, 3].map((n) => {
+              const checked = nightScenarios.includes(n)
+              return (
+                <label
+                  key={n}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
+                    checked
+                      ? 'border-[#1C1008] bg-[#1C1008]/5 text-[#1C1008]'
+                      : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 accent-[#1C1008]"
+                    checked={checked}
+                    onChange={(e) => {
+                      setNightScenarios((prev) =>
+                        e.target.checked
+                          ? [...prev, n].sort((a, b) => a - b)
+                          : prev.filter((x) => x !== n).length > 0
+                            ? prev.filter((x) => x !== n)
+                            : prev // never allow empty
+                      )
+                    }}
+                  />
+                  {n} night{n > 1 ? 's' : ''}
+                </label>
+              )
+            })}
+          </div>
+          {nightScenarios.length > 1 && (
+            <p className="mt-3 text-xs text-amber-600">
+              Hotels will be asked to quote rates and confirm availability for each selected scenario.
+            </p>
+          )}
+        </Card>
+
+        {/* Second Visit */}
         <Card className="p-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-              Stay 2 <span className="ml-1 font-normal normal-case text-slate-400">(optional — same city, different dates)</span>
+              Second Visit <span className="ml-1 font-normal normal-case text-slate-400">(optional — same city, different dates)</span>
             </h2>
             {showStay2 ? (
               <button
@@ -319,7 +368,7 @@ export default function TripForm() {
                   }))
                 }}
               >
-                Remove stay 2
+                Remove second visit
               </button>
             ) : (
               <button
@@ -327,7 +376,7 @@ export default function TripForm() {
                 className="text-xs font-medium text-[#1C1008] hover:underline"
                 onClick={() => setShowStay2(true)}
               >
-                + Add second stay
+                + Add second visit
               </button>
             )}
           </div>
@@ -360,7 +409,7 @@ export default function TripForm() {
             </div>
           ) : (
             <p className="text-sm text-slate-400">
-              Use this when the same RFP covers two separate visits to the same city — e.g. Atlanta #1 in November and Atlanta #2 in April.
+              Use this when the team plays the same city twice — e.g. Atlanta in November and Atlanta in April. Each visit gets its own set of dates. This is different from night scenarios (which are rate-quote options for the same visit).
             </p>
           )}
         </Card>

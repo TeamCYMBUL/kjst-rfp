@@ -30,6 +30,9 @@ type Response = {
   best_suite_rate: number | null
   occupancy_tax: string | null
   meeting_space_notes: string | null
+  meeting_space_type: string | null
+  meeting_space_count: number | null
+  scenario_rates: Record<string, { rate: number | null; available: boolean }> | null
   general_comments: string | null
   concession_answers: Answer[]
 }
@@ -116,6 +119,67 @@ function ValueCell({
         <p className="mt-1 text-xs italic text-slate-500">{answer.comment}</p>
       )}
     </div>
+  )
+}
+
+// ── Dealbreaker badge ────────────────────────────────────────────────────────
+
+type DealBreakerLevel = 'red' | 'yellow'
+type DealBreaker = { label: string; level: DealBreakerLevel }
+
+function getDealbreakerBadges(
+  inv: Invitation,
+  items: ConcessionItem[],
+  answerMap: Record<string, Answer>,
+): DealBreaker[] {
+  const badges: DealBreaker[] = []
+  const resp = inv.rfp_responses
+  if (!resp) return badges
+
+  // 1. No flex cancel
+  const flexItem = items.find((i) => i.label.toLowerCase().includes('flexible cancellation'))
+  if (flexItem) {
+    const ans = answerMap[flexItem.id]
+    if (ans?.answer_yes_no === false) badges.push({ label: 'No Flex Cancel', level: 'red' })
+  }
+
+  // 2. No commission
+  const commItem = items.find(
+    (i) => i.answer_type === 'percent' && (i.label.toLowerCase().includes('commissionable') || i.label.toLowerCase().includes('commission')),
+  )
+  if (commItem) {
+    const ans = answerMap[commItem.id]
+    const val = ans?.answer_value?.trim() ?? ''
+    if (val === '0' || val === '0%' || val === '') badges.push({ label: 'No Commission', level: 'red' })
+  }
+
+  // 3. No eligible meeting space
+  if (resp.meeting_space_type === 'restaurant' || resp.meeting_space_type === 'suite_converted' || resp.meeting_space_type === 'none') {
+    badges.push({ label: 'No Mtg Space', level: 'yellow' })
+  }
+
+  // 4. Scenario unavailable
+  if (resp.scenario_rates) {
+    const unavailable = Object.entries(resp.scenario_rates)
+      .filter(([, v]) => v.available === false)
+      .map(([k]) => `${k}n N/A`)
+    for (const u of unavailable) badges.push({ label: u, level: 'yellow' })
+  }
+
+  return badges
+}
+
+function DealBreakerBadge({ label, level }: { label: string; level: DealBreakerLevel }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+        level === 'red'
+          ? 'bg-red-100 text-red-700'
+          : 'bg-amber-100 text-amber-700'
+      }`}
+    >
+      {label}
+    </span>
   )
 }
 
@@ -231,7 +295,8 @@ export default function TripGrid() {
             rfp_responses (
               id, completed_by_name, completed_date, best_king_rate, king_rate_notes,
               current_selling_rate, stay2_king_rate, stay2_suite_rate, stay2_selling_rate,
-              best_suite_rate, occupancy_tax, meeting_space_notes, general_comments,
+              best_suite_rate, occupancy_tax, meeting_space_notes, meeting_space_type,
+              meeting_space_count, scenario_rates, general_comments,
               concession_answers (
                 id, concession_item_id, answer_yes_no, answer_value, comment
               )
@@ -573,6 +638,18 @@ export default function TripGrid() {
                           </span>
                         )}
                       </div>
+                      {/* Dealbreaker badges */}
+                      {!isDimmed && inv.rfp_responses && (() => {
+                        const badges = getDealbreakerBadges(inv, items, answerMaps[inv.id] ?? {})
+                        if (badges.length === 0) return null
+                        return (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {badges.map((b) => (
+                              <DealBreakerBadge key={b.label} label={b.label} level={b.level} />
+                            ))}
+                          </div>
+                        )
+                      })()}
                       {/* Award / Undo Award / Pass / Unavailable actions */}
                       {(canAward || canUndoAward || canPass || canMarkUnavailable) && (
                         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -793,6 +870,24 @@ export default function TripGrid() {
 
               {/* ── Additional info ── */}
               <SectionRow label="Additional Information" colSpan={colSpan} />
+              <RateRow
+                label="Meeting Space Type"
+                invitations={invitations}
+                getValue={(r) => {
+                  if (!r?.meeting_space_type) return r?.meeting_space_notes ?? null
+                  const typeLabels: Record<string, string> = {
+                    function_room: '✅ Function Room',
+                    restaurant: '❌ Restaurant (ineligible)',
+                    suite_converted: '❌ Suite converted (ineligible)',
+                    none: '❌ None',
+                    other: 'Other',
+                  }
+                  const label = typeLabels[r.meeting_space_type] ?? r.meeting_space_type
+                  const count = r.meeting_space_count != null ? ` × ${r.meeting_space_count}` : ''
+                  return `${label}${count}`
+                }}
+                lowestRateId={lowestRateId}
+              />
               <RateRow
                 label="Meeting Space Notes"
                 invitations={invitations}
