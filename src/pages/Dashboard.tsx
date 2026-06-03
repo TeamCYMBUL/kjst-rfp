@@ -3,9 +3,8 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { formatDate } from '../lib/format'
 import { Badge, ErrorNote, LinkButton, Loading } from '../components/ui'
-import { useOnboardingProgress } from '../hooks/useOnboardingProgress'
 
-const BANNER_KEY = 'kjst_banner_dismissed'
+
 
 type DashTrip = {
   id: string
@@ -345,18 +344,6 @@ export default function Dashboard() {
   const [hasClients, setHasClients] = useState(false)
   const [view, setView] = useState<ViewMode>('deadline')
   const [showClosed, setShowClosed] = useState(false)
-  const [bannerDismissed, setBannerDismissed] = useState(
-    () => localStorage.getItem(BANNER_KEY) === 'true',
-  )
-  const { completedCount, allDone } = useOnboardingProgress()
-
-  const dismissBanner = () => {
-    localStorage.setItem(BANNER_KEY, 'true')
-    setBannerDismissed(true)
-  }
-
-  const showBanner = !bannerDismissed && !allDone
-
   useEffect(() => {
     const load = async () => {
       const [tripsRes, clientsRes] = await Promise.all([
@@ -456,49 +443,6 @@ export default function Dashboard() {
           </LinkButton>
         </div>
       </div>
-
-      {/* Getting Started banner */}
-      {showBanner && (
-        <div className="flex items-center justify-between gap-4 rounded-xl border border-[#1C1008]/20 bg-[#1C1008]/5 px-5 py-3.5">
-          <div className="flex items-center gap-3">
-            <span className="text-lg">🏁</span>
-            <div>
-              <p className="text-sm font-semibold text-[#1C1008]">
-                New to KJST RFP?{' '}
-                <span className="font-normal text-slate-600">
-                  Follow the Getting Started guide to run your first RFP.
-                </span>
-              </p>
-              <div className="mt-1 flex items-center gap-2">
-                <div className="h-1 w-24 rounded-full bg-[#1C1008]/15">
-                  <div
-                    className="h-1 rounded-full bg-[#1C1008] transition-all"
-                    style={{ width: `${(completedCount / 5) * 100}%` }}
-                  />
-                </div>
-                <span className="text-xs text-slate-500">{completedCount}/5 steps done</span>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              to="/getting-started"
-              className="shrink-0 rounded-lg bg-[#1C1008] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#2d1e0e] transition-colors"
-            >
-              View guide →
-            </Link>
-            <button
-              onClick={dismissBanner}
-              className="shrink-0 text-slate-400 hover:text-slate-600 transition-colors"
-              title="Never show again"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Stats bar */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

@@ -1,6 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import { useOnboardingProgress } from '../hooks/useOnboardingProgress'
 import { useTheme } from '../contexts/ThemeContext'
 import { useProfile } from '../hooks/useProfile'
 
@@ -47,7 +46,6 @@ export { KJLogoMark }
 
 export default function DashboardLayout() {
   const { user, signOut } = useAuth()
-  const { completedCount, allDone, loading: progressLoading } = useOnboardingProgress()
   const { isDark } = useTheme()
   const { isAdmin } = useProfile()
 
@@ -96,26 +94,6 @@ export default function DashboardLayout() {
             </NavLink>
           )}
 
-          {/* Get Started — shown until all steps complete */}
-          {!progressLoading && (
-            <NavLink
-              to="/getting-started"
-              className={({ isActive }) =>
-                `flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-white/15 text-white'
-                    : 'text-white/60 hover:bg-white/10 hover:text-white'
-                }`
-              }
-            >
-              <span>{allDone ? '✓ Guide' : 'Get Started'}</span>
-              {!allDone && (
-                <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                  {completedCount}/5
-                </span>
-              )}
-            </NavLink>
-          )}
         </nav>
 
         <div className="border-t border-white/10 p-3">
