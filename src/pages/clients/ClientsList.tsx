@@ -295,7 +295,7 @@ export default function ClientsList() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Link
-                      to="/trips/new"
+                      to={`/trips/new?client=${selected.id}`}
                       className="rounded-lg border border-[#1C1008]/20 bg-[#1C1008]/5 px-3 py-1.5 text-xs font-semibold text-[#1C1008] transition-colors hover:bg-[#1C1008]/10"
                     >
                       + New trip
@@ -402,7 +402,7 @@ export default function ClientsList() {
                   <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center">
                     <p className="text-sm text-slate-400">No trips yet for this team.</p>
                     <Link
-                      to="/trips/new"
+                      to={`/trips/new?client=${selected.id}`}
                       className="mt-3 inline-block rounded-lg bg-[#1C1008] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#2d1e0e]"
                     >
                       Create first trip
