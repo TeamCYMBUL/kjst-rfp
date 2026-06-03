@@ -24,6 +24,8 @@ type Client = {
   primary_contact_title: string | null
   primary_contact_email: string | null
   primary_contact_phone: string | null
+  assigned_to: string | null
+  profiles: { full_name: string | null; email: string | null } | null
   trips: ClientTrip[]
 }
 
@@ -111,14 +113,14 @@ export default function ClientsList() {
     supabase
       .from('clients')
       .select(
-        'id, team_name, league, season, logo_url, primary_contact_name, primary_contact_title, primary_contact_email, primary_contact_phone, trips(id, opponent_label, arrival_date, city, status)',
+        'id, team_name, league, season, logo_url, primary_contact_name, primary_contact_title, primary_contact_email, primary_contact_phone, assigned_to, profiles(full_name, email), trips(id, opponent_label, arrival_date, city, status)',
       )
       .order('team_name')
       .then(({ data, error }) => {
         if (error) {
           setError(error.message)
         } else {
-          const rows = (data ?? []) as Client[]
+          const rows = (data ?? []).map((r: any) => ({ ...r, profiles: Array.isArray(r.profiles) ? (r.profiles[0] ?? null) : r.profiles })) as Client[]
           setClients(rows)
           if (rows.length > 0) setSelected(rows[0])
         }
@@ -242,6 +244,11 @@ export default function ClientsList() {
                             {c.primary_contact_email && ` · ${c.primary_contact_email}`}
                           </p>
                         )}
+                        {c.profiles?.full_name && (
+                          <p className="mt-0.5 truncate text-xs text-slate-300">
+                            Manager: {c.profiles.full_name}
+                          </p>
+                        )}
                       </div>
                       <div className="shrink-0 text-right">
                         {active > 0 ? (
@@ -271,11 +278,16 @@ export default function ClientsList() {
                     <TeamAvatar name={selected.team_name} logoUrl={selected.logo_url} size="lg" />
                     <div>
                       <h2 className="text-xl font-bold text-slate-900">{selected.team_name}</h2>
-                      <div className="mt-1 flex items-center gap-2">
+                      <div className="mt-1 flex items-center gap-2 flex-wrap">
                         <LeagueBadge league={selected.league} />
                         {selected.season && (
                           <span className="text-sm text-slate-400">
                             Season {selected.season}
+                          </span>
+                        )}
+                        {selected.profiles?.full_name && (
+                          <span className="text-xs text-slate-400">
+                            · {selected.profiles.full_name}
                           </span>
                         )}
                       </div>

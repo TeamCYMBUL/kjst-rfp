@@ -25,7 +25,10 @@ const blank = {
   primary_contact_address: '',
   primary_contact_phone: '',
   primary_contact_email: '',
+  assigned_to: '' as string, // profile id or ''
 }
+
+type StaffProfile = { id: string; full_name: string | null; email: string | null }
 
 // Default Terms live in a jsonb column. We keep numbers as strings in the form
 // and coerce on save so empty inputs become null rather than 0.
@@ -58,8 +61,15 @@ export default function ClientForm() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(editing)
+  const [staffProfiles, setStaffProfiles] = useState<StaffProfile[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Load all staff profiles for the assignment dropdown
+    supabase.from('profiles').select('id, full_name, email').order('full_name')
+      .then(({ data }) => { if (data) setStaffProfiles(data as StaffProfile[]) })
+  }, [])
 
   useEffect(() => {
     if (!editing) return
@@ -72,7 +82,7 @@ export default function ClientForm() {
         if (error) {
           setError(error.message)
         } else if (data) {
-          const c = data as Client
+          const c = data as Client & { assigned_to?: string | null }
           setFields({
             team_name: c.team_name ?? '',
             legal_entity: c.legal_entity ?? '',
@@ -83,6 +93,7 @@ export default function ClientForm() {
             primary_contact_address: c.primary_contact_address ?? '',
             primary_contact_phone: c.primary_contact_phone ?? '',
             primary_contact_email: c.primary_contact_email ?? '',
+            assigned_to: c.assigned_to ?? '',
           })
           setLogoUrl(c.logo_url ?? null)
           setTerms({ ...blankTerms, ...(c.default_terms ?? {}) })
@@ -139,6 +150,7 @@ export default function ClientForm() {
       primary_contact_phone: clean(fields.primary_contact_phone),
       primary_contact_email: clean(fields.primary_contact_email),
       logo_url: logoUrl ?? null,
+      assigned_to: fields.assigned_to || null,
       default_terms: {
         agreement_status: clean(terms.agreement_status ?? '') ?? undefined,
         commission_pct: clean(terms.commission_pct ?? '') ?? undefined,
@@ -262,6 +274,18 @@ export default function ClientForm() {
               <option value="Pending">Pending</option>
               <option value="Expired">Expired</option>
               <option value="None">None</option>
+            </Select>
+            <Select
+              label="Travel manager"
+              value={fields.assigned_to}
+              onChange={(e) => setFields((f) => ({ ...f, assigned_to: e.target.value }))}
+            >
+              <option value="">Unassigned</option>
+              {staffProfiles.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.full_name || p.email || p.id}
+                </option>
+              ))}
             </Select>
           </div>
         </Card>

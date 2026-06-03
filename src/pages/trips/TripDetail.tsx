@@ -40,15 +40,31 @@ type Answer = {
 
 // ── Score calculation ─────────────────────────────────────────────────────────
 
+type ScoreResult = {
+  score: number
+  noFlexCancel: boolean  // flex cancellation answered No → KJST dealbreaker
+  noCommission: boolean  // commission = 0% → KJST dealbreaker
+}
+
 function calcScores(
   submittedInvites: { id: string }[],
   responses: Map<string, HotelResponse>,
   answers: Map<string, Answer[]>,
-): Map<string, number> {
-  const scores = new Map<string, number>()
+  concessionItems: ConcessionItem[],
+): Map<string, ScoreResult> {
+  const scores = new Map<string, ScoreResult>()
   if (submittedInvites.length === 0) return scores
 
-  // Rate score (40 pts) — lowest rate = 40, others proportional
+  // Find key item IDs by label
+  const flexCancelItem = concessionItems.find((c) => c.label.toLowerCase().includes('flexible cancellation'))
+  const commissionItem  = concessionItems.find((c) => c.label.toLowerCase().includes('commissionable') || (c.label.toLowerCase().includes('commission') && c.answer_type === 'percent'))
+  const compSuitesItem  = concessionItems.find((c) => c.label.toLowerCase().includes('complimentary one bedroom suites'))
+  const suiteUpgItem    = concessionItems.find((c) => c.label.toLowerCase().includes('suite upgrades at the group'))
+  const meetingMainItem = concessionItems.find((c) => c.label.toLowerCase().includes('meeting space') && c.label.toLowerCase().includes('3,000'))
+  const massageRoomItem = concessionItems.find((c) => c.label.toLowerCase().includes('massage room'))
+  const postseasonItem  = concessionItems.find((c) => c.section === 'postseason')
+
+  // Rate score (25 pts) — lowest rate = 25 pts, others proportional
   const rates = submittedInvites
     .map((inv) => responses.get(inv.id)?.best_king_rate ?? null)
     .filter((r): r is number => r != null)
@@ -56,24 +72,49 @@ function calcScores(
 
   for (const inv of submittedInvites) {
     const resp = responses.get(inv.id)
-    const ans = answers.get(inv.id) ?? []
+    const ans  = answers.get(inv.id) ?? []
+    const ansMap = new Map(ans.map((a) => [a.concession_item_id, a]))
 
+    const getYesNo = (item: ConcessionItem | undefined) =>
+      item ? (ansMap.get(item.id)?.answer_yes_no ?? null) : null
+    const getValue = (item: ConcessionItem | undefined) =>
+      item ? (ansMap.get(item.id)?.answer_value ?? null) : null
+
+    // Dealbreaker flags (separate from score)
+    const flexAns = getYesNo(flexCancelItem)
+    const noFlexCancel = flexAns === false
+    const commValue = getValue(commissionItem)
+    const noCommission = commValue != null && (commValue.trim() === '0' || commValue.trim() === '0%')
+
+    // 1. Flex cancel — 20 pts
+    const flexScore = flexAns === true ? 20 : 0
+
+    // 2. Commission > 0% — 15 pts
+    const commScore = (!noCommission && commValue != null && commValue.trim() !== '') ? 15 : 0
+
+    // 3. Rate competitiveness — 25 pts
     let rateScore = 0
     if (minRate != null && resp?.best_king_rate != null) {
-      rateScore = Math.round((minRate / resp.best_king_rate) * 40)
-    } else if (resp?.best_king_rate == null) {
-      rateScore = 0
-    } else {
-      rateScore = 40 // only one hotel submitted
+      rateScore = Math.round((minRate / resp.best_king_rate) * 25)
+    } else if (resp?.best_king_rate != null) {
+      rateScore = 25
     }
 
-    let concessionScore = 0
-    if (ans.length > 0) {
-      const yesCount = ans.filter((a) => a.answer_yes_no === true).length
-      concessionScore = Math.round((yesCount / ans.length) * 60)
-    }
+    // 4. Playoff / postseason clause — 10 pts
+    const playoffScore = getYesNo(postseasonItem) === true ? 10 : 0
 
-    scores.set(inv.id, Math.min(100, rateScore + concessionScore))
+    // 5. Meeting space (main + massage room) — up to 10 pts
+    const meetingScore =
+      (getYesNo(meetingMainItem) === true ? 5 : 0) +
+      (getYesNo(massageRoomItem) === true ? 5 : 0)
+
+    // 6. Suite concessions — up to 20 pts
+    const compSuitesVal = Number(getValue(compSuitesItem) ?? 0)
+    const suiteUpgVal   = Number(getValue(suiteUpgItem)   ?? 0)
+    const suiteScore = (compSuitesVal > 0 ? 10 : 0) + (suiteUpgVal > 0 ? 10 : 0)
+
+    const total = Math.min(100, flexScore + commScore + rateScore + playoffScore + meetingScore + suiteScore)
+    scores.set(inv.id, { score: total, noFlexCancel, noCommission })
   }
   return scores
 }
@@ -242,28 +283,33 @@ function BidSummaryTable({
   scores,
   selectedId,
   onSelect,
+  onAward,
+  awardingId,
 }: {
   invites: Invitation[]
   responses: Map<string, HotelResponse>
   answers: Map<string, Answer[]>
   concessionItems: ConcessionItem[]
-  scores: Map<string, number>
+  scores: Map<string, ScoreResult>
   selectedId: string | null
   onSelect: (id: string) => void
+  onAward: (inv: Invitation) => void
+  awardingId: string | null
 }) {
   const submitted = invites.filter((i) => ['submitted', 'awarded'].includes(i.status))
   if (submitted.length === 0) return null
 
-  // Find concession item IDs for key fields
-  const commissionItem = concessionItems.find((c) =>
-    c.label.toLowerCase().includes('commissionable') || c.label.toLowerCase().includes('commission')
-  )
-  const noWalkItem = concessionItems.find((c) => c.label.toLowerCase().includes('no walk'))
+  // Find concession item IDs for key columns
+  const commissionItem  = concessionItems.find((c) => c.label.toLowerCase().includes('commissionable') || (c.label.toLowerCase().includes('commission') && c.answer_type === 'percent'))
+  const compSuitesItem  = concessionItems.find((c) => c.label.toLowerCase().includes('complimentary one bedroom suites'))
+  const suiteUpgItem    = concessionItems.find((c) => c.label.toLowerCase().includes('suite upgrades at the group'))
 
   const getAnswer = (invId: string, itemId: string | undefined) => {
     if (!itemId) return null
     return answers.get(invId)?.find((a) => a.concession_item_id === itemId) ?? null
   }
+
+  const hasAwarded = invites.some((i) => i.status === 'awarded')
 
   return (
     <div className="border-b border-slate-200 bg-white px-6 py-4">
@@ -274,59 +320,90 @@ function BidSummaryTable({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-100 text-left text-xs font-semibold text-slate-400">
-              <th className="pb-2 pr-4">Hotel</th>
-              <th className="pb-2 pr-4 text-right whitespace-nowrap">King Rate</th>
-              <th className="pb-2 pr-4 text-right whitespace-nowrap">Occ. Tax</th>
-              <th className="pb-2 pr-4 text-right whitespace-nowrap">Commission</th>
-              <th className="pb-2 pr-4 text-center whitespace-nowrap">No Walk</th>
-              <th className="pb-2 text-center whitespace-nowrap">Score</th>
+              <th className="pb-2 pr-6">Hotel</th>
+              <th className="pb-2 pr-6 text-right whitespace-nowrap">King Rate</th>
+              <th className="pb-2 pr-6 text-center whitespace-nowrap">Free Suites</th>
+              <th className="pb-2 pr-6 text-center whitespace-nowrap">Suite Upgrades</th>
+              <th className="pb-2 pr-6 text-right whitespace-nowrap">Commission</th>
+              <th className="pb-2 pr-6 text-center whitespace-nowrap">Score</th>
+              <th className="pb-2 text-right whitespace-nowrap"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {[...submitted].sort((a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0)).map((inv) => {
-              const resp = responses.get(inv.id)
-              const commAns = getAnswer(inv.id, commissionItem?.id)
-              const noWalkAns = getAnswer(inv.id, noWalkItem?.id)
-              const score = scores.get(inv.id) ?? 0
-              const isSelected = inv.id === selectedId
-              return (
-                <tr
-                  key={inv.id}
-                  onClick={() => onSelect(inv.id)}
-                  className={`cursor-pointer transition-colors ${
-                    isSelected ? 'bg-[#1C1008]/5' : 'hover:bg-slate-50'
-                  }`}
-                >
-                  <td className="py-2.5 pr-4">
-                    <span className={`font-medium ${isSelected ? 'text-[#1C1008]' : 'text-slate-800'}`}>
-                      {inv.status === 'awarded' && '🏆 '}
-                      {inv.hotel_name}
-                    </span>
-                  </td>
-                  <td className="py-2.5 pr-4 text-right font-medium text-slate-700">
-                    {resp?.best_king_rate != null ? `$${resp.best_king_rate.toLocaleString()}` : '—'}
-                  </td>
-                  <td className="py-2.5 pr-4 text-right text-slate-600">
-                    {resp?.occupancy_tax || '—'}
-                  </td>
-                  <td className="py-2.5 pr-4 text-right text-slate-600">
-                    {commAns?.answer_value || (commAns?.answer_yes_no === true ? 'Yes' : commAns?.answer_yes_no === false ? 'No' : '—')}
-                  </td>
-                  <td className="py-2.5 pr-4 text-center">
-                    {noWalkAns?.answer_yes_no === true ? (
-                      <span className="text-emerald-600 font-semibold">✓</span>
-                    ) : noWalkAns?.answer_yes_no === false ? (
-                      <span className="text-red-500">✗</span>
-                    ) : (
-                      <span className="text-slate-300">—</span>
-                    )}
-                  </td>
-                  <td className="py-2.5 text-center">
-                    <ScoreBadge score={score} />
-                  </td>
-                </tr>
-              )
-            })}
+            {[...submitted]
+              .sort((a, b) => (scores.get(b.id)?.score ?? 0) - (scores.get(a.id)?.score ?? 0))
+              .map((inv) => {
+                const resp       = responses.get(inv.id)
+                const result     = scores.get(inv.id)
+                const commAns    = getAnswer(inv.id, commissionItem?.id)
+                const compSuites = getAnswer(inv.id, compSuitesItem?.id)
+                const suiteUpg   = getAnswer(inv.id, suiteUpgItem?.id)
+                const isSelected = inv.id === selectedId
+                const isAwarded  = inv.status === 'awarded'
+                return (
+                  <tr
+                    key={inv.id}
+                    onClick={() => onSelect(inv.id)}
+                    className={`cursor-pointer transition-colors ${isSelected ? 'bg-[#1C1008]/5' : 'hover:bg-slate-50'}`}
+                  >
+                    {/* Hotel name + issue flags */}
+                    <td className="py-2.5 pr-6">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`font-medium ${isSelected ? 'text-[#1C1008]' : 'text-slate-800'}`}>
+                          {isAwarded && '🏆 '}{inv.hotel_name}
+                        </span>
+                        {result?.noFlexCancel && (
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-100 text-red-600">No flex cancel</span>
+                        )}
+                        {result?.noCommission && (
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-orange-100 text-orange-600">No commission</span>
+                        )}
+                        {resp?.stay2_king_rate != null && (
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-slate-100 text-slate-500">2 stays</span>
+                        )}
+                      </div>
+                    </td>
+                    {/* King rate */}
+                    <td className="py-2.5 pr-6 text-right font-medium text-slate-700">
+                      {resp?.best_king_rate != null ? `$${resp.best_king_rate.toLocaleString()}` : '—'}
+                    </td>
+                    {/* Free (comp) suites */}
+                    <td className="py-2.5 pr-6 text-center">
+                      <span className={`font-semibold ${Number(compSuites?.answer_value ?? 0) > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        {compSuites?.answer_value ?? '—'}
+                      </span>
+                    </td>
+                    {/* Suite upgrades at king rate */}
+                    <td className="py-2.5 pr-6 text-center">
+                      <span className={`font-semibold ${Number(suiteUpg?.answer_value ?? 0) > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        {suiteUpg?.answer_value ?? '—'}
+                      </span>
+                    </td>
+                    {/* Commission */}
+                    <td className={`py-2.5 pr-6 text-right font-medium ${result?.noCommission ? 'text-orange-500' : 'text-slate-700'}`}>
+                      {commAns?.answer_value || '—'}
+                    </td>
+                    {/* Score */}
+                    <td className="py-2.5 pr-6 text-center">
+                      {result ? <ScoreBadge score={result.score} /> : <span className="text-slate-300">—</span>}
+                    </td>
+                    {/* Award */}
+                    <td className="py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                      {isAwarded ? (
+                        <span className="text-xs text-amber-600 font-semibold">Awarded</span>
+                      ) : !hasAwarded ? (
+                        <button
+                          onClick={() => onAward(inv)}
+                          disabled={awardingId === inv.id}
+                          className="rounded-lg px-3 py-1 text-xs font-semibold bg-[#1C1008] text-white hover:bg-[#2d1e0e] disabled:opacity-40 transition-colors"
+                        >
+                          {awardingId === inv.id ? '…' : 'Select'}
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                )
+              })}
           </tbody>
         </table>
       </div>
@@ -533,31 +610,48 @@ function HotelPanel({
 
         {isSubmitted && !loadingBid && response && (
           <div className="space-y-0 divide-y divide-slate-100">
-            {/* Quick stats chips */}
+            {/* Quick stats — top 5 items that matter most */}
             {(() => {
               const ansMap = new Map((preloadedAnswers ?? answers).map((a) => [a.concession_item_id, a]))
-              const commItem = concessionItems.find((c) => c.label.toLowerCase().includes('commissionable') || c.label.toLowerCase().includes('commission'))
-              const noWalkItem = concessionItems.find((c) => c.label.toLowerCase().includes('no walk'))
-              const compRoomsItem = concessionItems.find((c) => c.label.toLowerCase().includes('complimentary') && c.label.toLowerCase().includes('room'))
-              const commAns = commItem ? ansMap.get(commItem.id) : null
-              const noWalkAns = noWalkItem ? ansMap.get(noWalkItem.id) : null
-              const compAns = compRoomsItem ? ansMap.get(compRoomsItem.id) : null
-              const chips = [
-                { label: 'Commission', value: commAns?.answer_value || (commAns?.answer_yes_no === true ? 'Yes' : commAns?.answer_yes_no === false ? 'No' : null) },
-                { label: 'No Walk', value: noWalkAns?.answer_yes_no === true ? 'Yes ✓' : noWalkAns?.answer_yes_no === false ? 'No ✗' : null, ok: noWalkAns?.answer_yes_no },
-                { label: 'Comp Rooms', value: compAns?.answer_value || (compAns?.answer_yes_no === true ? 'Yes' : compAns?.answer_yes_no === false ? 'No' : null) },
-                { label: 'Score', value: score != null ? String(score) : null, isScore: true },
-              ].filter((c) => c.value != null)
+              const find = (test: (c: ConcessionItem) => boolean) => concessionItems.find(test)
+              const flexItem    = find((c) => c.label.toLowerCase().includes('flexible cancellation'))
+              const commItem    = find((c) => c.label.toLowerCase().includes('commissionable') || (c.label.toLowerCase().includes('commission') && c.answer_type === 'percent'))
+              const compSuiteI  = find((c) => c.label.toLowerCase().includes('complimentary one bedroom suites'))
+              const suiteUpgI   = find((c) => c.label.toLowerCase().includes('suite upgrades at the group'))
+              const postItem    = find((c) => c.section === 'postseason')
+
+              const flexAns    = flexItem   ? ansMap.get(flexItem.id)   : null
+              const commAns    = commItem   ? ansMap.get(commItem.id)   : null
+              const compAns    = compSuiteI ? ansMap.get(compSuiteI.id) : null
+              const upgAns     = suiteUpgI  ? ansMap.get(suiteUpgI.id)  : null
+              const postAns    = postItem   ? ansMap.get(postItem.id)   : null
+
+              const noFlex = flexAns?.answer_yes_no === false
+              const noComm = commAns?.answer_value != null && (commAns.answer_value.trim() === '0' || commAns.answer_value.trim() === '0%')
+
+              type Chip = { label: string; value: string; ok?: boolean | null; warn?: boolean }
+              const chips: Chip[] = []
+              if (flexAns)  chips.push({ label: 'Flex cancel',      value: flexAns.answer_yes_no  === true ? '✓ Yes' : '✗ No',  ok: flexAns.answer_yes_no,  warn: noFlex })
+              if (commAns)  chips.push({ label: 'Commission',        value: commAns.answer_value ?? '—',                          warn: noComm })
+              if (compAns)  chips.push({ label: 'Free suites',       value: compAns.answer_value  ?? '—',                          ok: Number(compAns.answer_value ?? 0) > 0 })
+              if (upgAns)   chips.push({ label: 'Suite upgrades',    value: upgAns.answer_value   ?? '—',                          ok: Number(upgAns.answer_value  ?? 0) > 0 })
+              if (postAns)  chips.push({ label: 'Playoff clause',    value: postAns.answer_yes_no === true ? '✓ Yes' : '✗ No',  ok: postAns.answer_yes_no })
+              if (score != null) chips.push({ label: 'Score', value: String(score) })
+
               if (chips.length === 0) return null
               return (
                 <div className="flex flex-wrap gap-2 px-6 py-3 bg-slate-50 border-b border-slate-100">
                   {chips.map((chip) => (
                     <span key={chip.label} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
-                      chip.isScore
+                      chip.label === 'Score'
                         ? (score! >= 80 ? 'bg-emerald-100 text-emerald-700' : score! >= 60 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600')
-                        : chip.ok === false ? 'bg-red-50 text-red-600' : chip.ok === true ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                        : chip.warn
+                          ? 'bg-red-50 text-red-600'
+                          : chip.ok === true  ? 'bg-emerald-50 text-emerald-700'
+                          : chip.ok === false ? 'bg-red-50 text-red-600'
+                          : 'bg-slate-100 text-slate-600'
                     }`}>
-                      <span className="text-slate-400">{chip.label}:</span> {chip.value}
+                      <span className="opacity-60">{chip.label}:</span> {chip.value}
                     </span>
                   ))}
                 </div>
@@ -757,7 +851,8 @@ export default function TripDetail() {
   // Bulk responses + answers for the summary table and scoring
   const [allResponses, setAllResponses] = useState<Map<string, HotelResponse>>(new Map())
   const [allAnswers, setAllAnswers] = useState<Map<string, Answer[]>>(new Map())
-  const [scores, setScores] = useState<Map<string, number>>(new Map())
+  const [scores, setScores] = useState<Map<string, ScoreResult>>(new Map())
+  const [awardingId, setAwardingId] = useState<string | null>(null)
 
   const loadInvites = () => {
     supabase.from('rfp_invitations').select('*').eq('trip_id', id).order('created_at', { ascending: true })
@@ -788,7 +883,7 @@ export default function TripDetail() {
 
   // Bulk-fetch responses + answers for all submitted hotels (for summary table + scoring)
   useEffect(() => {
-    if (!invites) return
+    if (!invites || concessionItems.length === 0) return
     const submitted = invites.filter((i) => ['submitted', 'awarded'].includes(i.status))
     if (submitted.length === 0) return
     const ids = submitted.map((i) => i.id)
@@ -807,9 +902,9 @@ export default function TripDetail() {
 
       setAllResponses(respMap)
       setAllAnswers(ansMap)
-      setScores(calcScores(submitted, respMap, ansMap))
+      setScores(calcScores(submitted, respMap, ansMap, concessionItems))
     })
-  }, [invites])
+  }, [invites, concessionItems])
 
   const selectedInvite = invites?.find((i) => i.id === selectedId) ?? null
 
@@ -833,6 +928,21 @@ export default function TripDetail() {
   const markUnavailable = async (inv: Invitation) => {
     if (!confirm(`Mark "${inv.hotel_name}" as unavailable?\nThey'll be grayed out on the grid.`)) return
     await supabase.from('rfp_invitations').update({ status: 'unavailable' }).eq('id', inv.id)
+    loadInvites()
+  }
+
+  const awardHotel = async (inv: Invitation) => {
+    setAwardingId(inv.id)
+    // Mark this hotel as awarded, mark all other submitted hotels on this trip as passed
+    await Promise.all([
+      supabase.from('rfp_invitations').update({ status: 'awarded' }).eq('id', inv.id),
+      supabase.from('rfp_invitations')
+        .update({ status: 'passed' })
+        .eq('trip_id', id!)
+        .neq('id', inv.id)
+        .in('status', ['submitted']),
+    ])
+    setAwardingId(null)
     loadInvites()
   }
 
@@ -928,6 +1038,8 @@ export default function TripDetail() {
           scores={scores}
           selectedId={selectedId}
           onSelect={setSelectedId}
+          onAward={awardHotel}
+          awardingId={awardingId}
         />
       )}
 
@@ -1019,7 +1131,7 @@ export default function TripDetail() {
               trip={trip}
               concessionItems={concessionItems}
               preloadedAnswers={allAnswers.get(selectedInvite.id)}
-              score={scores.get(selectedInvite.id)}
+              score={scores.get(selectedInvite.id)?.score}
               onSendEmail={sendEmail}
               onMarkUnavailable={markUnavailable}
               onCopyLink={copyLink}
