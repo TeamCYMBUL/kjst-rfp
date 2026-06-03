@@ -2,14 +2,8 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useProfile } from '../hooks/useProfile'
+import { useOnboardingProgress } from '../hooks/useOnboardingProgress'
 
-const nav = [
-  { to: '/', label: 'Dashboard', end: true },
-  { to: '/clients', label: 'Clients' },
-  { to: '/trips', label: 'Trips' },
-  { to: '/hotels', label: 'Hotels' },
-  { to: '/template', label: 'Template' },
-]
 
 function KJLogoMark({ dark = false }: { dark?: boolean }) {
   const color = dark ? '#1C1008' : 'white'
@@ -48,6 +42,7 @@ export default function DashboardLayout() {
   const { user, signOut } = useAuth()
   const { isDark } = useTheme()
   const { isAdmin } = useProfile()
+  const { completedCount, allDone, steps } = useOnboardingProgress()
 
   return (
     <div className={`flex h-screen ${isDark ? 'bg-slate-900' : 'bg-slate-50'}`}>
@@ -61,22 +56,83 @@ export default function DashboardLayout() {
         </div>
 
         <nav className="flex-1 space-y-0.5 p-3">
-          {nav.map((item) => (
+          {/* Dashboard */}
+          <NavLink
+            to="/"
+            end
+            className={({ isActive }) =>
+              `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-white/15 text-white'
+                  : 'text-white/60 hover:bg-white/10 hover:text-white'
+              }`
+            }
+          >
+            <span className="mr-2">📊</span>Dashboard
+          </NavLink>
+
+          {/* Get Started — only when onboarding not complete */}
+          {!allDone && (
             <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
+              to="/getting-started"
               className={({ isActive }) =>
-                `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                `flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                   isActive
                     ? 'bg-white/15 text-white'
                     : 'text-white/60 hover:bg-white/10 hover:text-white'
                 }`
               }
             >
-              {item.label}
+              <span>
+                <span className="mr-2">🚀</span>Get Started
+              </span>
+              <span className="rounded-full bg-amber-400/90 px-1.5 py-0.5 text-[10px] font-bold text-[#1C1008]">
+                {completedCount}/{steps.length}
+              </span>
             </NavLink>
-          ))}
+          )}
+
+          {/* Clients */}
+          <NavLink
+            to="/clients"
+            className={({ isActive }) =>
+              `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-white/15 text-white'
+                  : 'text-white/60 hover:bg-white/10 hover:text-white'
+              }`
+            }
+          >
+            <span className="mr-2">🏀</span>Clients
+          </NavLink>
+
+          {/* Trips */}
+          <NavLink
+            to="/trips"
+            className={({ isActive }) =>
+              `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-white/15 text-white'
+                  : 'text-white/60 hover:bg-white/10 hover:text-white'
+              }`
+            }
+          >
+            <span className="mr-2">✈️</span>Trips
+          </NavLink>
+
+          {/* Hotels */}
+          <NavLink
+            to="/hotels"
+            className={({ isActive }) =>
+              `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-white/15 text-white'
+                  : 'text-white/60 hover:bg-white/10 hover:text-white'
+              }`
+            }
+          >
+            <span className="mr-2">🏨</span>Hotels
+          </NavLink>
 
           {/* Team — admin only */}
           {isAdmin && (
@@ -90,7 +146,7 @@ export default function DashboardLayout() {
                 }`
               }
             >
-              Team
+              <span className="mr-2">👥</span>Team
             </NavLink>
           )}
 
@@ -110,7 +166,7 @@ export default function DashboardLayout() {
               }`
             }
           >
-            ⚙️ Settings
+            <span className="mr-2">⚙️</span>Settings
           </NavLink>
           <button
             onClick={signOut}

@@ -311,9 +311,8 @@ export default function TripForm() {
             Night Scenarios
           </h2>
           <p className="mb-4 text-xs text-slate-400">
-            How many nights might the team stay? Check all that apply — hotels will quote rates for each scenario. Most trips are 1 night. Select 2 or 3 if the travel schedule hasn't been finalized yet.
+            Hotels will quote a separate rate for each option you select. Not sure yet? Check all that apply — you can narrow it down before sending.
           </p>
-          <p className="mb-4 text-xs text-slate-400 -mt-2">Not sure? Select all likely options — hotels will quote rates for each.</p>
           <div className="flex flex-wrap gap-3">
             {[1, 2, 3].map((n) => {
               const checked = nightScenarios.includes(n)

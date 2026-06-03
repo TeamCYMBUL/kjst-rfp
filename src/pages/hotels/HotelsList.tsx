@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabase'
 import { Loading, ErrorNote } from '../../components/ui'
 
@@ -491,6 +492,209 @@ function HotelDetail({
   )
 }
 
+// ── CSV Import Modal ──────────────────────────────────────────────────────────
+
+type ImportModalProps = { onClose: () => void; onImported: (count: number) => void }
+
+type ImportRow = {
+  name: string
+  chain: string
+  city: string
+  contact_name: string
+  contact_email: string
+  contact_phone: string
+}
+
+function HotelImportModal({ onClose, onImported }: ImportModalProps) {
+  const [parsed, setParsed] = useState<ImportRow[]>([])
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<number | null>(null)
+
+  const normalizeHeader = (h: string) => h.trim().toLowerCase().replace(/[\s_-]+/g, '_')
+
+  const parseFile = (file: File) => {
+    setImportError(null)
+    setParsed([])
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target!.result as ArrayBuffer)
+        const workbook = XLSX.read(data, { type: 'array' })
+        const sheet = workbook.Sheets[workbook.SheetNames[0]]
+        const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: '' })
+        if (rows.length === 0) { setImportError('No data rows found in file.'); return }
+
+        // Build a header map from first row keys
+        const firstRow = rows[0]
+        const headerMap: Record<string, string> = {}
+        for (const key of Object.keys(firstRow)) {
+          headerMap[normalizeHeader(key)] = key
+        }
+
+        const getCol = (row: Record<string, string>, ...aliases: string[]) => {
+          for (const alias of aliases) {
+            const raw = headerMap[normalizeHeader(alias)]
+            if (raw !== undefined && row[raw] !== undefined) return String(row[raw]).trim()
+          }
+          return ''
+        }
+
+        const valid: ImportRow[] = []
+        for (const row of rows) {
+          const name = getCol(row, 'name', 'property_name', 'hotel_name', 'hotel')
+          if (!name) continue
+          valid.push({
+            name,
+            chain: getCol(row, 'chain', 'brand', 'chain_brand'),
+            city: getCol(row, 'city', 'location'),
+            contact_name: getCol(row, 'contact_name', 'contact', 'contact name'),
+            contact_email: getCol(row, 'contact_email', 'email', 'contact email'),
+            contact_phone: getCol(row, 'contact_phone', 'phone', 'contact phone'),
+          })
+        }
+
+        if (valid.length === 0) { setImportError('No valid rows found. Make sure the file has a "name" column.'); return }
+        setParsed(valid)
+      } catch {
+        setImportError('Could not parse file. Make sure it is a valid CSV or Excel file.')
+      }
+    }
+    reader.readAsArrayBuffer(file)
+  }
+
+  const downloadTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['name', 'chain', 'city', 'contact_name', 'contact_email', 'contact_phone'],
+      ['Four Seasons Miami', 'Four Seasons', 'Miami', 'John Smith', 'jsmith@fourseasons.com', '305-555-0100'],
+    ])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Hotels')
+    XLSX.writeFile(wb, 'hotel_import_template.csv')
+  }
+
+  const doImport = async () => {
+    if (parsed.length === 0) return
+    setImporting(true)
+    setImportError(null)
+    const payload = parsed.map((r) => ({
+      name: r.name,
+      chain: r.chain || null,
+      city: r.city || null,
+      contact_name: r.contact_name || null,
+      contact_email: r.contact_email || null,
+      contact_phone: r.contact_phone || null,
+    }))
+    // Insert in batches of 100
+    const BATCH = 100
+    let inserted = 0
+    for (let i = 0; i < payload.length; i += BATCH) {
+      const batch = payload.slice(i, i + BATCH)
+      const { error } = await supabase.from('hotels').insert(batch)
+      if (error) { setImportError(error.message); setImporting(false); return }
+      inserted += batch.length
+    }
+    setImporting(false)
+    setSuccess(inserted)
+    setTimeout(() => onImported(inserted), 1200)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <h2 className="text-sm font-semibold text-slate-800">Import Hotels from CSV</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">✕</button>
+        </div>
+        <div className="p-6 space-y-4">
+          {/* Template download */}
+          <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+            <div>
+              <p className="text-sm font-medium text-slate-700">Download template</p>
+              <p className="text-xs text-slate-400">CSV with the expected column headers and an example row</p>
+            </div>
+            <button
+              onClick={downloadTemplate}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              ↓ Template
+            </button>
+          </div>
+
+          {/* File upload */}
+          <div>
+            <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 px-6 py-8 text-center hover:border-[#1C1008]/30 transition-colors">
+              <span className="text-2xl mb-2">📁</span>
+              <span className="text-sm font-medium text-slate-700">Click to upload CSV or Excel file</span>
+              <span className="mt-1 text-xs text-slate-400">Columns: name (required), chain, city, contact_name, contact_email, contact_phone</span>
+              <input
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) parseFile(f) }}
+              />
+            </label>
+          </div>
+
+          {importError && (
+            <p className="text-xs text-red-600">{importError}</p>
+          )}
+
+          {/* Preview table */}
+          {parsed.length > 0 && (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{parsed.length} hotels ready to import</p>
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-slate-50">
+                    <tr className="border-b border-slate-200 text-left text-slate-400">
+                      <th className="px-3 py-2 font-semibold">Name</th>
+                      <th className="px-3 py-2 font-semibold">Chain</th>
+                      <th className="px-3 py-2 font-semibold">City</th>
+                      <th className="px-3 py-2 font-semibold">Contact</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {parsed.map((row, i) => (
+                      <tr key={i} className="hover:bg-slate-50">
+                        <td className="px-3 py-2 font-medium text-slate-800">{row.name}</td>
+                        <td className="px-3 py-2 text-slate-500">{row.chain || '—'}</td>
+                        <td className="px-3 py-2 text-slate-500">{row.city || '—'}</td>
+                        <td className="px-3 py-2 text-slate-500">{row.contact_name || row.contact_email || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {success !== null && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+              ✅ {success} hotel{success !== 1 ? 's' : ''} imported successfully!
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <button onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-medium text-slate-500 hover:bg-slate-50">
+              Cancel
+            </button>
+            {parsed.length > 0 && success === null && (
+              <button
+                onClick={doImport}
+                disabled={importing}
+                className="rounded-lg bg-[#1C1008] px-4 py-2 text-xs font-semibold text-white hover:bg-[#2d1e0e] disabled:opacity-50 transition-colors"
+              >
+                {importing ? 'Importing…' : `Import ${parsed.length} hotel${parsed.length !== 1 ? 's' : ''}`}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function HotelsList() {
@@ -501,6 +705,7 @@ export default function HotelsList() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [mode, setMode] = useState<'view' | 'add' | 'edit'>('view')
   const [sortBy, setSortBy] = useState<SortBy>('brand')
+  const [showImport, setShowImport] = useState(false)
 
   const load = () => {
     supabase.from('hotels').select('*').order('name')
@@ -547,12 +752,20 @@ export default function HotelsList() {
           <h1 className="text-lg font-semibold text-slate-900">Hotel Database</h1>
           <p className="text-sm text-slate-500">{hotels.length} propert{hotels.length === 1 ? 'y' : 'ies'} · click any hotel to view details</p>
         </div>
-        <button
-          onClick={() => { setMode('add'); setSelectedId(null) }}
-          className="rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2d1e0e] transition-colors"
-        >
-          + Add hotel
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowImport(true)}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            ↑ Import CSV
+          </button>
+          <button
+            onClick={() => { setMode('add'); setSelectedId(null) }}
+            className="rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2d1e0e] transition-colors"
+          >
+            + Add hotel
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
@@ -691,6 +904,13 @@ export default function HotelsList() {
           )}
         </div>
       </div>
+
+      {showImport && (
+        <HotelImportModal
+          onClose={() => setShowImport(false)}
+          onImported={(_n) => { setShowImport(false); load() }}
+        />
+      )}
     </div>
   )
 }

@@ -246,7 +246,7 @@ function InviteForm({
 
   return (
     <div className="border-b border-slate-200 bg-slate-50 p-4">
-      <p className="mb-1 text-sm font-semibold text-slate-700">Add a hotel</p>
+      <p className="mb-1 text-sm font-semibold text-slate-700">Add hotel to RFP</p>
       <p className="mb-3 text-xs text-slate-400">Hotels receive a secure link and can't see each other's bids.</p>
       {error && <p className="mb-2 text-xs text-red-600">{error}</p>}
       <form onSubmit={submit} className="space-y-3">
@@ -342,7 +342,7 @@ function BidSummaryTable({
   return (
     <div className="border-b border-slate-200 bg-white px-6 py-4">
       <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-        Submitted Bids — {submitted.length} hotel{submitted.length !== 1 ? 's' : ''}
+        Submitted RFPs — {submitted.length} hotel{submitted.length !== 1 ? 's' : ''}
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -353,7 +353,15 @@ function BidSummaryTable({
               <th className="pb-2 pr-6 text-center whitespace-nowrap">Free Suites</th>
               <th className="pb-2 pr-6 text-center whitespace-nowrap">Suite Upgrades</th>
               <th className="pb-2 pr-6 text-right whitespace-nowrap">Commission</th>
-              <th className="pb-2 pr-6 text-center whitespace-nowrap">Score</th>
+              <th className="pb-2 pr-6 text-center whitespace-nowrap">
+                Score
+                <span
+                  className="ml-1 cursor-help text-slate-300 hover:text-slate-500"
+                  title="KJST score out of 100: Flex cancellation (20pts) · Commission >0% (15pts) · Rate vs lowest bid (25pts) · Playoff clause (10pts) · Meeting space (10pts) · Suite concessions (20pts)"
+                >
+                  ⓘ
+                </span>
+              </th>
               <th className="pb-2 text-right whitespace-nowrap"></th>
             </tr>
           </thead>
@@ -884,6 +892,8 @@ export default function TripDetail() {
   const [versions, setVersions] = useState<{id: string; version_label: string; created_at: string}[]>([])
   const [viewingVersion, setViewingVersion] = useState<{label: string; snapshot: any} | null>(null)
   const [savingVersion, setSavingVersion] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
+  const exportRef = useRef<HTMLDivElement>(null)
 
   const loadInvites = () => {
     supabase.from('rfp_invitations').select('*').eq('trip_id', id).order('created_at', { ascending: true })
@@ -978,6 +988,17 @@ export default function TripDetail() {
     setAwardingId(null)
     loadInvites()
   }
+
+  // Close export dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   const doSendReminders = async () => {
     if (!id) return
@@ -1100,21 +1121,44 @@ export default function TripDetail() {
           <button onClick={doSendReminders} disabled={sendingReminders} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors">
             {sendingReminders ? 'Sending…' : 'Send reminders'}
           </button>
-          <button
-            onClick={exportForTeam}
-            disabled={!invites?.some((i) => ['submitted', 'awarded'].includes(i.status))}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
-            title="Export stripped grid for the team (no commission, no internal data)"
-          >
-            ↓ Team export
-          </button>
-          <Link
-            to={`/trips/${id}/proposal`}
-            target="_blank"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-          >
-            📄 Proposal PDF
-          </Link>
+          {/* Export dropdown */}
+          <div className="relative" ref={exportRef}>
+            <button
+              onClick={() => setExportOpen(v => !v)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              ↓ Export
+              <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" /></svg>
+            </button>
+            {exportOpen && (
+              <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
+                <Link
+                  to={`/trips/${id}/grid`}
+                  onClick={() => setExportOpen(false)}
+                  className="flex w-full flex-col border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50 transition-colors"
+                >
+                  <span className="text-sm font-medium text-slate-800">Internal comparison</span>
+                  <span className="text-xs text-slate-400">Full grid for KJST staff (.xlsx)</span>
+                </Link>
+                <button
+                  onClick={() => { exportForTeam(); setExportOpen(false) }}
+                  className="flex w-full flex-col border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50 transition-colors"
+                >
+                  <span className="text-sm font-medium text-slate-800">Team summary</span>
+                  <span className="text-xs text-slate-400">Stripped sheet for the client (.xlsx)</span>
+                </button>
+                <Link
+                  to={`/trips/${id}/proposal`}
+                  target="_blank"
+                  onClick={() => setExportOpen(false)}
+                  className="flex w-full flex-col px-4 py-3 text-left hover:bg-slate-50 transition-colors"
+                >
+                  <span className="text-sm font-medium text-slate-800">Proposal PDF</span>
+                  <span className="text-xs text-slate-400">Clean proposal to email the client</span>
+                </Link>
+              </div>
+            )}
+          </div>
           <button
             onClick={saveVersion}
             disabled={savingVersion}
@@ -1148,6 +1192,26 @@ export default function TripDetail() {
       {!awarded && allResponded && invites.length > 0 && (
         <div className="border-b border-emerald-200 bg-emerald-50 px-6 py-2 text-xs text-emerald-800">
           ✅ All hotels have responded — select a winner below or open the <Link to={`/trips/${id}/grid`} className="font-semibold underline">full comparison grid</Link>.
+        </div>
+      )}
+
+      {/* ── Grid discovery banner (shown when ≥2 hotels submitted) ── */}
+      {invites && invites.filter((i) => ['submitted', 'awarded'].includes(i.status)).length >= 2 && (
+        <div className="mx-6 mb-0 mt-4 flex items-center justify-between rounded-xl border border-[#1C1008]/20 bg-[#1C1008]/5 px-5 py-3.5">
+          <div>
+            <p className="text-sm font-semibold text-[#1C1008]">
+              {invites.filter((i) => ['submitted', 'awarded'].includes(i.status)).length} bids in — ready to compare
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              View all bids side by side on the comparison grid
+            </p>
+          </div>
+          <Link
+            to={`/trips/${id}/grid`}
+            className="shrink-0 rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2d1e0e] transition-colors"
+          >
+            View Comparison Grid →
+          </Link>
         </div>
       )}
 
@@ -1206,7 +1270,7 @@ export default function TripDetail() {
           <div className="flex-1 overflow-y-auto">
             {invites.length === 0 && !showInvite && (
               <div className="px-4 py-6 text-center text-xs text-slate-400">
-                No hotels yet.<br />Add one below to get started.
+                No hotels added to RFP yet.<br />Add one below to get started.
               </div>
             )}
             {invites.map((inv) => {

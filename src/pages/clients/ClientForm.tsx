@@ -58,6 +58,7 @@ export default function ClientForm() {
 
   const [fields, setFields] = useState(blank)
   const [terms, setTerms] = useState<DefaultTerms>(blankTerms)
+  const [showTerms, setShowTerms] = useState(editing)
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(editing)
@@ -341,61 +342,71 @@ export default function ClientForm() {
         </Card>
 
         <Card className="p-6">
-          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Default terms
-          </h2>
-          <p className="mb-4 text-xs text-slate-400">
-            These pre-fill every new trip for this client, so staff usually only edit
-            city/opponent/dates.
-          </p>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <TextField
-              label="Attrition %"
-              value={terms.attrition_pct ?? ''}
-              onChange={setTerm('attrition_pct')}
-            />
-            <TextField
-              label="Default king rooms"
-              type="number"
-              value={terms.default_king_rooms ?? ''}
-              onChange={setTerm('default_king_rooms')}
-            />
-            <TextField
-              label="Default suites"
-              type="number"
-              value={terms.default_suites ?? ''}
-              onChange={setTerm('default_suites')}
-            />
-            <TextField
-              label="Default total rooms"
-              type="number"
-              value={terms.default_total_rooms ?? ''}
-              onChange={setTerm('default_total_rooms')}
-            />
-            <TextField
-              label="In-season tournament window"
-              value={terms.in_season_tournament_window ?? ''}
-              onChange={setTerm('in_season_tournament_window')}
-            />
-            <TextField
-              label="Postseason window"
-              value={terms.postseason_window ?? ''}
-              onChange={setTerm('postseason_window')}
-            />
-            <TextField
-              label="Postseason rooms"
-              value={terms.postseason_rooms_text ?? ''}
-              onChange={setTerm('postseason_rooms_text')}
-            />
-            <div className="sm:col-span-2">
-              <TextArea
-                label="Guarantee language"
-                rows={3}
-                value={terms.guarantee_language ?? ''}
-                onChange={setTerm('guarantee_language')}
-              />
+          <button
+            type="button"
+            onClick={() => setShowTerms(v => !v)}
+            className="flex w-full items-center justify-between text-left"
+          >
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Default terms</h2>
+              <p className="mt-0.5 text-xs text-slate-400">
+                Pre-fills room counts and clauses on every new trip for this client
+              </p>
             </div>
-          </div>
+            <span className="shrink-0 text-xs font-medium text-slate-400 ml-4">
+              {showTerms ? '▲ Hide' : '▼ Set up (optional)'}
+            </span>
+          </button>
+          {showTerms && (
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <TextField
+                label="Attrition %"
+                value={terms.attrition_pct ?? ''}
+                onChange={setTerm('attrition_pct')}
+              />
+              <TextField
+                label="Default king rooms"
+                type="number"
+                value={terms.default_king_rooms ?? ''}
+                onChange={setTerm('default_king_rooms')}
+              />
+              <TextField
+                label="Default suites"
+                type="number"
+                value={terms.default_suites ?? ''}
+                onChange={setTerm('default_suites')}
+              />
+              <TextField
+                label="Default total rooms"
+                type="number"
+                value={terms.default_total_rooms ?? ''}
+                onChange={setTerm('default_total_rooms')}
+              />
+              <TextField
+                label="In-season tournament window"
+                value={terms.in_season_tournament_window ?? ''}
+                onChange={setTerm('in_season_tournament_window')}
+              />
+              <TextField
+                label="Postseason window"
+                value={terms.postseason_window ?? ''}
+                onChange={setTerm('postseason_window')}
+              />
+              <TextField
+                label="Postseason rooms"
+                value={terms.postseason_rooms_text ?? ''}
+                onChange={setTerm('postseason_rooms_text')}
+              />
+              <div className="sm:col-span-2">
+                <TextArea
+                  label="Guarantee language"
+                  rows={3}
+                  value={terms.guarantee_language ?? ''}
+                  onChange={setTerm('guarantee_language')}
+                />
+              </div>
+            </div>
+          )}
         </Card>
 
         <div className="flex items-center gap-3">

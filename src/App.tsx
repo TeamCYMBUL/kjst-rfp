@@ -16,6 +16,7 @@ import SettingsPage from './pages/settings/Settings'
 import Dashboard from './pages/Dashboard'
 import HotelsList from './pages/hotels/HotelsList'
 import TeamPage from './pages/team/TeamPage'
+import GettingStarted from './pages/GettingStarted'
 
 export default function App() {
   return (
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="trips/:id/proposal" element={<ProposalPrint />} />
 
           <Route path="hotels" element={<HotelsList />} />
+          <Route path="getting-started" element={<GettingStarted />} />
           <Route path="template" element={<TemplateEditor />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="team" element={<TeamPage />} />

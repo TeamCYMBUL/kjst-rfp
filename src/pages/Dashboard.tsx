@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { formatDate } from '../lib/format'
 import { Badge, ErrorNote, LinkButton, Loading } from '../components/ui'
+import { useOnboardingProgress } from '../hooks/useOnboardingProgress'
 
 
 
@@ -96,7 +97,7 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
             </div>
           )}
           {invited === 0 && (
-            <span className="text-xs text-slate-400">No hotels invited yet</span>
+            <span className="text-xs text-slate-400">No hotels added yet</span>
           )}
         </div>
       </div>
@@ -260,73 +261,70 @@ function StatusView({ trips }: { trips: DashTrip[] }) {
   )
 }
 
-const STEPS = [
-  {
-    n: 1,
-    title: 'Create a client',
-    body: 'Add a sports team with their default room-block terms. These pre-fill every new trip automatically.',
-    href: '/clients/new',
-    cta: 'Add client',
-  },
-  {
-    n: 2,
-    title: 'Create a trip',
-    body: 'Set city, opponent, game dates, and the room block requested. Set a deadline for hotel responses.',
-    href: '/trips/new',
-    cta: 'Add trip',
-  },
-  {
-    n: 3,
-    title: 'Invite hotels',
-    body: "From the trip page, add each hotel's name and contact. A unique, secure link is generated for each property.",
-    href: '/trips',
-    cta: 'Go to trips',
-  },
-  {
-    n: 4,
-    title: 'Watch bids arrive',
-    body: 'The comparison grid updates live as hotels submit. Every counteroffer stays attached to its line item.',
-    href: '/trips',
-    cta: 'View trips',
-  },
-  {
-    n: 5,
-    title: 'Export to Excel',
-    body: "Export KJST's standard comparison sheet, or generate a clean proposal PDF to send directly to the team.",
-    href: '/trips',
-    cta: 'View trips',
-  },
-]
 
-function HowItWorks({ compact = false }: { compact?: boolean }) {
+function OnboardingBanner() {
+  const { steps, completedCount, allDone, loading } = useOnboardingProgress()
+  if (loading || allDone) return null
+  const total = steps.length
+  const pct = Math.round((completedCount / total) * 100)
+
   return (
-    <div className={compact ? '' : 'rounded-xl border border-slate-200 bg-white p-8'}>
-      {!compact && (
-        <h2 className="mb-6 text-lg font-semibold text-slate-800">How it works</h2>
-      )}
-      <ol className={`${compact ? 'space-y-4' : 'space-y-6'}`}>
-        {STEPS.map((s) => (
-          <li key={s.n} className="flex gap-4">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1C1008]/10 text-xs font-bold text-[#1C1008]">
-              {s.n}
-            </div>
-            <div className="flex-1 flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-semibold text-slate-800">{s.title}</p>
-                <p className="mt-0.5 text-sm text-slate-500">{s.body}</p>
-              </div>
-              {s.href && (
-                <Link
-                  to={s.href}
-                  className="shrink-0 rounded-lg border border-[#1C1008]/20 bg-[#1C1008]/5 px-3 py-1.5 text-xs font-medium text-[#1C1008] hover:bg-[#1C1008]/10 transition-colors"
-                >
-                  {s.cta} →
-                </Link>
+    <div className="rounded-xl border border-[#1C1008]/15 bg-[#1C1008]/5 px-6 py-5">
+      {/* Header row */}
+      <div className="flex items-center justify-between gap-4 mb-3">
+        <div>
+          <p className="text-sm font-semibold text-[#1C1008]">
+            🚀 Get Started — {completedCount} of {total} steps complete
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="w-32 h-2 rounded-full bg-[#1C1008]/10 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-[#1C1008] transition-all"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <span className="text-xs font-medium text-[#1C1008]/60">{pct}%</span>
+        </div>
+      </div>
+
+      {/* Steps */}
+      <div className="space-y-2">
+        {steps.map((step) => (
+          <div key={step.n} className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2.5">
+              {step.done ? (
+                <span className="text-emerald-500 text-sm font-bold">✅</span>
+              ) : (
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#1C1008]/20 text-[10px] font-bold text-[#1C1008]/40">
+                  {step.n}
+                </span>
               )}
+              <span className={`text-sm ${step.done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                {step.title}
+              </span>
             </div>
-          </li>
+            {!step.done && (
+              <Link
+                to={step.href}
+                className="shrink-0 rounded-lg border border-[#1C1008]/20 bg-white px-3 py-1 text-xs font-medium text-[#1C1008] hover:bg-[#1C1008]/5 transition-colors"
+              >
+                {step.cta} →
+              </Link>
+            )}
+          </div>
         ))}
-      </ol>
+      </div>
+
+      {/* Footer */}
+      <div className="mt-4 text-right">
+        <Link
+          to="/getting-started"
+          className="text-xs font-medium text-[#1C1008]/70 hover:text-[#1C1008] hover:underline transition-colors"
+        >
+          View full guide →
+        </Link>
+      </div>
     </div>
   )
 }
@@ -424,7 +422,23 @@ export default function Dashboard() {
             {hasClients && <LinkButton to="/trips/new">Create a trip</LinkButton>}
           </div>
         </div>
-        <HowItWorks />
+        <div className="rounded-xl border border-slate-200 bg-white px-6 py-5">
+          <h2 className="mb-3 text-sm font-semibold text-slate-700">How this works</h2>
+          <div className="grid gap-3 sm:grid-cols-3 text-sm text-slate-500">
+            <div>
+              <p className="font-medium text-slate-700 mb-1">1. Set up clients &amp; hotels</p>
+              <p>Add each sports team you work with under Clients. Add your hotel contacts under Hotels — they'll auto-fill when you invite hotels to a trip.</p>
+            </div>
+            <div>
+              <p className="font-medium text-slate-700 mb-1">2. Create trips &amp; send RFPs</p>
+              <p>Every away game that needs a hotel block is a Trip. Add hotels to the trip and each one gets a unique, secure link to fill out their bid.</p>
+            </div>
+            <div>
+              <p className="font-medium text-slate-700 mb-1">3. Compare &amp; present</p>
+              <p>As hotels submit, the comparison grid updates live. When ready, export an internal sheet for your team or a clean proposal PDF for the client.</p>
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
@@ -441,6 +455,28 @@ export default function Dashboard() {
           <LinkButton to="/trips/new">
             + New trip
           </LinkButton>
+        </div>
+      </div>
+
+      {/* Onboarding banner */}
+      <OnboardingBanner />
+
+      {/* How this works — always-visible explanation */}
+      <div className="rounded-xl border border-slate-200 bg-white px-6 py-5">
+        <h2 className="mb-3 text-sm font-semibold text-slate-700">How this works</h2>
+        <div className="grid gap-3 sm:grid-cols-3 text-sm text-slate-500">
+          <div>
+            <p className="font-medium text-slate-700 mb-1">1. Set up clients &amp; hotels</p>
+            <p>Add each sports team you work with under Clients. Add your hotel contacts under Hotels — they'll auto-fill when you invite hotels to a trip.</p>
+          </div>
+          <div>
+            <p className="font-medium text-slate-700 mb-1">2. Create trips &amp; send RFPs</p>
+            <p>Every away game that needs a hotel block is a Trip. Add hotels to the trip and each one gets a unique, secure link to fill out their bid.</p>
+          </div>
+          <div>
+            <p className="font-medium text-slate-700 mb-1">3. Compare &amp; present</p>
+            <p>As hotels submit, the comparison grid updates live. When ready, export an internal sheet for your team or a clean proposal PDF for the client.</p>
+          </div>
         </div>
       </div>
 
@@ -584,15 +620,6 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* How it works (compact, collapsible) */}
-      <details className="rounded-xl border border-slate-200 bg-white">
-        <summary className="cursor-pointer select-none px-6 py-4 text-sm font-medium text-slate-600 hover:text-slate-900">
-          How it works — quick guide
-        </summary>
-        <div className="border-t border-slate-100 px-6 pb-6 pt-4">
-          <HowItWorks compact />
-        </div>
-      </details>
     </div>
   )
 }
