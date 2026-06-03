@@ -187,7 +187,7 @@ function InviteForm({
   const [contactEmail, setContactEmail] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [suggestions, setSuggestions] = useState<{ hotel_name: string; hotel_contact_name: string | null; hotel_contact_email: string | null }[]>([])
+  const [suggestions, setSuggestions] = useState<{ hotel_name: string; hotel_contact_name: string | null; hotel_contact_email: string | null; fromDatabase?: boolean }[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -201,11 +201,31 @@ function InviteForm({
 
   const search = async (q: string) => {
     if (q.length < 2) { setSuggestions([]); setShowSuggestions(false); return }
-    const { data } = await supabase.from('rfp_invitations').select('hotel_name, hotel_contact_name, hotel_contact_email').ilike('hotel_name', `%${q}%`).order('hotel_name').limit(8)
-    if (data && data.length > 0) {
-      const seen = new Set<string>()
-      const unique = data.filter((r) => { const k = `${r.hotel_name}||${r.hotel_contact_email ?? ''}`; if (seen.has(k)) return false; seen.add(k); return true })
-      setSuggestions(unique); setShowSuggestions(true)
+    const [dbRes, histRes] = await Promise.all([
+      supabase.from('hotels').select('name, contact_name, contact_email').ilike('name', `%${q}%`).limit(5),
+      supabase.from('rfp_invitations').select('hotel_name, hotel_contact_name, hotel_contact_email').ilike('hotel_name', `%${q}%`).order('hotel_name').limit(8),
+    ])
+    const dbSuggestions = (dbRes.data ?? []).map((h: any) => ({
+      hotel_name: h.name as string,
+      hotel_contact_name: h.contact_name as string | null,
+      hotel_contact_email: h.contact_email as string | null,
+      fromDatabase: true as const,
+    }))
+    const seen = new Set<string>(dbSuggestions.map((s) => s.hotel_name.toLowerCase()))
+    const histUnique = (histRes.data ?? []).filter((r: any) => {
+      const k = r.hotel_name.toLowerCase()
+      if (seen.has(k)) return false
+      seen.add(k)
+      return true
+    }).map((r: any) => ({
+      hotel_name: r.hotel_name as string,
+      hotel_contact_name: r.hotel_contact_name as string | null,
+      hotel_contact_email: r.hotel_contact_email as string | null,
+      fromDatabase: false as const,
+    }))
+    const merged = [...dbSuggestions, ...histUnique].slice(0, 8)
+    if (merged.length > 0) {
+      setSuggestions(merged); setShowSuggestions(true)
     } else { setSuggestions([]); setShowSuggestions(false) }
   }
 
@@ -226,7 +246,8 @@ function InviteForm({
 
   return (
     <div className="border-b border-slate-200 bg-slate-50 p-4">
-      <p className="mb-3 text-sm font-semibold text-slate-700">Add a hotel</p>
+      <p className="mb-1 text-sm font-semibold text-slate-700">Add a hotel</p>
+      <p className="mb-3 text-xs text-slate-400">Hotels receive a secure link and can't see each other's bids.</p>
       {error && <p className="mb-2 text-xs text-red-600">{error}</p>}
       <form onSubmit={submit} className="space-y-3">
         <div ref={ref} className="relative">
@@ -245,7 +266,12 @@ function InviteForm({
                   onMouseDown={() => { setHotelName(s.hotel_name); setContactName(s.hotel_contact_name ?? ''); setContactEmail(s.hotel_contact_email ?? ''); setShowSuggestions(false) }}
                   className="flex w-full flex-col border-b border-slate-100 px-3 py-2.5 text-left text-sm hover:bg-slate-50 last:border-0"
                 >
-                  <span className="font-medium text-slate-800">{s.hotel_name}</span>
+                  <span className="flex items-center gap-1.5 font-medium text-slate-800">
+                    {s.hotel_name}
+                    {s.fromDatabase && (
+                      <span className="rounded px-1 py-0.5 text-[10px] bg-blue-50 text-blue-500 font-semibold">📋 DB</span>
+                    )}
+                  </span>
                   {(s.hotel_contact_name || s.hotel_contact_email) && (
                     <span className="text-xs text-slate-400">{[s.hotel_contact_name, s.hotel_contact_email].filter(Boolean).join(' · ')}</span>
                   )}
@@ -855,6 +881,9 @@ export default function TripDetail() {
   const [allAnswers, setAllAnswers] = useState<Map<string, Answer[]>>(new Map())
   const [scores, setScores] = useState<Map<string, ScoreResult>>(new Map())
   const [awardingId, setAwardingId] = useState<string | null>(null)
+  const [versions, setVersions] = useState<{id: string; version_label: string; created_at: string}[]>([])
+  const [viewingVersion, setViewingVersion] = useState<{label: string; snapshot: any} | null>(null)
+  const [savingVersion, setSavingVersion] = useState(false)
 
   const loadInvites = () => {
     supabase.from('rfp_invitations').select('*').eq('trip_id', id).order('created_at', { ascending: true })
@@ -873,6 +902,8 @@ export default function TripDetail() {
     loadInvites()
     supabase.from('concession_items').select('id, sort_order, section, label, answer_type, requested_value').order('sort_order')
       .then(({ data }) => { if (data) setConcessionItems(data as ConcessionItem[]) })
+    supabase.from('grid_versions').select('id, version_label, created_at').eq('trip_id', id).order('created_at', { ascending: false })
+      .then(({ data }) => { setVersions((data as any[]) ?? []) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
@@ -965,6 +996,31 @@ export default function TripDetail() {
     else navigate('/trips')
   }
 
+  const saveVersion = async () => {
+    const label = window.prompt('Version label:', `Updated ${new Date().toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'})}`)
+    if (!label) return
+    setSavingVersion(true)
+    const snapshot = {
+      version: 1,
+      saved_at: new Date().toISOString(),
+      hotels: (invites ?? []).map((inv) => ({
+        id: inv.id,
+        hotel_name: inv.hotel_name,
+        status: inv.status,
+        king_rate: allResponses.get(inv.id)?.best_king_rate ?? null,
+      }))
+    }
+    await supabase.from('grid_versions').insert({ trip_id: id, version_label: label, snapshot })
+    setSavingVersion(false)
+    const { data } = await supabase.from('grid_versions').select('id, version_label, created_at').eq('trip_id', id).order('created_at', { ascending: false })
+    setVersions((data as any[]) ?? [])
+  }
+
+  const viewVersion = async (versionId: string) => {
+    const { data } = await supabase.from('grid_versions').select('snapshot, version_label').eq('id', versionId).single()
+    if (data) setViewingVersion({ label: data.version_label as string, snapshot: data.snapshot })
+  }
+
   const exportForTeam = () => {
     if (!trip || !invites) return
     // Find key concession item IDs
@@ -1051,6 +1107,20 @@ export default function TripDetail() {
             title="Export stripped grid for the team (no commission, no internal data)"
           >
             ↓ Team export
+          </button>
+          <Link
+            to={`/trips/${id}/proposal`}
+            target="_blank"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            📄 Proposal PDF
+          </Link>
+          <button
+            onClick={saveVersion}
+            disabled={savingVersion}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
+          >
+            {savingVersion ? 'Saving…' : '💾 Save Version'}
           </button>
           <LinkButton to={`/trips/${id}/grid`} variant="secondary">
             Full grid →
@@ -1165,6 +1235,31 @@ export default function TripDetail() {
             })}
           </div>
 
+          {/* Version history */}
+          {versions.length > 0 && (
+            <div className="border-t border-slate-100 px-4 py-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Version History</p>
+              <div className="space-y-1">
+                {versions.map((v) => (
+                  <div key={v.id} className="flex items-center justify-between gap-2">
+                    <span className="truncate text-xs text-slate-600">📌 {v.version_label}</span>
+                    <button
+                      onClick={() => viewVersion(v.id)}
+                      className="shrink-0 rounded px-2 py-0.5 text-[10px] font-medium text-slate-500 hover:bg-slate-100 transition-colors"
+                    >
+                      View
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {versions.length === 0 && (
+            <div className="border-t border-slate-100 px-4 py-2">
+              <p className="text-xs text-slate-300 italic">No versions saved yet</p>
+            </div>
+          )}
+
           {/* Add hotel button */}
           <div className="border-t border-slate-100 p-3">
             <button
@@ -1208,6 +1303,43 @@ export default function TripDetail() {
           )}
         </div>
       </div>
+
+      {/* ── Version history modal ── */}
+      {viewingVersion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <h2 className="text-sm font-semibold text-slate-800">Version: {viewingVersion.label}</h2>
+              <button onClick={() => setViewingVersion(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+            <div className="p-6">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 text-left text-xs font-semibold text-slate-400">
+                    <th className="pb-2 pr-4">Hotel</th>
+                    <th className="pb-2 pr-4">Status</th>
+                    <th className="pb-2 text-right">King Rate</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {(viewingVersion.snapshot?.hotels ?? []).map((h: any, i: number) => (
+                    <tr key={i}>
+                      <td className="py-2 pr-4 font-medium text-slate-800">{h.hotel_name}</td>
+                      <td className="py-2 pr-4 capitalize text-slate-500">{h.status}</td>
+                      <td className="py-2 text-right text-slate-700">{h.king_rate != null ? `$${h.king_rate.toLocaleString()}` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="mt-4 text-right">
+                <button onClick={() => setViewingVersion(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-medium text-slate-500 hover:bg-slate-50">
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

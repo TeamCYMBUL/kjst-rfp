@@ -964,9 +964,17 @@ export default function RfpForm() {
           {sections.map((section) => {
             const items = bySection[section]
             if (!items || items.length === 0) return null
+            const hasFlexCancel = section === 'concessions' && items.some((i) => i.label.toLowerCase().includes('flexible cancellation'))
             return (
               <div key={section} className="rounded-xl border border-slate-200 bg-white p-6">
                 <SectionHeading>{SECTION_LABELS[section]}</SectionHeading>
+
+                {/* Flex cancel warning */}
+                {hasFlexCancel && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 mb-3">
+                    ⚠️ <strong>Required:</strong> Flexible cancellation is a non-negotiable requirement. Selecting "No" will mark your bid as ineligible.
+                  </div>
+                )}
 
                 {/* Show window context for tournament / postseason */}
                 {section === 'in_season_tournament' && data.invitation.trips.in_season_tournament_window && (

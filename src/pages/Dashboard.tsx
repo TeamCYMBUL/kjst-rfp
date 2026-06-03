@@ -292,7 +292,7 @@ const STEPS = [
   {
     n: 5,
     title: 'Export to Excel',
-    body: "One click produces KJST's standard comparison sheet — ready to send to the team.",
+    body: "Export KJST's standard comparison sheet, or generate a clean proposal PDF to send directly to the team.",
     href: '/trips',
     cta: 'View trips',
   },

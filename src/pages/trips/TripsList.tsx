@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { formatDate } from '../../lib/format'
 import { Badge, Card, EmptyState, ErrorNote, LinkButton, Loading, PageHeader } from '../../components/ui'
+import ScheduleImportModal from './ScheduleImport'
 
 type Row = {
   id: string
@@ -20,6 +21,8 @@ export default function TripsList() {
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [showImport, setShowImport] = useState(false)
+  const [importBanner, setImportBanner] = useState<string | null>(null)
 
   const load = () => {
     supabase
@@ -57,7 +60,34 @@ export default function TripsList() {
       <PageHeader
         title="Trips"
         subtitle="Road trips an RFP is being run for."
-        action={<LinkButton to="/trips/new">Add Trip</LinkButton>}
+        action={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowImport(true)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              ↑ Import Schedule
+            </button>
+            <LinkButton to="/trips/new">Add Trip</LinkButton>
+          </div>
+        }
+      />
+
+      {importBanner && (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          ✅ {importBanner}
+        </div>
+      )}
+
+      <ScheduleImportModal
+        isOpen={showImport}
+        onClose={() => setShowImport(false)}
+        onImported={(count) => {
+          setShowImport(false)
+          load()
+          setImportBanner(`${count} trip${count !== 1 ? 's' : ''} created as drafts`)
+          setTimeout(() => setImportBanner(null), 3000)
+        }}
       />
 
       {rows.length === 0 ? (

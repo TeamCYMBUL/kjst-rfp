@@ -9,6 +9,7 @@ import TripsList from './pages/trips/TripsList'
 import TripForm from './pages/trips/TripForm'
 import TripDetail from './pages/trips/TripDetail'
 import TripGrid from './pages/trips/TripGrid'
+import ProposalPrint from './pages/trips/ProposalPrint'
 import RfpForm from './pages/rfp/RfpForm'
 import TemplateEditor from './pages/settings/TemplateEditor'
 import SettingsPage from './pages/settings/Settings'
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="trips/:id" element={<TripDetail />} />
           <Route path="trips/:id/edit" element={<TripForm />} />
           <Route path="trips/:id/grid" element={<TripGrid />} />
+          <Route path="trips/:id/proposal" element={<ProposalPrint />} />
 
           <Route path="hotels" element={<HotelsList />} />
           <Route path="template" element={<TemplateEditor />} />

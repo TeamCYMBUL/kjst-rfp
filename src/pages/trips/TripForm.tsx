@@ -243,10 +243,14 @@ export default function TripForm() {
             <TextField
               label="Opponent"
               hint="e.g. at Boston Celtics"
+              placeholder="e.g. @ Miami Heat"
               value={fields.opponent_label}
               onChange={set('opponent_label')}
             />
-            <TextField label="City" value={fields.city} onChange={set('city')} />
+            <div>
+              <TextField label="City" value={fields.city} onChange={set('city')} />
+              <p className="mt-1 text-xs text-slate-400">Each game city is its own trip. Two away games in NYC = two separate trips.</p>
+            </div>
             <Select
               label="Status"
               value={fields.status}
@@ -309,6 +313,7 @@ export default function TripForm() {
           <p className="mb-4 text-xs text-slate-400">
             How many nights might the team stay? Check all that apply — hotels will quote rates for each scenario. Most trips are 1 night. Select 2 or 3 if the travel schedule hasn't been finalized yet.
           </p>
+          <p className="mb-4 text-xs text-slate-400 -mt-2">Not sure? Select all likely options — hotels will quote rates for each.</p>
           <div className="flex flex-wrap gap-3">
             {[1, 2, 3].map((n) => {
               const checked = nightScenarios.includes(n)
@@ -425,12 +430,15 @@ export default function TripForm() {
               value={fields.king_rooms_requested}
               onChange={set('king_rooms_requested')}
             />
-            <TextField
-              label="Suites"
-              type="number"
-              value={fields.suites_requested}
-              onChange={set('suites_requested')}
-            />
+            <div>
+              <TextField
+                label="Suites"
+                type="number"
+                value={fields.suites_requested}
+                onChange={set('suites_requested')}
+              />
+              <p className="mt-1 text-xs text-slate-400">Include coaches, staff, and executive suites.</p>
+            </div>
             <TextField
               label="Total rooms"
               type="number"
