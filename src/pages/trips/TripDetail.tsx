@@ -312,6 +312,7 @@ function BidSummaryTable({
   selectedId,
   onSelect,
   onAward,
+  onResetStatus,
   awardingId,
 }: {
   invites: Invitation[]
@@ -322,9 +323,16 @@ function BidSummaryTable({
   selectedId: string | null
   onSelect: (id: string) => void
   onAward: (inv: Invitation) => void
+  onResetStatus: (inv: Invitation) => void
   awardingId: string | null
 }) {
-  const submitted = invites.filter((i) => ['submitted', 'awarded'].includes(i.status))
+  // Include 'passed' hotels so staff can undo them; sort: awarded first, then submitted, then passed
+  const submitted = invites
+    .filter((i) => ['submitted', 'awarded', 'passed'].includes(i.status))
+    .sort((a, b) => {
+      const rank = (s: string) => s === 'awarded' ? 0 : s === 'submitted' ? 1 : 2
+      return rank(a.status) - rank(b.status)
+    })
   if (submitted.length === 0) return null
 
   // Find concession item IDs for key columns
@@ -366,9 +374,7 @@ function BidSummaryTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {[...submitted]
-              .sort((a, b) => (scores.get(b.id)?.score ?? 0) - (scores.get(a.id)?.score ?? 0))
-              .map((inv) => {
+            {submitted.map((inv) => {
                 const resp       = responses.get(inv.id)
                 const result     = scores.get(inv.id)
                 const commAns    = getAnswer(inv.id, commissionItem?.id)
@@ -376,17 +382,18 @@ function BidSummaryTable({
                 const suiteUpg   = getAnswer(inv.id, suiteUpgItem?.id)
                 const isSelected = inv.id === selectedId
                 const isAwarded  = inv.status === 'awarded'
+                const isPassed   = inv.status === 'passed'
                 return (
                   <tr
                     key={inv.id}
                     onClick={() => onSelect(inv.id)}
-                    className={`cursor-pointer transition-colors ${isSelected ? 'bg-[#1C1008]/5' : 'hover:bg-slate-50'}`}
+                    className={`cursor-pointer transition-colors ${isPassed ? 'opacity-50' : ''} ${isSelected ? 'bg-[#1C1008]/5' : 'hover:bg-slate-50'}`}
                   >
                     {/* Hotel name + issue flags */}
                     <td className="py-2.5 pr-6">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`font-medium ${isSelected ? 'text-[#1C1008]' : 'text-slate-800'}`}>
-                          {isAwarded && '🏆 '}{inv.hotel_name}
+                          {isAwarded && '🏆 '}{isPassed && '✗ '}{inv.hotel_name}
                         </span>
                         {result?.noFlexCancel && (
                           <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-100 text-red-600">No flex cancel</span>
@@ -423,10 +430,27 @@ function BidSummaryTable({
                     <td className="py-2.5 pr-6 text-center">
                       {result ? <ScoreBadge score={result.score} /> : <span className="text-slate-300">—</span>}
                     </td>
-                    {/* Award */}
+                    {/* Award / Undo */}
                     <td className="py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
                       {isAwarded ? (
-                        <span className="text-xs text-amber-600 font-semibold">Awarded</span>
+                        <div className="flex items-center justify-end gap-2">
+                          <span className="text-xs text-amber-600 font-semibold">Awarded</span>
+                          <button
+                            onClick={() => onResetStatus(inv)}
+                            className="rounded px-2 py-0.5 text-[10px] font-medium text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                            title="Undo award — reset to Submitted"
+                          >
+                            Undo
+                          </button>
+                        </div>
+                      ) : inv.status === 'passed' ? (
+                        <button
+                          onClick={() => onResetStatus(inv)}
+                          className="rounded px-2 py-0.5 text-[10px] font-medium text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                          title="Undo pass — reset to Submitted"
+                        >
+                          Undo pass
+                        </button>
                       ) : !hasAwarded ? (
                         <button
                           onClick={() => onAward(inv)}
@@ -457,6 +481,7 @@ function HotelPanel({
   score,
   onSendEmail,
   onMarkUnavailable,
+  onResetStatus,
   onCopyLink,
   onContactUpdated,
   sendingEmail,
@@ -470,6 +495,7 @@ function HotelPanel({
   score: number | undefined
   onSendEmail: (inv: Invitation) => void
   onMarkUnavailable: (inv: Invitation) => void
+  onResetStatus: (inv: Invitation) => void
   onCopyLink: (token: string) => void
   onContactUpdated: (id: string, name: string | null, email: string | null) => void
   sendingEmail: string | null
@@ -595,6 +621,16 @@ function HotelPanel({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge status={inv.status} />
+            {/* Undo awarded / passed / unavailable */}
+            {(inv.status === 'awarded' || inv.status === 'passed' || inv.status === 'unavailable') && (
+              <button
+                onClick={() => onResetStatus(inv)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors"
+                title={`Reset to Submitted`}
+              >
+                ↩ Undo {inv.status === 'awarded' ? 'award' : inv.status === 'passed' ? 'pass' : 'unavailable'}
+              </button>
+            )}
             <button
               onClick={() => onCopyLink(inv.token)}
               className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
@@ -1008,6 +1044,12 @@ export default function TripDetail() {
     loadInvites()
   }
 
+  // Reset a single hotel back to 'submitted' — does NOT touch any other hotels
+  const resetHotelStatus = async (inv: Invitation) => {
+    await supabase.from('rfp_invitations').update({ status: 'submitted' }).eq('id', inv.id)
+    loadInvites()
+  }
+
   // Close export dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -1245,6 +1287,7 @@ export default function TripDetail() {
           selectedId={selectedId}
           onSelect={setSelectedId}
           onAward={awardHotel}
+          onResetStatus={resetHotelStatus}
           awardingId={awardingId}
         />
       )}
@@ -1365,6 +1408,7 @@ export default function TripDetail() {
               score={scores.get(selectedInvite.id)?.score}
               onSendEmail={sendEmail}
               onMarkUnavailable={markUnavailable}
+              onResetStatus={resetHotelStatus}
               onCopyLink={copyLink}
               onContactUpdated={(id, name, email) => {
                 setInvites((prev) =>
