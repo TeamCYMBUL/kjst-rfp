@@ -277,89 +277,358 @@ const SECTION_LABELS: Record<string, string> = {
   postseason: 'Postseason / Playoff Guarantee',
 }
 
-// ── Trip banner (read-only, top of the form) ──────────────────────────────────
+// ── RFP header — mirrors the Word doc layout ─────────────────────────────────
 
-function TripBanner({ data }: { data: RfpData }) {
-  const { invitation } = data
+type RfpHeaderProps = {
+  data: RfpData
+  resp: RespState
+  setResp: React.Dispatch<React.SetStateAction<RespState>>
+  isReadOnly: boolean
+}
+
+function RfpHeader({ data, resp, setResp, isReadOnly }: RfpHeaderProps) {
+  const { invitation, org } = data
   const trip = invitation.trips
   const client = trip.clients
 
-  return (
-    <div className="mb-8 rounded-xl border border-[#E5D5C8] bg-[#F5EFE8] p-6">
-      <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-[#1C1008]/50">
-        KJ Sports Travel — Hotel RFP
-      </div>
-      <h1 className="text-2xl font-bold text-slate-900">{client.team_name}</h1>
-      <p className="mt-0.5 text-sm text-slate-600">
-        {trip.opponent_label || 'Road trip'} · {trip.city || ''}
-      </p>
+  const hasStay2 = Boolean(trip.stay2_arrival_date)
+  const scenarios = trip.night_scenarios ?? [1]
+  const isMultiScenario = scenarios.length > 1
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+  // ── Helper: table cell styles ─────────────────────────────────────────────
+  const th = 'border border-slate-300 bg-slate-100 px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500'
+  const td = 'border border-slate-300 px-3 py-1.5 text-sm text-slate-800'
+  const tdLabel = 'border border-slate-300 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 w-32'
+  const rateInput = `w-full border-0 bg-transparent px-2 py-1 text-sm text-slate-800 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-[#1C1008] disabled:text-slate-400 min-w-0`
+
+  // Build dates rows
+  const dateRows: Array<{ opponent: string; arr: string | null; dep: string | null; nts: number | null; game: string | null; time: string | null }> = []
+  dateRows.push({
+    opponent: trip.opponent_label || '—',
+    arr: trip.arrival_date,
+    dep: trip.departure_date,
+    nts: trip.nights,
+    game: trip.game_date,
+    time: trip.game_time,
+  })
+  if (hasStay2) {
+    const arr = trip.stay2_arrival_date
+    const dep = trip.stay2_departure_date
+    let nts: number | null = null
+    if (arr && dep) {
+      nts = Math.round((new Date(dep).getTime() - new Date(arr).getTime()) / 86400000)
+    }
+    dateRows.push({
+      opponent: trip.opponent_label ? `${trip.opponent_label} (Visit 2)` : 'Visit 2',
+      arr, dep, nts,
+      game: trip.stay2_game_date,
+      time: trip.stay2_game_time,
+    })
+  }
+
+  const setScenarioRate = (n: number, field: 'rate' | 'available', value: string | boolean) => {
+    setResp((r) => ({
+      ...r,
+      scenario_rates: {
+        ...r.scenario_rates,
+        [String(n)]: {
+          rate: r.scenario_rates[String(n)]?.rate ?? '',
+          available: r.scenario_rates[String(n)]?.available ?? true,
+          [field]: value,
+        },
+      },
+    }))
+  }
+
+  return (
+    <div className="mb-8 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      {/* ── Top bar ── */}
+      <div className="flex items-center justify-between bg-[#1C1008] px-6 py-4">
         <div>
-          <dt className="text-xs uppercase tracking-wide text-slate-400">
-            {trip.stay2_arrival_date ? 'Stay 1 dates' : 'Dates'}
-          </dt>
-          <dd className="mt-0.5 text-sm font-medium text-slate-700">
-            {formatDate(trip.arrival_date)} – {formatDate(trip.departure_date)}
-            {trip.nights != null ? ` (${trip.nights}n)` : ''}
-          </dd>
+          <div className="text-xs font-semibold uppercase tracking-widest text-white/50">KJ Sports Travel</div>
+          <div className="mt-0.5 text-lg font-bold text-white">Hotel RFP</div>
         </div>
-        {trip.stay2_arrival_date && (
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-400">Stay 2 dates</dt>
-            <dd className="mt-0.5 text-sm font-medium text-slate-700">
-              {formatDate(trip.stay2_arrival_date)} – {formatDate(trip.stay2_departure_date)}
-            </dd>
+        {org?.season_label && (
+          <div className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white">
+            {org.season_label}
           </div>
         )}
-        {trip.game_date && (
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-400">
-              {trip.stay2_arrival_date ? 'Game (stay 1)' : 'Game'}
-            </dt>
-            <dd className="mt-0.5 text-sm font-medium text-slate-700">
-              {formatDate(trip.game_date)}
-              {trip.game_time ? ` · ${trip.game_time}` : ''}
-            </dd>
-          </div>
-        )}
-        {trip.stay2_game_date && (
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-400">Game (stay 2)</dt>
-            <dd className="mt-0.5 text-sm font-medium text-slate-700">
-              {formatDate(trip.stay2_game_date)}
-              {trip.stay2_game_time ? ` · ${trip.stay2_game_time}` : ''}
-            </dd>
-          </div>
-        )}
+      </div>
+
+      <div className="p-6 space-y-5">
+        {/* ── Hotel name & city ── */}
         <div>
-          <dt className="text-xs uppercase tracking-wide text-slate-400">Room block</dt>
-          <dd className="mt-0.5 text-sm font-medium text-slate-700">
-            {[
-              trip.king_rooms_requested != null ? `${trip.king_rooms_requested} kings` : null,
-              trip.suites_requested != null ? `${trip.suites_requested} suites` : null,
-              trip.total_rooms_requested != null ? `${trip.total_rooms_requested} total` : null,
-            ]
-              .filter(Boolean)
-              .join(' · ') || '—'}
-          </dd>
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Hotel Name &amp; City</p>
+          <p className="text-xl font-bold text-slate-900">
+            {invitation.hotel_name}{trip.city ? ` — ${trip.city}` : ''}
+          </p>
+          {trip.response_deadline && (
+            <p className="mt-1 text-xs text-red-600 font-medium">
+              Response deadline: {formatDate(trip.response_deadline)}
+            </p>
+          )}
         </div>
-        {trip.response_deadline && (
+
+        {/* ── Contact table ── */}
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                <th className={tdLabel} />
+                <th className={th}>Organization Contact</th>
+                <th className={th}>Third Party Travel Agency Contact{org?.iata_number ? ` (IATA ${org.iata_number})` : ''}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ['Company', client.team_name, org?.name || 'KJ Sports Travel'],
+                ['Name', client.primary_contact_name, org?.contact_name],
+                ['Title', client.primary_contact_title, org?.contact_title],
+                ['Address', client.primary_contact_address, org?.contact_address],
+                ['Phone', client.primary_contact_phone, org?.contact_phone],
+                ['E-mail', client.primary_contact_email, org?.contact_email],
+              ].map(([label, left, right]) => (
+                <tr key={label as string}>
+                  <td className={tdLabel}>{label}</td>
+                  <td className={td}>{left || '—'}</td>
+                  <td className={td}>{right || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* ── Room Block ── */}
+        <div className="overflow-x-auto">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Room Block</p>
+          <table className="border-collapse text-sm">
+            <thead>
+              <tr>
+                <th className={th}>King Room</th>
+                <th className={th}>One Bedroom Suite</th>
+                <th className={th}>Total Rooms</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className={`${td} text-center`}>{trip.king_rooms_requested ?? '—'}</td>
+                <td className={`${td} text-center`}>{trip.suites_requested ?? '—'}</td>
+                <td className={`${td} text-center font-semibold`}>{trip.total_rooms_requested ?? '—'}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* ── Dates ── */}
+        <div className="overflow-x-auto">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Dates</p>
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                <th className={th}>Opponent</th>
+                <th className={th}>Arr Date</th>
+                <th className={th}>Dep Date</th>
+                <th className={th}>Nts</th>
+                <th className={th}>Game Date</th>
+                <th className={th}>Game Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dateRows.map((row, i) => (
+                <tr key={i}>
+                  <td className={td}>{row.opponent}</td>
+                  <td className={td}>{formatDate(row.arr)}</td>
+                  <td className={td}>{formatDate(row.dep)}</td>
+                  <td className={`${td} text-center`}>{row.nts ?? '—'}</td>
+                  <td className={td}>{formatDate(row.game)}</td>
+                  <td className={td}>{row.time || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* ── Rates — inline inputs matching Word doc layout ── */}
+        {isMultiScenario ? (
+          /* Multi-scenario: scenario table */
           <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-400">Response deadline</dt>
-            <dd className="mt-0.5 text-sm font-medium text-red-700">
-              {formatDate(trip.response_deadline)}
-            </dd>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Rates</p>
+            <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <strong>Multiple night scenarios requested.</strong> Please provide a King rate for each scenario below.
+            </div>
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr>
+                  <th className={th}>Scenario</th>
+                  <th className={th}>King Rate (per night)</th>
+                  <th className={th}>Suite Rate ($)</th>
+                  <th className={th}>Occupancy Tax</th>
+                  <th className={th}>Available?</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scenarios.sort((a, b) => a - b).map((n) => {
+                  const sr = resp.scenario_rates[String(n)] ?? { rate: '', available: true }
+                  return (
+                    <tr key={n}>
+                      <td className={td}><span className="font-medium">{n} night{n > 1 ? 's' : ''}</span></td>
+                      <td className="border border-slate-300 p-0">
+                        <div className="flex items-center">
+                          <span className="border-r border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-400">$</span>
+                          <input type="number" min="0" step="0.01" className={rateInput} value={sr.rate}
+                            onChange={(e) => setScenarioRate(n, 'rate', e.target.value)}
+                            disabled={isReadOnly || !sr.available} placeholder="0.00" />
+                        </div>
+                      </td>
+                      <td className="border border-slate-300 p-0">
+                        <div className="flex items-center">
+                          <span className="border-r border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-400">$</span>
+                          <input type="number" min="0" step="0.01" className={rateInput}
+                            value={n === scenarios[0] ? resp.best_suite_rate : (n === scenarios[1] ? resp.stay2_suite_rate : '')}
+                            onChange={(e) => setResp((r) => ({ ...r, [n === scenarios[0] ? 'best_suite_rate' : 'stay2_suite_rate']: e.target.value }))}
+                            disabled={isReadOnly} placeholder="0.00" />
+                        </div>
+                      </td>
+                      <td className="border border-slate-300 p-0">
+                        {n === scenarios[0] && (
+                          <input type="text" className={rateInput} value={resp.occupancy_tax}
+                            onChange={(e) => setResp((r) => ({ ...r, occupancy_tax: e.target.value }))}
+                            disabled={isReadOnly} placeholder="e.g. 16.9% + $5/night" />
+                        )}
+                      </td>
+                      <td className={td}>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" className="h-4 w-4 rounded border-slate-300 accent-[#1C1008]"
+                            checked={sr.available}
+                            onChange={(e) => setScenarioRate(n, 'available', e.target.checked)}
+                            disabled={isReadOnly} />
+                          <span className={`text-xs ${sr.available ? 'text-slate-700' : 'text-slate-400'}`}>
+                            {sr.available ? 'Available' : 'Not available'}
+                          </span>
+                        </label>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          /* Single scenario: horizontal rate row matching Word doc */
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Rates</p>
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr>
+                  <th className={th}>
+                    Best Available King/Double Rate(s){hasStay2 ? ' — Visit 1' : ''}
+                  </th>
+                  <th className={th}>VS. Current Selling Rate</th>
+                  <th className={th}>Best Available Suite Rate(s){hasStay2 ? ' — Visit 1' : ''}</th>
+                  <th className={th}>Occupancy Tax</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="border border-slate-300 p-0">
+                    <div className="flex items-center">
+                      <span className="border-r border-slate-200 bg-slate-50 px-2 py-2 text-xs text-slate-400">$</span>
+                      <input type="number" min="0" step="0.01" className={rateInput}
+                        value={resp.best_king_rate} placeholder="0.00" aria-required="true"
+                        onChange={(e) => setResp((r) => ({ ...r, best_king_rate: e.target.value }))}
+                        disabled={isReadOnly} />
+                    </div>
+                  </td>
+                  <td className="border border-slate-300 p-0">
+                    <input type="text" className={rateInput} value={resp.current_selling_rate}
+                      placeholder="e.g. $595"
+                      onChange={(e) => setResp((r) => ({ ...r, current_selling_rate: e.target.value }))}
+                      disabled={isReadOnly} />
+                  </td>
+                  <td className="border border-slate-300 p-0">
+                    <div className="flex items-center">
+                      <span className="border-r border-slate-200 bg-slate-50 px-2 py-2 text-xs text-slate-400">$</span>
+                      <input type="number" min="0" step="0.01" className={rateInput}
+                        value={resp.best_suite_rate} placeholder="0.00"
+                        onChange={(e) => setResp((r) => ({ ...r, best_suite_rate: e.target.value }))}
+                        disabled={isReadOnly} />
+                    </div>
+                  </td>
+                  <td className="border border-slate-300 p-0">
+                    <input type="text" className={rateInput} value={resp.occupancy_tax}
+                      placeholder="e.g. 16.9% + $5/night"
+                      onChange={(e) => setResp((r) => ({ ...r, occupancy_tax: e.target.value }))}
+                      disabled={isReadOnly} />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            {/* Visit 2 rates row */}
+            {hasStay2 && (
+              <table className="mt-1 w-full border-collapse text-sm">
+                <thead>
+                  <tr>
+                    <th className={th}>King Rate — Visit 2 ({formatDate(trip.stay2_arrival_date)} – {formatDate(trip.stay2_departure_date)})</th>
+                    <th className={th}>VS. Current Selling Rate — Visit 2</th>
+                    <th className={th}>Suite Rate — Visit 2</th>
+                    <th className={th} />
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="border border-slate-300 p-0">
+                      <div className="flex items-center">
+                        <span className="border-r border-slate-200 bg-slate-50 px-2 py-2 text-xs text-slate-400">$</span>
+                        <input type="number" min="0" step="0.01" className={rateInput}
+                          value={resp.stay2_king_rate} placeholder="0.00"
+                          onChange={(e) => setResp((r) => ({ ...r, stay2_king_rate: e.target.value }))}
+                          disabled={isReadOnly} />
+                      </div>
+                    </td>
+                    <td className="border border-slate-300 p-0">
+                      <input type="text" className={rateInput} value={resp.stay2_selling_rate}
+                        placeholder="e.g. $685"
+                        onChange={(e) => setResp((r) => ({ ...r, stay2_selling_rate: e.target.value }))}
+                        disabled={isReadOnly} />
+                    </td>
+                    <td className="border border-slate-300 p-0">
+                      <div className="flex items-center">
+                        <span className="border-r border-slate-200 bg-slate-50 px-2 py-2 text-xs text-slate-400">$</span>
+                        <input type="number" min="0" step="0.01" className={rateInput}
+                          value={resp.stay2_suite_rate} placeholder="0.00"
+                          onChange={(e) => setResp((r) => ({ ...r, stay2_suite_rate: e.target.value }))}
+                          disabled={isReadOnly} />
+                      </div>
+                    </td>
+                    <td className="border border-slate-300 p-0" />
+                  </tr>
+                </tbody>
+              </table>
+            )}
           </div>
         )}
+
+        {/* ── Rate notes (optional) ── */}
         <div>
-          <dt className="text-xs uppercase tracking-wide text-slate-400">Your hotel</dt>
-          <dd className="mt-0.5 text-sm font-medium text-slate-700">{invitation.hotel_name}</dd>
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            Rate Notes <span className="font-normal normal-case text-slate-300">(optional — any variances, constraints, or special pricing)</span>
+          </label>
+          <input type="text" className={`${inputCls} text-sm`}
+            value={resp.king_rate_notes}
+            onChange={(e) => setResp((r) => ({ ...r, king_rate_notes: e.target.value }))}
+            disabled={isReadOnly}
+            placeholder="e.g. Rate subject to availability on game night…" />
+        </div>
+
+        {/* ── Instruction text ── */}
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          Select <strong>Yes</strong> or <strong>No</strong> for the list of concessions below. If No is selected, note the reason or counteroffer in the comment field.
         </div>
       </div>
     </div>
   )
 }
+
 
 // ── Main form ─────────────────────────────────────────────────────────────────
 
@@ -660,7 +929,7 @@ export default function RfpForm() {
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-8">
       <div className="mx-auto max-w-3xl">
-        <TripBanner data={data} />
+        <RfpHeader data={data} resp={resp} setResp={setResp} isReadOnly={isReadOnly} />
 
         {/* Save status indicator */}
         {!isReadOnly && saveStatus !== 'idle' && (
@@ -718,249 +987,7 @@ export default function RfpForm() {
             </div>
           </div>
 
-          {/* ── Section 2: Rates ─── */}
-          {(() => {
-            const trip = data.invitation.trips
-            const hasStay2 = Boolean(trip.stay2_arrival_date)
-            const scenarios = trip.night_scenarios ?? [1]
-            const isMultiScenario = scenarios.length > 1
-
-            const setScenarioRate = (n: number, field: 'rate' | 'available', value: string | boolean) => {
-              setResp((r) => ({
-                ...r,
-                scenario_rates: {
-                  ...r.scenario_rates,
-                  [String(n)]: {
-                    rate: r.scenario_rates[String(n)]?.rate ?? '',
-                    available: r.scenario_rates[String(n)]?.available ?? true,
-                    [field]: value,
-                  },
-                },
-              }))
-            }
-
-            return (
-              <div className="rounded-xl border border-slate-200 bg-white p-6">
-                <SectionHeading>Rates</SectionHeading>
-
-                {isMultiScenario && (
-                  <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    <strong>Multiple night scenarios requested.</strong> Please provide a King rate for each scenario and indicate whether you can accommodate that length of stay.
-                  </div>
-                )}
-
-                {hasStay2 && !isMultiScenario && (
-                  <div className="mb-4 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">
-                    This trip covers <strong>2 separate visits</strong> — please provide separate King rates for each visit's dates.
-                  </div>
-                )}
-
-                {/* Multi-scenario rate table */}
-                {isMultiScenario ? (
-                  <div className="mb-5">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-200">
-                          <th className="pb-2 text-left text-xs font-semibold text-slate-500">Scenario</th>
-                          <th className="pb-2 text-left text-xs font-semibold text-slate-500">King Rate (per night)</th>
-                          <th className="pb-2 text-left text-xs font-semibold text-slate-500">Available?</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {scenarios.sort((a, b) => a - b).map((n) => {
-                          const sr = resp.scenario_rates[String(n)] ?? { rate: '', available: true }
-                          return (
-                            <tr key={n} className="py-3">
-                              <td className="py-3 pr-4">
-                                <span className="font-medium text-slate-700">{n} night{n > 1 ? 's' : ''}</span>
-                              </td>
-                              <td className="py-3 pr-4">
-                                <div className="flex items-center">
-                                  <span className="rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">$</span>
-                                  <input
-                                    type="number" min="0" step="0.01"
-                                    className={`${inputCls} rounded-l-none`}
-                                    value={sr.rate}
-                                    onChange={(e) => setScenarioRate(n, 'rate', e.target.value)}
-                                    disabled={isReadOnly || !sr.available}
-                                    placeholder="0.00"
-                                  />
-                                </div>
-                              </td>
-                              <td className="py-3">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    className="h-4 w-4 rounded border-slate-300 accent-[#1C1008]"
-                                    checked={sr.available}
-                                    onChange={(e) => setScenarioRate(n, 'available', e.target.checked)}
-                                    disabled={isReadOnly}
-                                  />
-                                  <span className={`text-sm ${sr.available ? 'text-slate-700' : 'text-slate-400'}`}>
-                                    {sr.available ? 'Yes, available' : 'Not available'}
-                                  </span>
-                                </label>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  /* Single-scenario king rate */
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <FieldLabel required htmlFor="rfp-king-rate">
-                        {hasStay2 ? 'King Rate — Visit 1 ($)' : 'Best Available King Rate ($)'}
-                      </FieldLabel>
-                      <div className="flex items-center">
-                        <span className="rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">$</span>
-                        <input
-                          id="rfp-king-rate"
-                          type="number" min="0" step="0.01"
-                          className={`${inputCls} rounded-l-none`}
-                          value={resp.best_king_rate}
-                          onChange={setRespField('best_king_rate')}
-                          disabled={isReadOnly}
-                          placeholder="0.00"
-                          aria-required="true"
-                        />
-                      </div>
-                      {hasStay2 && (
-                        <p className="mt-1 text-xs text-slate-400">
-                          {formatDate(trip.arrival_date)} – {formatDate(trip.departure_date)}
-                        </p>
-                      )}
-                    </div>
-                    <div className="sm:col-span-1" />
-                  </div>
-                )}
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {/* Suite rate and selling rate always shown */}
-                  {!isMultiScenario && (
-                    <div>
-                      <FieldLabel htmlFor="rfp-selling-rate">
-                        {hasStay2 ? 'Current Selling Rate — Visit 1' : 'Current Selling Rate'}
-                      </FieldLabel>
-                      <input
-                        id="rfp-selling-rate"
-                        type="text"
-                        className={inputCls}
-                        value={resp.current_selling_rate}
-                        onChange={setRespField('current_selling_rate')}
-                        disabled={isReadOnly}
-                        placeholder="e.g. $595"
-                      />
-                    </div>
-                  )}
-
-                  {/* Suite Rate */}
-                  <div>
-                    <FieldLabel htmlFor="rfp-suite-rate">
-                      {hasStay2 ? 'Suite Rate — Visit 1 ($)' : 'Best Suite Rate ($)'}
-                    </FieldLabel>
-                    <div className="flex items-center">
-                      <span className="rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">$</span>
-                      <input
-                        id="rfp-suite-rate"
-                        type="number" min="0" step="0.01"
-                        className={`${inputCls} rounded-l-none`}
-                        value={resp.best_suite_rate}
-                        onChange={setRespField('best_suite_rate')}
-                        disabled={isReadOnly}
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Occupancy tax */}
-                  <div>
-                    <FieldLabel htmlFor="rfp-occupancy-tax">Occupancy Tax</FieldLabel>
-                    <input
-                      id="rfp-occupancy-tax"
-                      type="text"
-                      className={inputCls}
-                      value={resp.occupancy_tax}
-                      onChange={setRespField('occupancy_tax')}
-                      disabled={isReadOnly}
-                      placeholder="e.g. 16.9% + $5/night"
-                    />
-                  </div>
-
-                  {/* King rate notes */}
-                  <div className="sm:col-span-2">
-                    <FieldLabel htmlFor="rfp-king-notes">Rate Notes <span className="font-normal text-slate-400">(optional)</span></FieldLabel>
-                    <input
-                      id="rfp-king-notes"
-                      type="text"
-                      className={inputCls}
-                      value={resp.king_rate_notes}
-                      onChange={setRespField('king_rate_notes')}
-                      disabled={isReadOnly}
-                      placeholder="Any notes on rate variances, availability constraints, special pricing…"
-                    />
-                  </div>
-
-                  {/* Stay 2 (second separate visit) rates */}
-                  {hasStay2 && (
-                    <>
-                      <div className="sm:col-span-2 mt-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                          Visit 2 · {formatDate(trip.stay2_arrival_date)} – {formatDate(trip.stay2_departure_date)}
-                        </p>
-                      </div>
-                      <div>
-                        <FieldLabel htmlFor="rfp-stay2-king">King Rate — Visit 2 ($)</FieldLabel>
-                        <div className="flex items-center">
-                          <span className="rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">$</span>
-                          <input
-                            id="rfp-stay2-king"
-                            type="number" min="0" step="0.01"
-                            className={`${inputCls} rounded-l-none`}
-                            value={resp.stay2_king_rate}
-                            onChange={setRespField('stay2_king_rate')}
-                            disabled={isReadOnly}
-                            placeholder="0.00"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <FieldLabel htmlFor="rfp-stay2-selling">Current Selling Rate — Visit 2</FieldLabel>
-                        <input
-                          id="rfp-stay2-selling"
-                          type="text"
-                          className={inputCls}
-                          value={resp.stay2_selling_rate}
-                          onChange={setRespField('stay2_selling_rate')}
-                          disabled={isReadOnly}
-                          placeholder="e.g. $685"
-                        />
-                      </div>
-                      <div>
-                        <FieldLabel htmlFor="rfp-stay2-suite">Suite Rate — Visit 2 ($)</FieldLabel>
-                        <div className="flex items-center">
-                          <span className="rounded-l-lg border border-r-0 border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">$</span>
-                          <input
-                            id="rfp-stay2-suite"
-                            type="number" min="0" step="0.01"
-                            className={`${inputCls} rounded-l-none`}
-                            value={resp.stay2_suite_rate}
-                            onChange={setRespField('stay2_suite_rate')}
-                            disabled={isReadOnly}
-                            placeholder="0.00"
-                          />
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )
-          })()}
-
-          {/* ── Sections 3–6: Concession items ─── */}
+          {/* ── Concession items ─── */}
           {sections.map((section) => {
             const items = bySection[section]
             if (!items || items.length === 0) return null
@@ -969,10 +996,10 @@ export default function RfpForm() {
               <div key={section} className="rounded-xl border border-slate-200 bg-white p-6">
                 <SectionHeading>{SECTION_LABELS[section]}</SectionHeading>
 
-                {/* Flex cancel warning */}
+                {/* Flex cancel note */}
                 {hasFlexCancel && (
-                  <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 mb-3">
-                    ⚠️ <strong>Required:</strong> Flexible cancellation is a non-negotiable requirement. Selecting "No" will mark your bid as ineligible.
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 mb-3">
+                    The team's travel schedule is subject to league rescheduling and postponements. Please review the flexible cancellation policy carefully.
                   </div>
                 )}
 
@@ -1015,7 +1042,7 @@ export default function RfpForm() {
           <div className="rounded-xl border border-slate-200 bg-white p-6">
             <SectionHeading>Meeting Space</SectionHeading>
             <p className="mb-4 text-sm text-slate-500">
-              Teams use meeting space for massage tables, recovery equipment, and trainer setups. Only traditional function rooms or ballrooms are eligible — restaurants and suites with furniture removed do not qualify.
+              Teams use meeting space for massage tables, recovery equipment, and trainer setups. Please describe what meeting or event space your property has available for the team's use.
             </p>
             <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
@@ -1029,18 +1056,12 @@ export default function RfpForm() {
                     disabled={isReadOnly}
                   >
                     <option value="">Select type…</option>
-                    <option value="function_room">✅ Function Room / Ballroom (eligible)</option>
-                    <option value="restaurant">❌ Restaurant (not eligible)</option>
-                    <option value="suite_converted">❌ Suite with furniture removed (not eligible)</option>
-                    <option value="none">❌ No meeting space available</option>
+                    <option value="function_room">Function Room / Ballroom</option>
+                    <option value="restaurant">Restaurant</option>
+                    <option value="suite_converted">Suite with furniture removed</option>
+                    <option value="none">No meeting space available</option>
                     <option value="other">Other — explain in notes below</option>
                   </select>
-                  {resp.meeting_space_type === 'restaurant' && !isReadOnly && (
-                    <p className="mt-1.5 text-xs text-red-600 font-medium">Restaurants are not eligible meeting spaces for team stays.</p>
-                  )}
-                  {resp.meeting_space_type === 'suite_converted' && !isReadOnly && (
-                    <p className="mt-1.5 text-xs text-red-600 font-medium">Suites with furniture removed do not provide enough space for team equipment.</p>
-                  )}
                 </div>
                 <div>
                   <FieldLabel htmlFor="rfp-meeting-count">Number of spaces available</FieldLabel>

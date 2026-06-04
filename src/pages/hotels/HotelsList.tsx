@@ -9,6 +9,7 @@ type Hotel = {
   name: string
   chain: string | null
   city: string | null
+  league: string | null
   logo_url: string | null
   contact_name: string | null
   contact_email: string | null
@@ -101,6 +102,7 @@ function HotelForm({
     name: initial?.name ?? '',
     chain: initial?.chain ?? '',
     city: initial?.city ?? '',
+    league: initial?.league ?? '',
     contact_name: initial?.contact_name ?? '',
     contact_email: initial?.contact_email ?? '',
     contact_phone: initial?.contact_phone ?? '',
@@ -143,6 +145,7 @@ function HotelForm({
       name: f.name.trim(),
       chain: f.chain.trim() || null,
       city: f.city.trim() || null,
+      league: f.league.trim() || null,
       logo_url: logoUrl ?? null,
       contact_name: f.contact_name.trim() || null,
       contact_email: f.contact_email.trim() || null,
@@ -208,6 +211,24 @@ function HotelForm({
           <label className={labelCls}>City</label>
           <input className={inputCls} value={f.city} onChange={set('city')} placeholder="e.g. Miami" />
         </div>
+      </div>
+      <div>
+        <label className={labelCls}>League</label>
+        <select
+          className={inputCls}
+          value={f.league}
+          onChange={(e) => setF((p) => ({ ...p, league: e.target.value }))}
+        >
+          <option value="">All leagues</option>
+          <option value="MLB">MLB</option>
+          <option value="NBA">NBA</option>
+          <option value="NHL">NHL</option>
+          <option value="NFL">NFL</option>
+          <option value="WNBA">WNBA</option>
+          <option value="MLS">MLS</option>
+          <option value="NCAA Basketball">NCAA Basketball</option>
+          <option value="NCAA Football">NCAA Football</option>
+        </select>
       </div>
       <div>
         <label className={labelCls}>Contact name</label>
@@ -327,6 +348,11 @@ function HotelDetail({
               <p className="text-sm text-slate-500">
                 {[hotel.chain, hotel.city].filter(Boolean).join(' · ')}
               </p>
+              {hotel.league && (
+                <span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  {hotel.league}
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -500,6 +526,7 @@ type ImportRow = {
   name: string
   chain: string
   city: string
+  league: string
   contact_name: string
   contact_email: string
   contact_phone: string
@@ -548,6 +575,7 @@ function HotelImportModal({ onClose, onImported }: ImportModalProps) {
             name,
             chain: getCol(row, 'chain', 'brand', 'chain_brand'),
             city: getCol(row, 'city', 'location'),
+            league: getCol(row, 'league', 'sport', 'sports_league'),
             contact_name: getCol(row, 'contact_name', 'contact', 'contact name'),
             contact_email: getCol(row, 'contact_email', 'email', 'contact email'),
             contact_phone: getCol(row, 'contact_phone', 'phone', 'contact phone'),
@@ -565,8 +593,8 @@ function HotelImportModal({ onClose, onImported }: ImportModalProps) {
 
   const downloadTemplate = () => {
     const ws = XLSX.utils.aoa_to_sheet([
-      ['name', 'chain', 'city', 'contact_name', 'contact_email', 'contact_phone'],
-      ['Four Seasons Miami', 'Four Seasons', 'Miami', 'John Smith', 'jsmith@fourseasons.com', '305-555-0100'],
+      ['name', 'chain', 'city', 'league', 'contact_name', 'contact_email', 'contact_phone'],
+      ['Four Seasons Miami', 'Four Seasons', 'Miami', 'NBA', 'John Smith', 'jsmith@fourseasons.com', '305-555-0100'],
     ])
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Hotels')
@@ -581,6 +609,7 @@ function HotelImportModal({ onClose, onImported }: ImportModalProps) {
       name: r.name,
       chain: r.chain || null,
       city: r.city || null,
+      league: r.league || null,
       contact_name: r.contact_name || null,
       contact_email: r.contact_email || null,
       contact_phone: r.contact_phone || null,
@@ -626,7 +655,7 @@ function HotelImportModal({ onClose, onImported }: ImportModalProps) {
             <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 px-6 py-8 text-center hover:border-[#1C1008]/30 transition-colors">
               <span className="text-2xl mb-2">📁</span>
               <span className="text-sm font-medium text-slate-700">Click to upload CSV or Excel file</span>
-              <span className="mt-1 text-xs text-slate-400">Columns: name (required), chain, city, contact_name, contact_email, contact_phone</span>
+              <span className="mt-1 text-xs text-slate-400">Columns: name (required), chain, city, league, contact_name, contact_email, contact_phone</span>
               <input
                 type="file"
                 accept=".csv,.xlsx,.xls"
@@ -702,6 +731,7 @@ export default function HotelsList() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [leagueFilter, setLeagueFilter] = useState<string>('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [mode, setMode] = useState<'view' | 'add' | 'edit'>('view')
   const [sortBy, setSortBy] = useState<SortBy>('brand')
@@ -720,9 +750,14 @@ export default function HotelsList() {
 
   const selected = hotels.find((h) => h.id === selectedId) ?? null
 
-  const filtered = hotels.filter((h) =>
-    !search || [h.name, h.chain, h.city, h.contact_name].some((v) => v?.toLowerCase().includes(search.toLowerCase()))
-  )
+  // Collect unique leagues that actually exist in the data
+  const availableLeagues = [...new Set(hotels.map((h) => h.league).filter(Boolean) as string[])].sort()
+
+  const filtered = hotels.filter((h) => {
+    if (leagueFilter && h.league !== leagueFilter) return false
+    if (search && ![h.name, h.chain, h.city, h.contact_name].some((v) => v?.toLowerCase().includes(search.toLowerCase()))) return false
+    return true
+  })
 
   // Group by chain
   const chains = new Map<string, Hotel[]>()
@@ -750,7 +785,12 @@ export default function HotelsList() {
       <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
         <div>
           <h1 className="text-lg font-semibold text-slate-900">Hotel Database</h1>
-          <p className="text-sm text-slate-500">{hotels.length} propert{hotels.length === 1 ? 'y' : 'ies'} · click any hotel to view details</p>
+          <p className="text-sm text-slate-500">
+          {filtered.length !== hotels.length
+            ? `${filtered.length} of ${hotels.length} propert${hotels.length === 1 ? 'y' : 'ies'}`
+            : `${hotels.length} propert${hotels.length === 1 ? 'y' : 'ies'}`}
+          {' · click any hotel to view details'}
+        </p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -797,6 +837,32 @@ export default function HotelsList() {
               </button>
             ))}
           </div>
+
+          {/* League filter */}
+          {availableLeagues.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1 border-b border-slate-100 px-3 py-2">
+              <span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">League:</span>
+              <button
+                onClick={() => setLeagueFilter('')}
+                className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${
+                  leagueFilter === '' ? 'bg-[#1C1008] text-white' : 'text-slate-500 hover:bg-slate-100'
+                }`}
+              >
+                All
+              </button>
+              {availableLeagues.map((lg) => (
+                <button
+                  key={lg}
+                  onClick={() => setLeagueFilter(leagueFilter === lg ? '' : lg)}
+                  className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${
+                    leagueFilter === lg ? 'bg-[#1C1008] text-white' : 'text-slate-500 hover:bg-slate-100'
+                  }`}
+                >
+                  {lg}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Hotel list */}
           <div className="flex-1 overflow-y-auto">

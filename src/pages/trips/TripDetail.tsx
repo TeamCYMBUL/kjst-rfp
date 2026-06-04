@@ -509,14 +509,20 @@ function HotelPanel({
   useEffect(() => {
     if (!['submitted', 'awarded'].includes(inv.status)) { setResponse(null); setAnswers([]); return }
     setLoadingBid(true)
-    Promise.all([
-      supabase.from('rfp_responses').select('*').eq('invitation_id', inv.id).single(),
-      supabase.from('rfp_answers').select('concession_item_id, answer_yes_no, answer_value, comment').eq('invitation_id', inv.id),
-    ]).then(([respRes, answersRes]) => {
-      setResponse(respRes.data as HotelResponse ?? null)
-      setAnswers((answersRes.data as Answer[]) ?? [])
-      setLoadingBid(false)
-    })
+    supabase.from('rfp_responses').select('*').eq('invitation_id', inv.id).single()
+      .then(async ({ data: respData }) => {
+        setResponse(respData as HotelResponse ?? null)
+        if (respData?.id) {
+          const { data: ansData } = await supabase
+            .from('concession_answers')
+            .select('concession_item_id, answer_yes_no, answer_value, comment')
+            .eq('response_id', respData.id)
+          setAnswers((ansData as Answer[]) ?? [])
+        } else {
+          setAnswers([])
+        }
+        setLoadingBid(false)
+      })
   }, [inv.id, inv.status])
 
   const hasStay2 = Boolean(trip.stay2_arrival_date)
@@ -929,24 +935,37 @@ export default function TripDetail() {
     if (!invites || concessionItems.length === 0) return
     const submitted = invites.filter((i) => ['submitted', 'awarded'].includes(i.status))
     if (submitted.length === 0) return
-    const ids = submitted.map((i) => i.id)
-    Promise.all([
-      supabase.from('rfp_responses').select('*').in('invitation_id', ids),
-      supabase.from('rfp_answers').select('invitation_id, concession_item_id, answer_yes_no, answer_value, comment').in('invitation_id', ids),
-    ]).then(([respRes, ansRes]) => {
-      const respMap = new Map<string, HotelResponse>()
-      ;(respRes.data ?? []).forEach((r: any) => respMap.set(r.invitation_id, r))
+    const invIds = submitted.map((i) => i.id)
 
-      const ansMap = new Map<string, Answer[]>()
-      ;(ansRes.data ?? []).forEach((a: any) => {
-        if (!ansMap.has(a.invitation_id)) ansMap.set(a.invitation_id, [])
-        ansMap.get(a.invitation_id)!.push(a)
+    supabase.from('rfp_responses').select('*').in('invitation_id', invIds)
+      .then(async ({ data: respData }) => {
+        const respMap = new Map<string, HotelResponse>()
+        ;(respData ?? []).forEach((r: any) => respMap.set(r.invitation_id, r))
+
+        // concession_answers links via response_id, not invitation_id — build the mapping
+        const responseIds = (respData ?? []).map((r: any) => r.id as string)
+        const respIdToInvId = new Map<string, string>(
+          (respData ?? []).map((r: any) => [r.id as string, r.invitation_id as string])
+        )
+
+        const ansMap = new Map<string, Answer[]>()
+        if (responseIds.length > 0) {
+          const { data: ansData } = await supabase
+            .from('concession_answers')
+            .select('response_id, concession_item_id, answer_yes_no, answer_value, comment')
+            .in('response_id', responseIds)
+          ;(ansData ?? []).forEach((a: any) => {
+            const invId = respIdToInvId.get(a.response_id)
+            if (!invId) return
+            if (!ansMap.has(invId)) ansMap.set(invId, [])
+            ansMap.get(invId)!.push(a)
+          })
+        }
+
+        setAllResponses(respMap)
+        setAllAnswers(ansMap)
+        setScores(calcScores(submitted, respMap, ansMap, concessionItems))
       })
-
-      setAllResponses(respMap)
-      setAllAnswers(ansMap)
-      setScores(calcScores(submitted, respMap, ansMap, concessionItems))
-    })
   }, [invites, concessionItems])
 
   const selectedInvite = invites?.find((i) => i.id === selectedId) ?? null
@@ -1069,7 +1088,7 @@ export default function TripDetail() {
           comp_suites: compAns?.answer_value ?? null,
           suite_upgrades: upgAns?.answer_value ?? null,
           playoff_clause: playoffAns?.answer_yes_no ?? null,
-          notes: null,
+          notes: inv.staff_notes ?? null,
         }
       })
 
