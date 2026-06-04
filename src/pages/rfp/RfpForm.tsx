@@ -835,7 +835,7 @@ export default function RfpForm() {
       const commVal = answers[commissionItem.id]?.answer_value?.trim() ?? ''
       if (commVal === '0' || commVal === '') {
         const ok = window.confirm(
-          'Commission is set to 0% (or not filled in).\n\nZero-commission bids cannot be represented by KJST — your bid will be flagged as ineligible for team selection.\n\nAre you sure you want to submit with 0% commission?'
+          'Commission is set to 0% (or not filled in). Are you sure you want to submit with 0% commission?'
         )
         if (!ok) return
       }
