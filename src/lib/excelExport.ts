@@ -143,6 +143,124 @@ export function exportComparisonXlsx(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// exportTeamGrid — raw-data version of the team export.
+// Takes invitations, responses Map, answers Map, and concessionItems directly.
+// NEVER includes: commission %, flex cancel details, internal scores.
+// Only exports hotels with status 'submitted' or 'awarded'.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function exportTeamGrid(
+  trip: {
+    city: string | null
+    arrival_date: string | null
+    departure_date: string | null
+    opponent_label: string | null
+    clients: { team_name: string } | null
+  },
+  invitations: Array<{ id: string; hotel_name: string; status: string; staff_notes?: string | null }>,
+  responses: Map<string, any>,
+  answers: Map<string, any[]>,
+  concessionItems: any[],
+): void {
+  // Find relevant concession item IDs (team-safe ones only)
+  const compSuitesItem = concessionItems.find((c: any) =>
+    c.label.toLowerCase().includes('complimentary one bedroom suites'),
+  )
+  const suiteUpgItem = concessionItems.find((c: any) =>
+    c.label.toLowerCase().includes('suite upgrades at the group'),
+  )
+  const playoffItem = concessionItems.find((c: any) => c.section === 'postseason')
+
+  const getAns = (invId: string, itemId: string | undefined) => {
+    if (!itemId) return null
+    return answers.get(invId)?.find((a: any) => a.concession_item_id === itemId) ?? null
+  }
+
+  const eligible = invitations.filter((i) => ['submitted', 'awarded'].includes(i.status))
+
+  const header = [
+    'Hotel',
+    'King Rate / Night',
+    'Resort Fee',
+    'Occupancy Tax',
+    'Comp Suites (FREE)',
+    'Suite Upgrades at King Rate',
+    'Playoff / Postseason Clause',
+    'Meeting Space',
+    'Notes',
+  ]
+
+  const rows = eligible.map((inv) => {
+    const resp = responses.get(inv.id)
+    const compAns = getAns(inv.id, compSuitesItem?.id)
+    const upgAns = getAns(inv.id, suiteUpgItem?.id)
+    const playoffAns = getAns(inv.id, playoffItem?.id)
+
+    // Meeting space — team-friendly label
+    const mtgType = resp?.meeting_space_type as string | null | undefined
+    const mtgCount = resp?.meeting_space_count as number | null | undefined
+    const mtgLabels: Record<string, string> = {
+      function_room: 'Function Room',
+      ballroom: 'Ballroom',
+      restaurant: 'Restaurant',
+      suite_converted: 'Suite (converted)',
+      none: 'None',
+    }
+    const mtgLabel = mtgType ? (mtgLabels[mtgType] ?? mtgType) : (resp ? 'Yes' : '—')
+    const mtgDisplay = mtgType && mtgCount != null && mtgCount > 1 ? `${mtgLabel} ×${mtgCount}` : mtgLabel
+
+    // Auto-generate notes (no internal flags)
+    const noteFragments: string[] = []
+    if (inv.staff_notes?.trim()) noteFragments.push(inv.staff_notes.trim())
+    if (mtgType === 'restaurant' || mtgType === 'suite_converted') {
+      noteFragments.push('Meeting space is restaurant/F&B — may not qualify')
+    }
+    // Check for unavailable scenarios
+    const scenarioRates = resp?.scenario_rates as Record<string, { rate: number | null; available: boolean }> | null | undefined
+    if (scenarioRates) {
+      for (const [nights, val] of Object.entries(scenarioRates)) {
+        if (val.available === false) noteFragments.push(`Not available for ${nights}-night stay`)
+      }
+    }
+
+    return [
+      inv.hotel_name,
+      resp?.best_king_rate != null ? resp.best_king_rate : '—',
+      resp?.resort_fee ?? '—',
+      resp?.occupancy_tax ?? '—',
+      compAns?.answer_value ?? '—',
+      upgAns?.answer_value ?? '—',
+      playoffAns?.answer_yes_no === true ? 'Yes' : playoffAns?.answer_yes_no === false ? 'No' : '—',
+      mtgDisplay,
+      noteFragments.join('; '),
+    ]
+  })
+
+  const teamName = (trip.clients?.team_name ?? 'Team').replace(/\s+/g, '_')
+  const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const filename = `${teamName} ${trip.city ?? 'City'} Proposals ${dateStr}.xlsx`
+
+  const sheetData = [header, ...rows]
+  const ws = XLSX.utils.aoa_to_sheet(sheetData)
+
+  ws['!cols'] = [
+    { wch: 32 }, // Hotel
+    { wch: 16 }, // King Rate
+    { wch: 14 }, // Resort Fee
+    { wch: 16 }, // Occupancy Tax
+    { wch: 20 }, // Comp Suites
+    { wch: 28 }, // Suite Upgrades
+    { wch: 24 }, // Playoff Clause
+    { wch: 24 }, // Meeting Space
+    { wch: 44 }, // Notes
+  ]
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Team Grid')
+  XLSX.writeFile(wb, filename)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Team-facing stripped export
 // Columns: City | Check-in | Check-out | King Rate | Tax | Comp Suites (FREE) |
 //          Suite Upgrades at King Rate | Playoff Clause | Notes

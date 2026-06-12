@@ -5,8 +5,7 @@ import type { Client, Invitation, Trip } from '../../lib/types'
 import { formatDate, generateToken } from '../../lib/format'
 import { sendInvitationEmail, sendReminderEmails } from '../../lib/emailApi'
 import { Badge, ErrorNote, LinkButton, Loading } from '../../components/ui'
-import { exportTeamGridXlsx } from '../../lib/excelExport'
-import type { TeamGridHotel } from '../../lib/excelExport'
+import { exportTeamGrid } from '../../lib/excelExport'
 import { useRole } from '../../lib/useRole'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1273,44 +1272,19 @@ export default function TripDetail() {
 
   const exportForTeam = () => {
     if (!trip || !invites) return
-    // Find key concession item IDs
-    const compSuitesItem = concessionItems.find((c) => c.label.toLowerCase().includes('complimentary one bedroom suites'))
-    const suiteUpgItem = concessionItems.find((c) => c.label.toLowerCase().includes('suite upgrades at the group'))
-    const playoffItem = concessionItems.find((c) => c.section === 'postseason')
-
-    const getAns = (invId: string, itemId: string | undefined) => {
-      if (!itemId) return null
-      return allAnswers.get(invId)?.find((a) => a.concession_item_id === itemId) ?? null
-    }
-
-    const hotels: TeamGridHotel[] = invites
-      .filter((i) => ['submitted', 'awarded'].includes(i.status))
-      .map((inv) => {
-        const resp = allResponses.get(inv.id)
-        const compAns = getAns(inv.id, compSuitesItem?.id)
-        const upgAns = getAns(inv.id, suiteUpgItem?.id)
-        const playoffAns = getAns(inv.id, playoffItem?.id)
-        return {
-          hotel_name: inv.hotel_name,
-          status: inv.status,
-          best_king_rate: resp?.best_king_rate ?? null,
-          occupancy_tax: resp?.occupancy_tax ?? null,
-          comp_suites: compAns?.answer_value ?? null,
-          suite_upgrades: upgAns?.answer_value ?? null,
-          playoff_clause: playoffAns?.answer_yes_no ?? null,
-          notes: inv.staff_notes ?? null,
-        }
-      })
-
     const tripData = trip as any
-    exportTeamGridXlsx(
+    exportTeamGrid(
       {
         city: trip.city,
         arrival_date: trip.arrival_date,
         departure_date: trip.departure_date,
-        client_name: tripData.clients?.team_name ?? null,
+        opponent_label: trip.opponent_label,
+        clients: tripData.clients ? { team_name: tripData.clients.team_name } : null,
       },
-      hotels,
+      invites.map((inv) => ({ ...inv, staff_notes: inv.staff_notes ?? null })),
+      allResponses as Map<string, any>,
+      allAnswers as Map<string, any[]>,
+      concessionItems,
     )
   }
 
@@ -1364,6 +1338,16 @@ export default function TripDetail() {
               className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors"
             >
               {sendingDeclines ? 'Sending…' : 'Send Declines'}
+            </button>
+          )}
+          {/* Export for Team — standalone button, hidden for viewers */}
+          {!isViewer && (
+            <button
+              onClick={exportForTeam}
+              disabled={!invites || invites.filter((i) => ['submitted', 'awarded'].includes(i.status)).length === 0}
+              className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors"
+            >
+              📋 Export for Team
             </button>
           )}
           {/* Export dropdown — hidden for viewers */}

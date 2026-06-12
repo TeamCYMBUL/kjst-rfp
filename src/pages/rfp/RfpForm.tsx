@@ -201,11 +201,13 @@ function ConcessionRow({
   answer,
   onChange,
   disabled,
+  showCommissionWarning,
 }: {
   item: ConcessionItem
   answer: AnswerState
   onChange: (update: Partial<AnswerState>) => void
   disabled?: boolean
+  showCommissionWarning?: boolean
 }) {
   const isYesNo = item.answer_type === 'yes_no'
   const showComment = isYesNo
@@ -219,6 +221,9 @@ function ConcessionRow({
 
   const hasRequestedValue =
     item.requested_value && item.requested_value !== '—' && item.requested_value !== null
+
+  const commVal = answer.answer_value?.trim() ?? ''
+  const warnZeroCommission = showCommissionWarning && (commVal === '0' || commVal === '')
 
   return (
     <div className="border-b border-slate-100 py-4 last:border-0">
@@ -238,7 +243,14 @@ function ConcessionRow({
           {isYesNo ? (
             <YesNoToggle value={answer.answer_yes_no} onChange={handleYesNo} disabled={disabled} />
           ) : (
-            <ValueInput item={item} value={answer.answer_value} onChange={(v) => onChange({ answer_value: v })} disabled={disabled} />
+            <div>
+              <ValueInput item={item} value={answer.answer_value} onChange={(v) => onChange({ answer_value: v })} disabled={disabled} />
+              {warnZeroCommission && (
+                <p className="mt-1 text-xs text-amber-600">
+                  ⚠️ Zero commission bids are typically ineligible for team selection.
+                </p>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -330,17 +342,24 @@ function RfpHeader({ data, resp, setResp, isReadOnly }: RfpHeaderProps) {
   }
 
   const setScenarioRate = (n: number, field: 'rate' | 'available', value: string | boolean) => {
-    setResp((r) => ({
-      ...r,
-      scenario_rates: {
-        ...r.scenario_rates,
-        [String(n)]: {
-          rate: r.scenario_rates[String(n)]?.rate ?? '',
-          available: r.scenario_rates[String(n)]?.available ?? true,
-          [field]: value,
+    setResp((r) => {
+      const updated = {
+        ...r,
+        scenario_rates: {
+          ...r.scenario_rates,
+          [String(n)]: {
+            rate: r.scenario_rates[String(n)]?.rate ?? '',
+            available: r.scenario_rates[String(n)]?.available ?? true,
+            [field]: value,
+          },
         },
-      },
-    }))
+      }
+      // Keep best_king_rate in sync with the 1-night scenario rate for backward compat
+      if (n === 1 && field === 'rate' && typeof value === 'string') {
+        updated.best_king_rate = value
+      }
+      return updated
+    })
   }
 
   return (
@@ -660,6 +679,9 @@ export default function RfpForm() {
   const [submitted, setSubmitted] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
 
+  // Night scenarios state — populated from loaded trip data
+  const [nightScenarios, setNightScenarios] = useState<number[]>([1])
+
   // Form state
   const [resp, setResp] = useState<RespState>({
     completed_by_name: '',
@@ -696,6 +718,9 @@ export default function RfpForm() {
       .then((d) => {
         setData(d)
         if (d.invitation.status === 'submitted') setSubmitted(true)
+
+        // Populate night scenarios from the trip
+        setNightScenarios(d.invitation.trips.night_scenarios ?? [1])
 
         // Populate existing response if save-and-resume
         if (d.response) {
@@ -833,7 +858,7 @@ export default function RfpForm() {
       setValidationError('Please enter the name of the person completing this form.')
       return
     }
-    const scenarios = data?.invitation.trips.night_scenarios ?? [1]
+    const scenarios = nightScenarios
     const isMultiScenario = scenarios.length > 1
     if (!isMultiScenario && !resp.best_king_rate.trim()) {
       setValidationError('Best Available King Rate is required before submitting.')
@@ -937,15 +962,59 @@ export default function RfpForm() {
     )
   }
 
-  // Group items by section, in order
-  const sections = ['concessions', 'facilities', 'in_season_tournament', 'postseason'] as const
-  const bySection: Record<string, ConcessionItem[]> = {}
-  data.items.forEach((item) => {
-    if (!bySection[item.section]) bySection[item.section] = []
-    bySection[item.section].push(item)
-  })
+  // Classify concession items for ordered rendering
+  // Helpers: identify items by label keywords
+  const isFlexCancelItem = (item: ConcessionItem) =>
+    item.label.toLowerCase().includes('cancellation') || item.label.toLowerCase().includes('flexible cancellation')
+  const isCommissionItem = (item: ConcessionItem) =>
+    item.answer_type === 'percent' &&
+    (item.label.toLowerCase().includes('commission') || item.label.toLowerCase().includes('commissionable'))
+  const isMeetingSpaceYesNoItem = (item: ConcessionItem) =>
+    item.answer_type === 'yes_no' && item.label.toLowerCase().includes('meeting')
+  const isSuiteConcessionItem = (item: ConcessionItem) =>
+    item.label.toLowerCase().includes('comp suite') ||
+    item.label.toLowerCase().includes('suite upgrade') ||
+    item.label.toLowerCase().includes('complimentary suite')
+
+  const allConcessionItems = data.items.filter(
+    (i) => i.section === 'concessions' || i.section === 'facilities',
+  )
+  const flexCancelItems = allConcessionItems.filter(isFlexCancelItem)
+  const commissionItems = allConcessionItems.filter(isCommissionItem)
+  const meetingSpaceYesNoItems = allConcessionItems.filter(isMeetingSpaceYesNoItem)
+  const suiteConcessionItems = allConcessionItems.filter(isSuiteConcessionItem)
+  const postseasonItems = data.items.filter((i) => i.section === 'postseason')
+  const inSeasonItems = data.items.filter((i) => i.section === 'in_season_tournament')
+
+  // "Other" = concessions/facilities not in any of the above special groups
+  const specialItemIds = new Set([
+    ...flexCancelItems,
+    ...commissionItems,
+    ...meetingSpaceYesNoItems,
+    ...suiteConcessionItems,
+  ].map((i) => i.id))
+  const otherConcessionItems = allConcessionItems.filter((i) => !specialItemIds.has(i.id))
+
+  // Determine if meeting space is answered Yes (to show type/count fields)
+  const meetingSpaceYesNo = meetingSpaceYesNoItems.length > 0
+    ? (answers[meetingSpaceYesNoItems[0].id]?.answer_yes_no ?? null)
+    : null
+  const meetingSpaceAnsweredYes = meetingSpaceYesNo === true
 
   const isReadOnly = data.invitation.status === 'submitted'
+
+  // Helper: render a list of concession items
+  const renderItems = (items: ConcessionItem[]) =>
+    items.map((item) => (
+      <ConcessionRow
+        key={item.id}
+        item={item}
+        answer={answers[item.id] ?? { answer_yes_no: null, answer_value: '', comment: '', commentOpen: false }}
+        onChange={(update) => setAnswer(item.id, update)}
+        disabled={isReadOnly}
+        showCommissionWarning={isCommissionItem(item)}
+      />
+    ))
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-8">
@@ -1008,112 +1077,131 @@ export default function RfpForm() {
             </div>
           </div>
 
-          {/* ── Concession items ─── */}
-          {sections.map((section) => {
-            const items = bySection[section]
-            if (!items || items.length === 0) return null
-            const hasFlexCancel = section === 'concessions' && items.some((i) => i.label.toLowerCase().includes('flexible cancellation'))
-            return (
-              <div key={section} className="rounded-xl border border-slate-200 bg-white p-6">
-                <SectionHeading>{SECTION_LABELS[section]}</SectionHeading>
-
-                {/* Flex cancel note */}
-                {hasFlexCancel && (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 mb-3">
-                    The team's travel schedule is subject to league rescheduling and postponements. Please review the flexible cancellation policy carefully.
-                  </div>
-                )}
-
-                {/* Show window context for tournament / postseason */}
-                {section === 'in_season_tournament' && data.invitation.trips.in_season_tournament_window && (
-                  <div className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                    Window: {data.invitation.trips.in_season_tournament_window}
-                  </div>
-                )}
-                {section === 'postseason' && data.invitation.trips.postseason_window && (
-                  <div className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                    Window: {data.invitation.trips.postseason_window}
-                    {data.invitation.trips.postseason_rooms_text
-                      ? ` · ${data.invitation.trips.postseason_rooms_text}`
-                      : ''}
-                  </div>
-                )}
-
-                {items.map((item) => (
-                  <ConcessionRow
-                    key={item.id}
-                    item={item}
-                    answer={
-                      answers[item.id] ?? {
-                        answer_yes_no: null,
-                        answer_value: '',
-                        comment: '',
-                        commentOpen: false,
-                      }
-                    }
-                    onChange={(update) => setAnswer(item.id, update)}
-                    disabled={isReadOnly}
-                  />
-                ))}
+          {/* ── Section 2: Flexible Cancellation (#1 dealbreaker) ─── */}
+          {flexCancelItems.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-6">
+              <SectionHeading>Flexible Cancellation</SectionHeading>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 mb-3">
+                The team's travel schedule is subject to league rescheduling and postponements. Please review the flexible cancellation policy carefully.
               </div>
-            )
-          })}
+              {renderItems(flexCancelItems)}
+            </div>
+          )}
 
-          {/* ── Section 7: Meeting Space ─── */}
+          {/* ── Section 3: Commission (#2 dealbreaker) ─── */}
+          {commissionItems.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-6">
+              <SectionHeading>Commission</SectionHeading>
+              {renderItems(commissionItems)}
+            </div>
+          )}
+
+          {/* ── Section 4: Meeting Space ─── */}
           <div className="rounded-xl border border-slate-200 bg-white p-6">
             <SectionHeading>Meeting Space</SectionHeading>
             <p className="mb-4 text-sm text-slate-500">
               Teams use meeting space for massage tables, recovery equipment, and trainer setups. Please describe what meeting or event space your property has available for the team's use.
             </p>
-            <div className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <FieldLabel htmlFor="rfp-meeting-type">Type of meeting space available</FieldLabel>
-                  <select
-                    id="rfp-meeting-type"
-                    className={inputCls}
-                    value={resp.meeting_space_type}
-                    onChange={(e) => setResp((r) => ({ ...r, meeting_space_type: e.target.value }))}
-                    disabled={isReadOnly}
-                  >
-                    <option value="">Select type…</option>
-                    <option value="function_room">Function Room / Ballroom</option>
-                    <option value="restaurant">Restaurant</option>
-                    <option value="suite_converted">Suite with furniture removed</option>
-                    <option value="none">No meeting space available</option>
-                    <option value="other">Other — explain in notes below</option>
-                  </select>
+            {/* Yes/No concession items for meeting space */}
+            {meetingSpaceYesNoItems.length > 0 && renderItems(meetingSpaceYesNoItems)}
+            {/* Type, count, and notes — only shown when answered Yes */}
+            {(meetingSpaceAnsweredYes || meetingSpaceYesNoItems.length === 0) && (
+              <div className="space-y-4 mt-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <FieldLabel htmlFor="rfp-meeting-type">Type of meeting space</FieldLabel>
+                    <select
+                      id="rfp-meeting-type"
+                      className={inputCls}
+                      value={resp.meeting_space_type}
+                      onChange={(e) => setResp((r) => ({ ...r, meeting_space_type: e.target.value }))}
+                      disabled={isReadOnly}
+                    >
+                      <option value="">Select type…</option>
+                      <option value="function_room">Function Room / Ballroom ✅</option>
+                      <option value="ballroom">Ballroom ✅</option>
+                      <option value="restaurant">Restaurant / F&B outlet ⚠️ (may not qualify)</option>
+                      <option value="suite_converted">Suite with furniture removed ⚠️ (may not qualify)</option>
+                      <option value="none">None available</option>
+                    </select>
+                  </div>
+                  <div>
+                    <FieldLabel htmlFor="rfp-meeting-count">Number of spaces</FieldLabel>
+                    <input
+                      id="rfp-meeting-count"
+                      type="number"
+                      min="1"
+                      max="20"
+                      className={inputCls}
+                      value={resp.meeting_space_count}
+                      onChange={(e) => setResp((r) => ({ ...r, meeting_space_count: e.target.value }))}
+                      disabled={isReadOnly}
+                      placeholder="e.g. 2"
+                    />
+                  </div>
                 </div>
                 <div>
-                  <FieldLabel htmlFor="rfp-meeting-count">Number of spaces available</FieldLabel>
-                  <input
-                    id="rfp-meeting-count"
-                    type="number"
-                    min="0"
-                    className={inputCls}
-                    value={resp.meeting_space_count}
-                    onChange={(e) => setResp((r) => ({ ...r, meeting_space_count: e.target.value }))}
+                  <FieldLabel htmlFor="rfp-meeting-notes">Meeting space details (names, dimensions, F&B minimum)</FieldLabel>
+                  <textarea
+                    id="rfp-meeting-notes"
+                    className={`${inputCls} resize-none`}
+                    rows={3}
+                    value={resp.meeting_space_notes}
+                    onChange={setRespField('meeting_space_notes')}
                     disabled={isReadOnly}
-                    placeholder="e.g. 2"
+                    placeholder="Room names, square footage, any food & beverage minimum requirement…"
                   />
                 </div>
               </div>
-              <div>
-                <FieldLabel htmlFor="rfp-meeting-notes">Meeting space details (names, dimensions, F&B minimum)</FieldLabel>
-                <textarea
-                  id="rfp-meeting-notes"
-                  className={`${inputCls} resize-none`}
-                  rows={3}
-                  value={resp.meeting_space_notes}
-                  onChange={setRespField('meeting_space_notes')}
-                  disabled={isReadOnly}
-                  placeholder="Room names, square footage, any food & beverage minimum requirement…"
-                />
-              </div>
-            </div>
+            )}
           </div>
 
-          {/* ── Section 8: General comments ─── */}
+          {/* ── Section 5: Suite Concessions ─── */}
+          {suiteConcessionItems.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-6">
+              <SectionHeading>Suite Concessions</SectionHeading>
+              {renderItems(suiteConcessionItems)}
+            </div>
+          )}
+
+          {/* ── Section 6: Postseason / Playoff Clause ─── */}
+          {postseasonItems.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-6">
+              <SectionHeading>{SECTION_LABELS['postseason']}</SectionHeading>
+              {data.invitation.trips.postseason_window && (
+                <div className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                  Window: {data.invitation.trips.postseason_window}
+                  {data.invitation.trips.postseason_rooms_text
+                    ? ` · ${data.invitation.trips.postseason_rooms_text}`
+                    : ''}
+                </div>
+              )}
+              {renderItems(postseasonItems)}
+            </div>
+          )}
+
+          {/* ── Section 7: Other concession / facility items ─── */}
+          {otherConcessionItems.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-6">
+              <SectionHeading>Concessions &amp; Facilities</SectionHeading>
+              {renderItems(otherConcessionItems)}
+            </div>
+          )}
+
+          {/* ── Section 8: In-Season Tournament ─── */}
+          {inSeasonItems.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-6">
+              <SectionHeading>{SECTION_LABELS['in_season_tournament']}</SectionHeading>
+              {data.invitation.trips.in_season_tournament_window && (
+                <div className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                  Window: {data.invitation.trips.in_season_tournament_window}
+                </div>
+              )}
+              {renderItems(inSeasonItems)}
+            </div>
+          )}
+
+          {/* ── Section 9: General comments ─── */}
           <div className="rounded-xl border border-slate-200 bg-white p-6">
             <SectionHeading>General Comments</SectionHeading>
             <textarea

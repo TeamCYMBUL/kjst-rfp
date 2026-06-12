@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { formatDate } from '../../lib/format'
@@ -248,6 +248,21 @@ function RateRow({
       })}
     </tr>
   )
+}
+
+// ── Meeting space type label ─────────────────────────────────────────────────
+
+function meetingSpaceLabel(type: string | null | undefined, count: number | null | undefined): string {
+  if (!type) return '—'
+  const labels: Record<string, string> = {
+    function_room: 'Function Room',
+    ballroom: 'Ballroom',
+    restaurant: '⚠️ Restaurant',
+    suite_converted: '⚠️ Suite (converted)',
+    none: 'None',
+  }
+  const base = labels[type] ?? type
+  return count != null && count > 1 ? `${base} ×${count}` : base
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -832,6 +847,64 @@ export default function TripGrid() {
                 )
               })()}
 
+              {/* Multi-scenario rates — shown when trip has night_scenarios with 2+ values */}
+              {(() => {
+                const scenarios: number[] = (trip as any)?.night_scenarios ?? []
+                if (scenarios.length < 2) return null
+                return scenarios.map((n) => (
+                  <tr key={`scenario-${n}`} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="sticky left-0 w-64 bg-white px-4 py-2.5 text-xs font-medium text-slate-500">
+                      {n}-Night Rate
+                    </td>
+                    {invitations.map((inv) => {
+                      const resp = inv.rfp_responses ?? null
+                      const sr = resp?.scenario_rates?.[String(n)]
+                      const isPassed = inv.status === 'passed'
+                      const isUnavailable = inv.status === 'unavailable'
+                      const isAwarded = inv.status === 'awarded'
+                      const isDimmed = isPassed || isUnavailable
+                      const noResponse = !resp && !isDimmed
+                      let content: ReactNode
+                      if (isUnavailable) {
+                        content = <span className="text-xs italic text-slate-400">Not available</span>
+                      } else if (noResponse) {
+                        content = <span className="text-xs italic text-slate-300">Awaiting response</span>
+                      } else if (!sr) {
+                        // Fall back to best_king_rate for the first scenario
+                        const fallback = n === scenarios[0] && resp?.best_king_rate != null
+                          ? `$${resp.best_king_rate}`
+                          : null
+                        content = fallback ? (
+                          <span className="text-slate-600">{fallback}</span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )
+                      } else if (sr.available === false) {
+                        content = <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">N/A</span>
+                      } else {
+                        content = <span className="font-medium text-slate-800">{sr.rate != null ? `$${sr.rate}` : '—'}</span>
+                      }
+                      return (
+                        <td
+                          key={inv.id}
+                          className={`min-w-[200px] px-4 py-2.5 text-sm ${
+                            isDimmed
+                              ? 'opacity-40 bg-slate-50'
+                              : isAwarded
+                                ? 'bg-amber-50'
+                                : inv.id === lowestRateId
+                                  ? 'bg-emerald-50'
+                                  : ''
+                          }`}
+                        >
+                          {content}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))
+              })()}
+
               <RateRow
                 label="Occupancy Tax"
                 invitations={invitations}
@@ -913,19 +986,7 @@ export default function TripGrid() {
               <RateRow
                 label="Meeting Space Type"
                 invitations={invitations}
-                getValue={(r) => {
-                  if (!r?.meeting_space_type) return r?.meeting_space_notes ?? null
-                  const typeLabels: Record<string, string> = {
-                    function_room: '✅ Function Room',
-                    restaurant: '❌ Restaurant (ineligible)',
-                    suite_converted: '❌ Suite converted (ineligible)',
-                    none: '❌ None',
-                    other: 'Other',
-                  }
-                  const label = typeLabels[r.meeting_space_type] ?? r.meeting_space_type
-                  const count = r.meeting_space_count != null ? ` × ${r.meeting_space_count}` : ''
-                  return `${label}${count}`
-                }}
+                getValue={(r) => meetingSpaceLabel(r?.meeting_space_type, r?.meeting_space_count)}
                 lowestRateId={lowestRateId}
               />
               <RateRow
