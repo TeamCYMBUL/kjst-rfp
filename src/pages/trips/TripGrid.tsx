@@ -44,6 +44,7 @@ type Invitation = {
   hotel_contact_email: string | null
   status: string
   submitted_at: string | null
+  staff_notes: string | null
   // PostgREST returns a single object (not array) because invitation_id has a UNIQUE constraint.
   rfp_responses: Response | null
 }
@@ -267,6 +268,9 @@ export default function TripGrid() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  // Per-hotel staff notes (persisted to rfp_invitations.staff_notes on blur)
+  const [staffNotes, setStaffNotes] = useState<Record<string, string>>({})
+  const [noteSaving, setNoteSaving] = useState<Record<string, boolean>>({})
 
   const loadData = async () => {
     if (!id) return
@@ -291,7 +295,7 @@ export default function TripGrid() {
         supabase
           .from('rfp_invitations')
           .select(`
-            id, hotel_name, hotel_contact_name, hotel_contact_email, status, submitted_at,
+            id, hotel_name, hotel_contact_name, hotel_contact_email, status, submitted_at, staff_notes,
             rfp_responses (
               id, completed_by_name, completed_date, best_king_rate, king_rate_notes,
               current_selling_rate, stay2_king_rate, stay2_suite_rate, stay2_selling_rate,
@@ -312,7 +316,16 @@ export default function TripGrid() {
       ])
 
     if (invErr) setError(invErr.message)
-    setInvitations((invData as unknown as Invitation[]) ?? [])
+    const parsedInvitations = (invData as unknown as Invitation[]) ?? []
+    setInvitations(parsedInvitations)
+    // Seed staffNotes state from DB (won't overwrite unsaved local edits — only on initial load)
+    setStaffNotes((prev) => {
+      const next = { ...prev }
+      for (const inv of parsedInvitations) {
+        if (!(inv.id in next)) next[inv.id] = inv.staff_notes ?? ''
+      }
+      return next
+    })
 
     // Use trip snapshot when available; fall back to live org items for legacy trips
     if (snapData && snapData.length > 0) {
@@ -494,6 +507,7 @@ export default function TripGrid() {
         occupancy_tax: resp?.occupancy_tax ?? null,
         meeting_space_notes: resp?.meeting_space_notes ?? null,
         general_comments: resp?.general_comments ?? null,
+        staff_notes: staffNotes[inv.id] || inv.staff_notes || null,
         answers: answerMaps[inv.id] ?? {},
       }
     })
@@ -689,6 +703,32 @@ export default function TripGrid() {
                             >
                               N/A
                             </button>
+                          )}
+                        </div>
+                      )}
+                      {/* Staff notes — KJST-only, shown on team export */}
+                      {!isDimmed && (
+                        <div className="mt-2">
+                          <textarea
+                            placeholder="Staff notes (team export)…"
+                            value={staffNotes[inv.id] ?? ''}
+                            onChange={(e) =>
+                              setStaffNotes((n) => ({ ...n, [inv.id]: e.target.value }))
+                            }
+                            onBlur={async () => {
+                              const val = staffNotes[inv.id] ?? ''
+                              setNoteSaving((s) => ({ ...s, [inv.id]: true }))
+                              await supabase
+                                .from('rfp_invitations')
+                                .update({ staff_notes: val.trim() || null })
+                                .eq('id', inv.id)
+                              setNoteSaving((s) => ({ ...s, [inv.id]: false }))
+                            }}
+                            className="w-full resize-none rounded border border-slate-200 bg-white px-2 py-1.5 text-xs font-normal text-slate-600 placeholder-slate-300 focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008]"
+                            rows={2}
+                          />
+                          {noteSaving[inv.id] && (
+                            <p className="mt-0.5 text-[10px] text-slate-400">Saving…</p>
                           )}
                         </div>
                       )}

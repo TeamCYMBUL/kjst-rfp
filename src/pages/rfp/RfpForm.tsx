@@ -32,6 +32,7 @@ type RespState = {
   stay2_suite_rate: string
   best_suite_rate: string
   occupancy_tax: string
+  resort_fee: string
   meeting_space_notes: string
   meeting_space_type: string
   meeting_space_count: string
@@ -207,11 +208,13 @@ function ConcessionRow({
   disabled?: boolean
 }) {
   const isYesNo = item.answer_type === 'yes_no'
-  const showComment = isYesNo ? answer.answer_yes_no === false : answer.commentOpen
+  const showComment = isYesNo
+    ? answer.answer_yes_no === false && item.allow_comment === true
+    : answer.commentOpen
 
   const handleYesNo = (v: boolean) => {
-    // When toggling to No, auto-open the comment box.
-    onChange({ answer_yes_no: v, commentOpen: !v })
+    // When toggling to No, auto-open the comment box (only if allow_comment is true).
+    onChange({ answer_yes_no: v, commentOpen: !v && item.allow_comment === true })
   }
 
   const hasRequestedValue =
@@ -608,6 +611,21 @@ function RfpHeader({ data, resp, setResp, isReadOnly }: RfpHeaderProps) {
           </div>
         )}
 
+        {/* ── Resort Fee (optional) ── */}
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            Resort Fee (if applicable)
+          </label>
+          <p className="mb-1.5 text-xs text-slate-400">
+            Enter the nightly resort/destination fee if your property charges one. Leave blank if none.
+          </p>
+          <input type="text" className={`${inputCls} text-sm`}
+            value={resp.resort_fee}
+            onChange={(e) => setResp((r) => ({ ...r, resort_fee: e.target.value }))}
+            disabled={isReadOnly}
+            placeholder="e.g. $35/night" />
+        </div>
+
         {/* ── Rate notes (optional) ── */}
         <div>
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
@@ -654,6 +672,7 @@ export default function RfpForm() {
     stay2_suite_rate: '',
     best_suite_rate: '',
     occupancy_tax: '',
+    resort_fee: '',
     meeting_space_notes: '',
     meeting_space_type: '',
     meeting_space_count: '',
@@ -699,6 +718,7 @@ export default function RfpForm() {
             stay2_suite_rate: r.stay2_suite_rate != null ? String(r.stay2_suite_rate) : '',
             best_suite_rate: r.best_suite_rate != null ? String(r.best_suite_rate) : '',
             occupancy_tax: r.occupancy_tax ?? '',
+            resort_fee: r.resort_fee ?? '',
             meeting_space_notes: r.meeting_space_notes ?? '',
             meeting_space_type: r.meeting_space_type ?? '',
             meeting_space_count: r.meeting_space_count != null ? String(r.meeting_space_count) : '',
@@ -761,6 +781,7 @@ export default function RfpForm() {
         stay2_selling_rate: r.stay2_selling_rate,
         best_suite_rate: r.best_suite_rate ? Number(r.best_suite_rate) : null,
         occupancy_tax: r.occupancy_tax,
+        resort_fee: r.resort_fee,
         meeting_space_notes: r.meeting_space_notes,
         meeting_space_type: r.meeting_space_type || null,
         meeting_space_count: r.meeting_space_count ? Number(r.meeting_space_count) : null,

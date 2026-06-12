@@ -26,6 +26,7 @@ type Response = {
   invitation_id: string
   best_king_rate: number | null
   occupancy_tax: string | null
+  resort_fee: string | null
 }
 
 type ConcessionItem = {
@@ -37,7 +38,6 @@ type ConcessionItem = {
 }
 
 type Answer = {
-  id: string
   response_id: string
   concession_item_id: string
   answer_yes_no: boolean | null
@@ -82,13 +82,13 @@ export default function ProposalPrint() {
 
       if (invs.length > 0) {
         const invIds = invs.map((i) => i.id)
-        const respRes = await supabase.from('rfp_responses').select('id, invitation_id, best_king_rate, occupancy_tax').in('invitation_id', invIds)
+        const respRes = await supabase.from('rfp_responses').select('id, invitation_id, best_king_rate, occupancy_tax, resort_fee').in('invitation_id', invIds)
         const resps: Response[] = (respRes.data as unknown as Response[]) ?? []
         setResponses(resps)
 
         if (resps.length > 0) {
           const respIds = resps.map((r) => r.id)
-          const ansRes = await supabase.from('rfp_answers').select('id, response_id, concession_item_id, answer_yes_no, answer_value').in('response_id', respIds)
+          const ansRes = await supabase.from('concession_answers').select('response_id, concession_item_id, answer_yes_no, answer_value').in('response_id', respIds)
           setAnswers((ansRes.data as unknown as Answer[]) ?? [])
         }
       }
@@ -152,6 +152,12 @@ export default function ProposalPrint() {
   tableRows.push({
     label: 'Taxes & Fees',
     values: hotels.map((h) => h.resp?.occupancy_tax || '—'),
+  })
+
+  // Resort Fee
+  tableRows.push({
+    label: 'Resort Fee',
+    values: hotels.map((h) => h.resp?.resort_fee || '—'),
   })
 
   // Comp Suites (FREE)

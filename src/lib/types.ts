@@ -8,9 +8,6 @@ export type InvitationStatus = 'sent' | 'opened' | 'submitted' | 'declined' | 'a
 // they pre-fill new trips so staff usually only edit city/opponent/dates.
 export type DefaultTerms = {
   agreement_status?: string
-  commission_pct?: string
-  attrition_pct?: string
-  guarantee_language?: string
   default_king_rooms?: number | null
   default_suites?: number | null
   default_total_rooms?: number | null
@@ -73,5 +70,6 @@ export type Invitation = {
   sent_at: string | null
   opened_at: string | null
   submitted_at: string | null
+  staff_notes: string | null
   created_at: string
 }

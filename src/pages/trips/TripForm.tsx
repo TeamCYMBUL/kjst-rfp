@@ -31,6 +31,7 @@ const blank = {
   in_season_tournament_window: '',
   postseason_window: '',
   postseason_rooms_text: '',
+  postseason_type: 'regular' as 'regular' | 'playoffs' | 'finals',
   status: 'draft' as TripStatus,
   response_deadline: '',
 }
@@ -54,6 +55,8 @@ export default function TripForm() {
   const [fields, setFields] = useState<FormState>({ ...blank, client_id: presetClient })
   const [showStay2, setShowStay2] = useState(false)
   const [nightScenarios, setNightScenarios] = useState<number[]>([1])
+  const [needsPlayoffClause, setNeedsPlayoffClause] = useState(false)
+  const [needsTournamentClause, setNeedsTournamentClause] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -86,6 +89,8 @@ export default function TripForm() {
           const t = data as Trip
           if (t.stay2_arrival_date) setShowStay2(true)
           if ((t as any).night_scenarios?.length) setNightScenarios((t as any).night_scenarios)
+          if (t.postseason_window || t.postseason_rooms_text) setNeedsPlayoffClause(true)
+          if (t.in_season_tournament_window) setNeedsTournamentClause(true)
           setFields({
             client_id: t.client_id,
             city: t.city ?? '',
@@ -104,6 +109,7 @@ export default function TripForm() {
             in_season_tournament_window: t.in_season_tournament_window ?? '',
             postseason_window: t.postseason_window ?? '',
             postseason_rooms_text: t.postseason_rooms_text ?? '',
+            postseason_type: ((t as any).postseason_type ?? 'regular') as 'regular' | 'playoffs' | 'finals',
             status: t.status,
             response_deadline: t.response_deadline ?? '',
           })
@@ -133,6 +139,8 @@ export default function TripForm() {
       postseason_window: f.postseason_window || terms.postseason_window || '',
       postseason_rooms_text: f.postseason_rooms_text || terms.postseason_rooms_text || '',
     }))
+    if (terms.postseason_window || terms.postseason_rooms_text) setNeedsPlayoffClause(true)
+    if (terms.in_season_tournament_window) setNeedsTournamentClause(true)
   }
 
   // Apply defaults once the client list arrives, when a client is preset via URL.
@@ -178,6 +186,7 @@ export default function TripForm() {
       in_season_tournament_window: clean(fields.in_season_tournament_window),
       postseason_window: clean(fields.postseason_window),
       postseason_rooms_text: clean(fields.postseason_rooms_text),
+      postseason_type: fields.postseason_type,
       status: fields.status,
       response_deadline: clean(fields.response_deadline),
       night_scenarios: nightScenarios.length > 0 ? nightScenarios : [1],
@@ -219,7 +228,7 @@ export default function TripForm() {
 
       <form onSubmit={save} className="space-y-6">
         <Card className="p-6">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Trip
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -249,7 +258,7 @@ export default function TripForm() {
             />
             <div>
               <TextField label="City" value={fields.city} onChange={set('city')} />
-              <p className="mt-1 text-xs text-slate-400">Each game city is its own trip. Two away games in NYC = two separate trips.</p>
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Each game city is its own trip. Two away games in NYC = two separate trips.</p>
             </div>
             <Select
               label="Status"
@@ -267,7 +276,7 @@ export default function TripForm() {
         </Card>
 
         <Card className="p-6">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             {fields.stay2_arrival_date ? 'Visit 1 Dates' : 'Dates'}
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -307,10 +316,10 @@ export default function TripForm() {
 
         {/* Night Scenarios */}
         <Card className="p-6">
-          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Night Scenarios
           </h2>
-          <p className="mb-4 text-xs text-slate-400">
+          <p className="mb-4 text-xs text-slate-400 dark:text-slate-500">
             Hotels will quote a separate rate for each option you select. Not sure yet? Check all that apply — you can narrow it down before sending.
           </p>
           <div className="flex flex-wrap gap-3">
@@ -321,8 +330,8 @@ export default function TripForm() {
                   key={n}
                   className={`flex cursor-pointer items-center gap-2.5 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
                     checked
-                      ? 'border-[#1C1008] bg-[#1C1008]/5 text-[#1C1008]'
-                      : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                      ? 'border-[#1C1008] bg-[#1C1008]/5 text-[#1C1008] dark:border-amber-400 dark:text-amber-400'
+                      : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-500'
                   }`}
                 >
                   <input
@@ -354,8 +363,8 @@ export default function TripForm() {
         {/* Second Visit */}
         <Card className="p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-              Second Visit <span className="ml-1 font-normal normal-case text-slate-400">(optional — same city, different dates)</span>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Second Visit <span className="ml-1 font-normal normal-case text-slate-400 dark:text-slate-500">(optional — same city, different dates)</span>
             </h2>
             {showStay2 ? (
               <button
@@ -412,14 +421,14 @@ export default function TripForm() {
               />
             </div>
           ) : (
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-400 dark:text-slate-500">
               Use this when the team plays the same city twice — e.g. Atlanta in November and Atlanta in April. Each visit gets its own set of dates. This is different from night scenarios (which are rate-quote options for the same visit).
             </p>
           )}
         </Card>
 
         <Card className="p-6">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Rooms requested
           </h2>
           <div className="grid gap-4 sm:grid-cols-3">
@@ -436,7 +445,7 @@ export default function TripForm() {
                 value={fields.suites_requested}
                 onChange={set('suites_requested')}
               />
-              <p className="mt-1 text-xs text-slate-400">Include coaches, staff, and executive suites.</p>
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Include coaches, staff, and executive suites.</p>
             </div>
             <TextField
               label="Total rooms"
@@ -447,29 +456,145 @@ export default function TripForm() {
           </div>
         </Card>
 
+        {/* ── Trip Type ── */}
         <Card className="p-6">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Special windows
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <TextField
-              label="In-season tournament window"
-              value={fields.in_season_tournament_window}
-              onChange={set('in_season_tournament_window')}
-            />
-            <TextField
-              label="Postseason window"
-              value={fields.postseason_window}
-              onChange={set('postseason_window')}
-            />
-            <div className="sm:col-span-2">
+          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Trip Type</h2>
+          <p className="mb-4 text-xs text-slate-400 dark:text-slate-500">
+            Selecting Playoffs or Finals auto-fills standard room block counts. You can edit them afterwards.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {(
+              [
+                { value: 'regular', label: 'Regular Season' },
+                { value: 'playoffs', label: 'Playoffs' },
+                { value: 'finals', label: 'NBA Finals / Championship' },
+              ] as const
+            ).map(({ value, label }) => {
+              const checked = fields.postseason_type === value
+              return (
+                <label
+                  key={value}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
+                    checked
+                      ? 'border-[#1C1008] bg-[#1C1008]/5 text-[#1C1008] dark:border-amber-400 dark:text-amber-400'
+                      : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-500'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="postseason_type"
+                    className="h-4 w-4 border-slate-300 accent-[#1C1008]"
+                    checked={checked}
+                    onChange={() => {
+                      setFields((f) => ({
+                        ...f,
+                        postseason_type: value,
+                        king_rooms_requested:
+                          value === 'playoffs' ? '75' : value === 'finals' ? '80' : f.king_rooms_requested,
+                        suites_requested:
+                          value === 'playoffs' ? '0' : value === 'finals' ? '20' : f.suites_requested,
+                      }))
+                    }}
+                  />
+                  {label}
+                </label>
+              )
+            })}
+          </div>
+          {fields.postseason_type === 'playoffs' && (
+            <p className="mt-3 text-xs text-amber-600">Auto-filled: 75 rooms (standard playoff block)</p>
+          )}
+          {fields.postseason_type === 'finals' && (
+            <p className="mt-3 text-xs text-amber-600">Auto-filled: 80 kings + 20 suites (standard finals block)</p>
+          )}
+        </Card>
+
+        {/* ── Playoff clause ── */}
+        <Card className="p-6">
+          <div className="mb-1 flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Playoff Clause</h2>
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                Adds a hold to the hotel contract for playoff dates. Only needed for teams that prioritize postseason — playoff-focused teams (e.g. Cavs) will choose a more expensive hotel just to get this. Budget-conscious teams typically skip it.
+              </p>
+            </div>
+            <label className="flex shrink-0 cursor-pointer items-center gap-2 pt-0.5">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 accent-[#1C1008]"
+                checked={needsPlayoffClause}
+                onChange={(e) => {
+                  setNeedsPlayoffClause(e.target.checked)
+                  if (!e.target.checked) {
+                    setFields((f) => ({ ...f, postseason_window: '', postseason_rooms_text: '' }))
+                  }
+                }}
+              />
+              <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                {needsPlayoffClause ? 'Yes — include playoff clause' : 'No — skip'}
+              </span>
+            </label>
+          </div>
+
+          {needsPlayoffClause && (
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <TextField
+                  label="Postseason window"
+                  value={fields.postseason_window}
+                  onChange={set('postseason_window')}
+                  hint="Date range the playoffs could be held — e.g. Apr 19 – May 31, 2026"
+                />
+              </div>
+              <div>
+                <TextField
+                  label="Postseason room count"
+                  value={fields.postseason_rooms_text}
+                  onChange={set('postseason_rooms_text')}
+                  hint="Leave blank to use the same room block as the regular stay"
+                />
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* ── In-Season Tournament clause ── */}
+        <Card className="p-6">
+          <div className="mb-1 flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">In-Season Tournament Clause</h2>
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                NBA In-Season Tournament runs Nov–Dec. If this city could host a return tournament stay, add a hold for that window. Skip for most regular-season trips.
+              </p>
+            </div>
+            <label className="flex shrink-0 cursor-pointer items-center gap-2 pt-0.5">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 accent-[#1C1008]"
+                checked={needsTournamentClause}
+                onChange={(e) => {
+                  setNeedsTournamentClause(e.target.checked)
+                  if (!e.target.checked) {
+                    setFields((f) => ({ ...f, in_season_tournament_window: '' }))
+                  }
+                }}
+              />
+              <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                {needsTournamentClause ? 'Yes — include tournament clause' : 'No — skip'}
+              </span>
+            </label>
+          </div>
+
+          {needsTournamentClause && (
+            <div className="mt-4">
               <TextField
-                label="Postseason rooms"
-                value={fields.postseason_rooms_text}
-                onChange={set('postseason_rooms_text')}
+                label="Tournament window"
+                value={fields.in_season_tournament_window}
+                onChange={set('in_season_tournament_window')}
+                hint="Date range for the In-Season Tournament — e.g. Nov 12 – Dec 14, 2025"
               />
             </div>
-          </div>
+          )}
         </Card>
 
         <div className="flex items-center gap-3">

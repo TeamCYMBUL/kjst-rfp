@@ -34,6 +34,23 @@ export type RfpClient = {
   id: string
   team_name: string
   league: string | null
+  primary_contact_name: string | null
+  primary_contact_title: string | null
+  primary_contact_address: string | null
+  primary_contact_phone: string | null
+  primary_contact_email: string | null
+}
+
+export type RfpOrg = {
+  id: string
+  name: string | null
+  iata_number: string | null
+  contact_name: string | null
+  contact_title: string | null
+  contact_address: string | null
+  contact_phone: string | null
+  contact_email: string | null
+  season_label: string | null
 }
 
 export type RfpInvitation = {
@@ -77,6 +94,7 @@ export type ExistingResponse = {
   stay2_selling_rate: string | null
   // Per-scenario rates: {"1": {rate: 199, available: true}, "2": {rate: 189, available: true}}
   scenario_rates: Record<string, ScenarioRate> | null
+  resort_fee: string | null
 }
 
 export type ExistingAnswer = {
@@ -89,6 +107,7 @@ export type ExistingAnswer = {
 
 export type RfpData = {
   invitation: RfpInvitation
+  org: RfpOrg | null
   items: ConcessionItem[]
   response: ExistingResponse | null
   answers: ExistingAnswer[]
@@ -114,6 +133,7 @@ export type ResponseFields = {
   stay2_selling_rate: string
   // Per-scenario rates (null when trip has only one night scenario)
   scenario_rates: Record<string, ScenarioRate> | null
+  resort_fee: string
 }
 
 export type AnswerPayload = {

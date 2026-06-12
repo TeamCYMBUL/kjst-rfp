@@ -19,6 +19,7 @@ export type GridHotel = {
   occupancy_tax: string | null
   meeting_space_notes: string | null
   general_comments: string | null
+  staff_notes: string | null
   answers: Record<
     string,
     { answer_yes_no: boolean | null; answer_value: string | null; comment: string | null }
@@ -125,6 +126,7 @@ export function exportComparisonXlsx(
   rows.push(['ADDITIONAL INFORMATION'])
   rows.push(row('MEETING SPACE NOTES', hotels.map((h) => fmt(h.meeting_space_notes))))
   rows.push(row('GENERAL COMMENTS', hotels.map((h) => fmt(h.general_comments))))
+  rows.push(row('STAFF NOTES (Team Export)', hotels.map((h) => fmt(h.staff_notes))))
 
   // ── Build workbook ───────────────────────────────────────────────────────
   const ws = XLSX.utils.aoa_to_sheet(rows)

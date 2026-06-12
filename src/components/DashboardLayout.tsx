@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useProfile } from '../hooks/useProfile'
 import { useOnboardingProgress } from '../hooks/useOnboardingProgress'
+import { useRole } from '../lib/useRole'
 
 
 function KJLogoMark({ dark = false }: { dark?: boolean }) {
@@ -43,6 +44,8 @@ export default function DashboardLayout() {
   const { isDark } = useTheme()
   const { isAdmin } = useProfile()
   const { completedCount, allDone, steps } = useOnboardingProgress()
+  const { role } = useRole()
+  const isViewer = role === 'viewer'
 
   return (
     <div className={`flex h-screen ${isDark ? 'bg-slate-900' : 'bg-slate-50'}`}>
@@ -167,9 +170,16 @@ export default function DashboardLayout() {
         </nav>
 
         <div className="border-t border-white/10 p-3">
-          <div className="truncate px-3 pb-2 text-xs text-white/35" title={user?.email ?? ''}>
+          <div className="truncate px-3 pb-1 text-xs text-white/35" title={user?.email ?? ''}>
             {user?.email}
           </div>
+          {isViewer && (
+            <div className="px-3 pb-2">
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white/50">
+                👁 View only
+              </span>
+            </div>
+          )}
           <NavLink
             to="/settings"
             className={({ isActive }) =>

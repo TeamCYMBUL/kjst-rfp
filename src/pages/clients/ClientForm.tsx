@@ -9,7 +9,6 @@ import {
   Loading,
   PageHeader,
   Select,
-  TextArea,
   TextField,
 } from '../../components/ui'
 
@@ -30,13 +29,10 @@ const blank = {
 
 type StaffProfile = { id: string; full_name: string | null; email: string | null }
 
-// Default Terms live in a jsonb column. We keep numbers as strings in the form
+// Season defaults live in a jsonb column. We keep numbers as strings in the form
 // and coerce on save so empty inputs become null rather than 0.
 const blankTerms: DefaultTerms = {
   agreement_status: '',
-  commission_pct: '',
-  attrition_pct: '',
-  guarantee_language: '',
   default_king_rooms: null,
   default_suites: null,
   default_total_rooms: null,
@@ -154,8 +150,6 @@ export default function ClientForm() {
       assigned_to: fields.assigned_to || null,
       default_terms: {
         agreement_status: clean(terms.agreement_status ?? '') ?? undefined,
-        attrition_pct: clean(terms.attrition_pct ?? '') ?? undefined,
-        guarantee_language: clean(terms.guarantee_language ?? '') ?? undefined,
         default_king_rooms: numOrNull(String(terms.default_king_rooms ?? '')),
         default_suites: numOrNull(String(terms.default_suites ?? '')),
         default_total_rooms: numOrNull(String(terms.default_total_rooms ?? '')),
@@ -205,13 +199,13 @@ export default function ClientForm() {
 
       <form onSubmit={save} className="space-y-6">
         <Card className="p-6">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Team
           </h2>
 
           {/* Logo upload */}
           <div className="mb-5 flex items-center gap-5">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-slate-200 bg-slate-50">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700">
               {logoUrl ? (
                 <img src={logoUrl} alt="Team logo" className="h-full w-full object-contain p-1" />
               ) : (
@@ -219,7 +213,7 @@ export default function ClientForm() {
               )}
             </div>
             <div>
-              <label className={`cursor-pointer rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              <label className={`cursor-pointer rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                 {uploading ? 'Uploading…' : logoUrl ? 'Change logo' : 'Upload logo'}
                 <input
                   type="file"
@@ -238,7 +232,7 @@ export default function ClientForm() {
                   Remove
                 </button>
               )}
-              <p className="mt-1.5 text-xs text-slate-400">
+              <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
                 PNG, SVG, or JPG · Shows in the client list instead of initials
               </p>
             </div>
@@ -306,7 +300,7 @@ export default function ClientForm() {
         </Card>
 
         <Card className="p-6">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Primary contact
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -348,63 +342,57 @@ export default function ClientForm() {
             className="flex w-full items-center justify-between text-left"
           >
             <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Default terms</h2>
-              <p className="mt-0.5 text-xs text-slate-400">
-                Pre-fills room counts and clauses on every new trip for this client
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Season defaults</h2>
+              <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                Pre-fills room counts and windows on every new trip for this team
               </p>
             </div>
-            <span className="shrink-0 text-xs font-medium text-slate-400 ml-4">
+            <span className="shrink-0 text-xs font-medium text-slate-400 dark:text-slate-500 ml-4">
               {showTerms ? '▲ Hide' : '▼ Set up (optional)'}
             </span>
           </button>
           {showTerms && (
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <TextField
-                label="Attrition %"
-                value={terms.attrition_pct ?? ''}
-                onChange={setTerm('attrition_pct')}
-              />
-              <TextField
                 label="Default king rooms"
                 type="number"
+                hint="How many king rooms this team typically needs per stay"
                 value={terms.default_king_rooms ?? ''}
                 onChange={setTerm('default_king_rooms')}
               />
               <TextField
                 label="Default suites"
                 type="number"
+                hint="Suites needed per stay (coaches, star players, etc.)"
                 value={terms.default_suites ?? ''}
                 onChange={setTerm('default_suites')}
               />
               <TextField
                 label="Default total rooms"
                 type="number"
+                hint="Kings + suites combined"
                 value={terms.default_total_rooms ?? ''}
                 onChange={setTerm('default_total_rooms')}
               />
+              <div className="sm:col-span-1" />
               <TextField
                 label="In-season tournament window"
+                hint="e.g. Nov 12 – Dec 14, 2025"
                 value={terms.in_season_tournament_window ?? ''}
                 onChange={setTerm('in_season_tournament_window')}
               />
               <TextField
                 label="Postseason window"
+                hint="e.g. Apr 19 – Jun 22, 2026"
                 value={terms.postseason_window ?? ''}
                 onChange={setTerm('postseason_window')}
               />
               <TextField
-                label="Postseason rooms"
+                label="Postseason room count"
+                hint="Leave blank to use the same block as the regular stay"
                 value={terms.postseason_rooms_text ?? ''}
                 onChange={setTerm('postseason_rooms_text')}
               />
-              <div className="sm:col-span-2">
-                <TextArea
-                  label="Guarantee language"
-                  rows={3}
-                  value={terms.guarantee_language ?? ''}
-                  onChange={setTerm('guarantee_language')}
-                />
-              </div>
             </div>
           )}
         </Card>

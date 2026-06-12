@@ -67,7 +67,7 @@ function TeamAvatar({
         src={logoUrl}
         alt={name}
         onError={() => setImgFailed(true)}
-        className={`${sizeClass} shrink-0 rounded-lg border border-slate-100 bg-white object-contain p-0.5`}
+        className={`${sizeClass} shrink-0 rounded-lg border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 object-contain p-0.5`}
       />
     )
   }
@@ -148,8 +148,8 @@ export default function ClientsList() {
       {/* Top bar */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Clients</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Clients</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {clients.length} team{clients.length !== 1 ? 's' : ''} · {totalTrips} total trip
             {totalTrips !== 1 ? 's' : ''}
           </p>
@@ -164,10 +164,10 @@ export default function ClientsList() {
 
       {clients.length === 0 ? (
         /* ── Empty state ── */
-        <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-16 text-center">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-16 text-center">
           <div className="mb-3 text-4xl">🏀</div>
-          <h2 className="text-base font-semibold text-slate-700">No clients yet</h2>
-          <p className="mt-1 text-sm text-slate-400">
+          <h2 className="text-base font-semibold text-slate-700 dark:text-slate-300">No clients yet</h2>
+          <p className="mt-1 text-sm text-slate-400 dark:text-slate-500">
             Add your first sports team to get started.
           </p>
           <Link
@@ -179,22 +179,22 @@ export default function ClientsList() {
         </div>
       ) : (
         /* ── Split panel ── */
-        <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-white" style={{ minHeight: 520 }}>
+        <div className="flex overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" style={{ minHeight: 520 }}>
           {/* Left — client list */}
-          <div className="flex w-72 shrink-0 flex-col border-r border-slate-200">
+          <div className="flex w-72 shrink-0 flex-col border-r border-slate-200 dark:border-slate-700">
             {/* Search */}
-            <div className="border-b border-slate-200 px-4 py-3 space-y-2">
+            <div className="border-b border-slate-200 dark:border-slate-700 px-4 py-3 space-y-2">
               <input
                 type="text"
                 placeholder="Search teams..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm placeholder-slate-400 focus:border-[#1C1008]/30 focus:outline-none focus:ring-1 focus:ring-[#1C1008]/20"
+                className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:border-[#1C1008]/30 focus:outline-none focus:ring-1 focus:ring-[#1C1008]/20"
               />
               <select
                 value={leagueFilter}
                 onChange={(e) => setLeagueFilter(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 focus:border-[#1C1008]/30 focus:outline-none focus:ring-1 focus:ring-[#1C1008]/20"
+                className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 focus:border-[#1C1008]/30 focus:outline-none focus:ring-1 focus:ring-[#1C1008]/20"
               >
                 <option value="all">All leagues</option>
                 {LEAGUES.map((l) => (
@@ -206,7 +206,7 @@ export default function ClientsList() {
             {/* List */}
             <div className="flex-1 overflow-y-auto">
               {filtered.length === 0 ? (
-                <div className="p-6 text-center text-sm text-slate-400">
+                <div className="p-6 text-center text-sm text-slate-400 dark:text-slate-500">
                   No teams match your search.
                 </div>
               ) : (
@@ -219,15 +219,15 @@ export default function ClientsList() {
                     <button
                       key={c.id}
                       onClick={() => setSelected(c)}
-                      className={`flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3.5 text-left transition-colors last:border-0 ${
-                        isSelected ? 'bg-[#1C1008]/5' : 'hover:bg-slate-50'
+                      className={`flex w-full items-center gap-3 border-b border-slate-100 dark:border-slate-700 px-4 py-3.5 text-left transition-colors last:border-0 ${
+                        isSelected ? 'bg-[#1C1008]/5' : 'hover:bg-slate-50 dark:hover:bg-slate-700'
                       }`}
                     >
                       <TeamAvatar name={c.team_name} logoUrl={c.logo_url} />
                       <div className="min-w-0 flex-1">
                         <span
                           className={`truncate block text-sm font-semibold ${
-                            isSelected ? 'text-[#1C1008]' : 'text-slate-800'
+                            isSelected ? 'text-[#1C1008] dark:text-amber-400' : 'text-slate-800 dark:text-slate-200'
                           }`}
                         >
                           {c.team_name}
@@ -235,28 +235,28 @@ export default function ClientsList() {
                         <div className="mt-0.5 flex items-center gap-2">
                           <LeagueBadge league={c.league} />
                           {c.season && (
-                            <span className="text-xs text-slate-400">{c.season}</span>
+                            <span className="text-xs text-slate-400 dark:text-slate-500">{c.season}</span>
                           )}
                         </div>
                         {c.primary_contact_name && (
-                          <p className="mt-0.5 truncate text-xs text-slate-400">
+                          <p className="mt-0.5 truncate text-xs text-slate-400 dark:text-slate-500">
                             {c.primary_contact_name}
                             {c.primary_contact_email && ` · ${c.primary_contact_email}`}
                           </p>
                         )}
                         {c.profiles?.full_name && (
-                          <p className="mt-0.5 truncate text-xs text-slate-300">
+                          <p className="mt-0.5 truncate text-xs text-slate-300 dark:text-slate-600">
                             Manager: {c.profiles.full_name}
                           </p>
                         )}
                       </div>
                       <div className="shrink-0 text-right">
                         {active > 0 ? (
-                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                          <span className="rounded-full bg-emerald-100 dark:bg-emerald-900/20 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
                             {active} active
                           </span>
                         ) : (
-                          <span className="text-xs text-slate-300">
+                          <span className="text-xs text-slate-300 dark:text-slate-600">
                             {c.trips.length} trip{c.trips.length !== 1 ? 's' : ''}
                           </span>
                         )}
@@ -272,21 +272,21 @@ export default function ClientsList() {
           {selected ? (
             <div className="flex-1 overflow-y-auto">
               {/* Header */}
-              <div className="border-b border-slate-200 px-6 py-5">
+              <div className="border-b border-slate-200 dark:border-slate-700 px-6 py-5">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-4">
                     <TeamAvatar name={selected.team_name} logoUrl={selected.logo_url} size="lg" />
                     <div>
-                      <h2 className="text-xl font-bold text-slate-900">{selected.team_name}</h2>
+                      <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">{selected.team_name}</h2>
                       <div className="mt-1 flex items-center gap-2 flex-wrap">
                         <LeagueBadge league={selected.league} />
                         {selected.season && (
-                          <span className="text-sm text-slate-400">
+                          <span className="text-sm text-slate-400 dark:text-slate-500">
                             Season {selected.season}
                           </span>
                         )}
                         {selected.profiles?.full_name && (
-                          <span className="text-xs text-slate-400">
+                          <span className="text-xs text-slate-400 dark:text-slate-500">
                             · {selected.profiles.full_name}
                           </span>
                         )}
@@ -302,7 +302,7 @@ export default function ClientsList() {
                     </Link>
                     <Link
                       to={`/clients/${selected.id}/edit`}
-                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50"
+                      className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700"
                     >
                       Edit
                     </Link>
@@ -320,15 +320,15 @@ export default function ClientsList() {
                     },
                     { label: 'Closed trips', value: selClosed.length, highlight: false },
                   ].map((s) => (
-                    <div key={s.label} className="rounded-lg bg-slate-50 px-4 py-3">
+                    <div key={s.label} className="rounded-lg bg-slate-50 dark:bg-slate-700 px-4 py-3">
                       <div
                         className={`text-xl font-bold ${
-                          s.highlight ? 'text-emerald-600' : 'text-slate-700'
+                          s.highlight ? 'text-emerald-600' : 'text-slate-700 dark:text-slate-300'
                         }`}
                       >
                         {s.value}
                       </div>
-                      <div className="text-xs text-slate-400">{s.label}</div>
+                      <div className="text-xs text-slate-400 dark:text-slate-500">{s.label}</div>
                     </div>
                   ))}
                 </div>
@@ -336,11 +336,11 @@ export default function ClientsList() {
 
               {/* Primary contact card */}
               {(selected.primary_contact_name || selected.primary_contact_email) && (
-                <div className="border-b border-slate-200 px-6 py-5">
-                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <div className="border-b border-slate-200 dark:border-slate-700 px-6 py-5">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
                     Primary Contact
                   </h3>
-                  <div className="flex items-start gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+                  <div className="flex items-start gap-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700 px-4 py-4">
                     {/* Avatar */}
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1C1008] text-sm font-bold text-white">
                       {(selected.primary_contact_name ?? '?')
@@ -352,12 +352,12 @@ export default function ClientsList() {
                     </div>
                     <div className="min-w-0 flex-1">
                       {selected.primary_contact_name && (
-                        <p className="text-sm font-semibold text-slate-900">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                           {selected.primary_contact_name}
                         </p>
                       )}
                       {selected.primary_contact_title && (
-                        <p className="mt-0.5 text-xs text-slate-500">
+                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                           {selected.primary_contact_title}
                         </p>
                       )}
@@ -374,7 +374,7 @@ export default function ClientsList() {
                         {selected.primary_contact_phone && (
                           <a
                             href={`tel:${selected.primary_contact_phone}`}
-                            className="flex items-center gap-1.5 text-xs text-slate-600 hover:underline"
+                            className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 hover:underline"
                           >
                             <span>📞</span>
                             {selected.primary_contact_phone}
@@ -384,7 +384,7 @@ export default function ClientsList() {
                     </div>
                     <Link
                       to={`/clients/${selected.id}/edit`}
-                      className="shrink-0 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                      className="shrink-0 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                       title="Edit contact info"
                     >
                       ✎
@@ -395,12 +395,12 @@ export default function ClientsList() {
 
               {/* Trips list */}
               <div className="px-6 py-5">
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
                   Trips
                 </h3>
                 {selTrips.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center">
-                    <p className="text-sm text-slate-400">No trips yet for this team.</p>
+                  <div className="rounded-lg border border-dashed border-slate-200 dark:border-slate-600 p-8 text-center">
+                    <p className="text-sm text-slate-400 dark:text-slate-500">No trips yet for this team.</p>
                     <Link
                       to={`/trips/new?client=${selected.id}`}
                       className="mt-3 inline-block rounded-lg bg-[#1C1008] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#2d1e0e]"
@@ -418,14 +418,14 @@ export default function ClientsList() {
                         <Link
                           key={t.id}
                           to={`/trips/${t.id}`}
-                          className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3 transition-colors hover:border-[#1C1008]/20 hover:bg-slate-50"
+                          className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-3 transition-colors hover:border-[#1C1008]/20 hover:bg-slate-50 dark:hover:bg-slate-700"
                         >
                           <div>
-                            <div className="text-sm font-medium text-slate-800">
+                            <div className="text-sm font-medium text-slate-800 dark:text-slate-200">
                               {t.opponent_label || 'Untitled trip'}
                             </div>
                             {(t.city || t.arrival_date) && (
-                              <div className="mt-0.5 text-xs text-slate-400">
+                              <div className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
                                 {t.city && <span>{t.city}</span>}
                                 {t.city && t.arrival_date && (
                                   <span className="mx-1">·</span>
@@ -444,7 +444,7 @@ export default function ClientsList() {
               </div>
             </div>
           ) : (
-            <div className="flex flex-1 items-center justify-center text-sm text-slate-400">
+            <div className="flex flex-1 items-center justify-center text-sm text-slate-400 dark:text-slate-500">
               Select a client to view details.
             </div>
           )}

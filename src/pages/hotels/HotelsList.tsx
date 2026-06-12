@@ -72,7 +72,7 @@ function HotelAvatar({
         src={logoUrl}
         alt={name}
         onError={() => setImgFailed(true)}
-        className={`${sizeClass} shrink-0 rounded-xl border border-slate-100 bg-white object-contain p-1`}
+        className={`${sizeClass} shrink-0 rounded-xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 object-contain p-1`}
       />
     )
   }
@@ -161,17 +161,17 @@ function HotelForm({
     onSave()
   }
 
-  const inputCls = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008]'
-  const labelCls = 'mb-1 block text-xs font-medium text-slate-600'
+  const inputCls = 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008]'
+  const labelCls = 'mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300'
 
   return (
     <form onSubmit={submit} className="space-y-3 p-6">
-      <h3 className="text-sm font-semibold text-slate-800">{initial?.id ? 'Edit hotel' : 'Add hotel'}</h3>
+      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">{initial?.id ? 'Edit hotel' : 'Add hotel'}</h3>
       {error && <p className="text-xs text-red-600">{error}</p>}
 
       {/* Logo upload */}
-      <div className="flex items-center gap-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-slate-200 bg-white">
+      <div className="flex items-center gap-4 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 p-3">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800">
           {logoUrl ? (
             <img src={logoUrl} alt="Hotel logo" className="h-full w-full object-contain p-1" />
           ) : (
@@ -179,7 +179,7 @@ function HotelForm({
           )}
         </div>
         <div className="flex items-center gap-2">
-          <label className={`cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 ${uploading ? 'cursor-not-allowed opacity-50' : ''}`}>
+          <label className={`cursor-pointer rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-slate-600 ${uploading ? 'cursor-not-allowed opacity-50' : ''}`}>
             {uploading ? 'Uploading…' : logoUrl ? 'Change logo' : 'Upload logo'}
             <input
               type="file"
@@ -254,7 +254,7 @@ function HotelForm({
           {saving ? 'Saving…' : initial?.id ? 'Save changes' : 'Add hotel'}
         </button>
         <button type="button" onClick={onCancel}
-          className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-medium text-slate-500 hover:bg-slate-50">
+          className="rounded-lg border border-slate-200 dark:border-slate-600 px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700">
           Cancel
         </button>
       </div>
@@ -339,17 +339,17 @@ function HotelDetail({
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
-      <div className="border-b border-slate-200 bg-white px-6 py-5">
+      <div className="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <HotelAvatar chain={hotel.chain} name={hotel.name} logoUrl={hotel.logo_url} size="lg" />
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">{hotel.name}</h2>
-              <p className="text-sm text-slate-500">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{hotel.name}</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 {[hotel.chain, hotel.city].filter(Boolean).join(' · ')}
               </p>
               {hotel.league && (
-                <span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <span className="mt-1 inline-block rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   {hotel.league}
                 </span>
               )}
@@ -357,11 +357,11 @@ function HotelDetail({
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button onClick={onEdit}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+              className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
               Edit
             </button>
             <button onClick={onDelete}
-              className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors">
+              className="rounded-lg border border-red-200 dark:border-red-800 px-3 py-1.5 text-xs font-medium text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
               Delete
             </button>
           </div>
@@ -369,23 +369,23 @@ function HotelDetail({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+      <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700">
         {/* Contact */}
         <div className="px-6 py-5">
-          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Sales Contact</h3>
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Sales Contact</h3>
           {hotel.contact_name || hotel.contact_email || hotel.contact_phone ? (
             <dl className="space-y-2">
               {hotel.contact_name && (
                 <div className="flex items-center justify-between">
-                  <dt className="text-xs text-slate-400">Name</dt>
-                  <dd className="text-sm font-medium text-slate-800">{hotel.contact_name}</dd>
+                  <dt className="text-xs text-slate-400 dark:text-slate-500">Name</dt>
+                  <dd className="text-sm font-medium text-slate-800 dark:text-slate-200">{hotel.contact_name}</dd>
                 </div>
               )}
               {hotel.contact_email && (
                 <div className="flex items-center justify-between">
-                  <dt className="text-xs text-slate-400">Email</dt>
-                  <dd className="text-sm text-slate-800">
-                    <a href={`mailto:${hotel.contact_email}`} className="text-[#1C1008] hover:underline">
+                  <dt className="text-xs text-slate-400 dark:text-slate-500">Email</dt>
+                  <dd className="text-sm text-slate-800 dark:text-slate-200">
+                    <a href={`mailto:${hotel.contact_email}`} className="text-[#1C1008] dark:text-amber-400 hover:underline">
                       {hotel.contact_email}
                     </a>
                   </dd>
@@ -393,28 +393,28 @@ function HotelDetail({
               )}
               {hotel.contact_phone && (
                 <div className="flex items-center justify-between">
-                  <dt className="text-xs text-slate-400">Phone</dt>
-                  <dd className="text-sm text-slate-800">{hotel.contact_phone}</dd>
+                  <dt className="text-xs text-slate-400 dark:text-slate-500">Phone</dt>
+                  <dd className="text-sm text-slate-800 dark:text-slate-200">{hotel.contact_phone}</dd>
                 </div>
               )}
             </dl>
           ) : (
-            <p className="text-xs text-slate-400">No contact info on file.</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500">No contact info on file.</p>
           )}
         </div>
 
         {/* Notes (general) */}
         {hotel.notes && (
           <div className="px-6 py-5">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">General Notes</h3>
-            <p className="text-sm text-slate-600">{hotel.notes}</p>
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">General Notes</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-300">{hotel.notes}</p>
           </div>
         )}
 
         {/* Issues & Notes log */}
         <div className="px-6 py-5">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               Issues &amp; Notes
               {hotelNotes.length > 0 && (
                 <span className="ml-2 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 normal-case">
@@ -434,10 +434,10 @@ function HotelDetail({
 
           {/* Add note form */}
           {showAddNote && (
-            <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="mb-3 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 p-3">
               <textarea
                 autoFocus
-                className="w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008] resize-none"
+                className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008] resize-none"
                 rows={3}
                 placeholder="Describe what happened — e.g. room shortage, billing dispute, late checkout issue…"
                 value={newNote}
@@ -453,7 +453,7 @@ function HotelDetail({
                 </button>
                 <button
                   onClick={() => { setShowAddNote(false); setNewNote('') }}
-                  className="rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-500 hover:bg-white"
+                  className="rounded border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700"
                 >
                   Cancel
                 </button>
@@ -463,24 +463,24 @@ function HotelDetail({
 
           {/* Notes timeline */}
           {loadingNotes ? (
-            <p className="text-xs text-slate-400">Loading…</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Loading…</p>
           ) : hotelNotes.length === 0 ? (
-            <p className="text-xs text-slate-400">No issues or notes logged yet.</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500">No issues or notes logged yet.</p>
           ) : (
             <div className="space-y-3">
               {hotelNotes.map((n) => (
                 <div key={n.id} className="relative pl-4 before:absolute before:left-1 before:top-2 before:h-1.5 before:w-1.5 before:rounded-full before:bg-amber-400">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm text-slate-700 leading-snug">{n.note}</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300 leading-snug">{n.note}</p>
                     <button
                       onClick={() => deleteNote(n.id)}
-                      className="shrink-0 text-xs text-slate-300 hover:text-red-400 transition-colors"
+                      className="shrink-0 text-xs text-slate-300 dark:text-slate-600 hover:text-red-400 transition-colors"
                       title="Delete note"
                     >
                       ✕
                     </button>
                   </div>
-                  <p className="mt-0.5 text-[11px] text-slate-400">{fmtDate(n.created_at)}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">{fmtDate(n.created_at)}</p>
                 </div>
               ))}
             </div>
@@ -489,25 +489,25 @@ function HotelDetail({
 
         {/* Trip history */}
         <div className="px-6 py-5">
-          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Trip History {!loadingTrips && trips.length > 0 && <span className="ml-1 font-normal normal-case text-slate-300">({trips.length})</span>}
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+            Trip History {!loadingTrips && trips.length > 0 && <span className="ml-1 font-normal normal-case text-slate-300 dark:text-slate-600">({trips.length})</span>}
           </h3>
           {loadingTrips ? (
-            <p className="text-xs text-slate-400">Loading…</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Loading…</p>
           ) : trips.length === 0 ? (
-            <p className="text-xs text-slate-400">Not yet used on any trips.</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Not yet used on any trips.</p>
           ) : (
             <div className="space-y-2">
               {trips.map((t) => (
                 <Link key={t.id} to={`/trips/${t.id}`}
-                  className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50 transition-colors">
+                  className="flex items-center justify-between rounded-lg border border-slate-100 dark:border-slate-700 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                   <div>
-                    <p className="text-sm font-medium text-slate-800">{t.opponent_label || 'Untitled trip'}</p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{t.opponent_label || 'Untitled trip'}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500">
                       {[t.clients?.team_name, t.city].filter(Boolean).join(' · ')}
                     </p>
                   </div>
-                  <span className="text-xs text-slate-400">{t.arrival_date?.slice(0, 7) ?? ''}</span>
+                  <span className="text-xs text-slate-400 dark:text-slate-500">{t.arrival_date?.slice(0, 7) ?? ''}</span>
                 </Link>
               ))}
             </div>
@@ -630,21 +630,21 @@ function HotelImportModal({ onClose, onImported }: ImportModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <h2 className="text-sm font-semibold text-slate-800">Import Hotels from CSV</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">✕</button>
+      <div className="w-full max-w-2xl rounded-xl bg-white dark:bg-slate-800 shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-6 py-4">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Import Hotels from CSV</h2>
+          <button onClick={onClose} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300">✕</button>
         </div>
         <div className="p-6 space-y-4">
           {/* Template download */}
-          <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-4 py-3">
             <div>
-              <p className="text-sm font-medium text-slate-700">Download template</p>
-              <p className="text-xs text-slate-400">CSV with the expected column headers and an example row</p>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Download template</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">CSV with the expected column headers and an example row</p>
             </div>
             <button
               onClick={downloadTemplate}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+              className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
             >
               ↓ Template
             </button>
@@ -652,10 +652,10 @@ function HotelImportModal({ onClose, onImported }: ImportModalProps) {
 
           {/* File upload */}
           <div>
-            <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 px-6 py-8 text-center hover:border-[#1C1008]/30 transition-colors">
+            <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-600 px-6 py-8 text-center hover:border-[#1C1008]/30 transition-colors">
               <span className="text-2xl mb-2">📁</span>
-              <span className="text-sm font-medium text-slate-700">Click to upload CSV or Excel file</span>
-              <span className="mt-1 text-xs text-slate-400">Columns: name (required), chain, city, league, contact_name, contact_email, contact_phone</span>
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Click to upload CSV or Excel file</span>
+              <span className="mt-1 text-xs text-slate-400 dark:text-slate-500">Columns: name (required), chain, city, league, contact_name, contact_email, contact_phone</span>
               <input
                 type="file"
                 accept=".csv,.xlsx,.xls"
@@ -672,24 +672,24 @@ function HotelImportModal({ onClose, onImported }: ImportModalProps) {
           {/* Preview table */}
           {parsed.length > 0 && (
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{parsed.length} hotels ready to import</p>
-              <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{parsed.length} hotels ready to import</p>
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-600">
                 <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-slate-50">
-                    <tr className="border-b border-slate-200 text-left text-slate-400">
+                  <thead className="sticky top-0 bg-slate-50 dark:bg-slate-700">
+                    <tr className="border-b border-slate-200 dark:border-slate-600 text-left text-slate-400 dark:text-slate-500">
                       <th className="px-3 py-2 font-semibold">Name</th>
                       <th className="px-3 py-2 font-semibold">Chain</th>
                       <th className="px-3 py-2 font-semibold">City</th>
                       <th className="px-3 py-2 font-semibold">Contact</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50">
+                  <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
                     {parsed.map((row, i) => (
-                      <tr key={i} className="hover:bg-slate-50">
-                        <td className="px-3 py-2 font-medium text-slate-800">{row.name}</td>
-                        <td className="px-3 py-2 text-slate-500">{row.chain || '—'}</td>
-                        <td className="px-3 py-2 text-slate-500">{row.city || '—'}</td>
-                        <td className="px-3 py-2 text-slate-500">{row.contact_name || row.contact_email || '—'}</td>
+                      <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-700">
+                        <td className="px-3 py-2 font-medium text-slate-800 dark:text-slate-200">{row.name}</td>
+                        <td className="px-3 py-2 text-slate-500 dark:text-slate-400">{row.chain || '—'}</td>
+                        <td className="px-3 py-2 text-slate-500 dark:text-slate-400">{row.city || '—'}</td>
+                        <td className="px-3 py-2 text-slate-500 dark:text-slate-400">{row.contact_name || row.contact_email || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -699,13 +699,13 @@ function HotelImportModal({ onClose, onImported }: ImportModalProps) {
           )}
 
           {success !== null && (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+            <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3 text-sm font-medium text-emerald-700 dark:text-emerald-300">
               ✅ {success} hotel{success !== 1 ? 's' : ''} imported successfully!
             </div>
           )}
 
           <div className="flex items-center justify-between gap-3 pt-2">
-            <button onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-medium text-slate-500 hover:bg-slate-50">
+            <button onClick={onClose} className="rounded-lg border border-slate-200 dark:border-slate-600 px-4 py-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700">
               Cancel
             </button>
             {parsed.length > 0 && success === null && (
@@ -782,10 +782,10 @@ export default function HotelsList() {
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col -mx-8 -my-8">
       {/* Top bar */}
-      <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
+      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-3">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">Hotel Database</h1>
-          <p className="text-sm text-slate-500">
+          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Hotel Database</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
           {filtered.length !== hotels.length
             ? `${filtered.length} of ${hotels.length} propert${hotels.length === 1 ? 'y' : 'ies'}`
             : `${hotels.length} propert${hotels.length === 1 ? 'y' : 'ies'}`}
@@ -795,7 +795,7 @@ export default function HotelsList() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowImport(true)}
-            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+            className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
           >
             ↑ Import CSV
           </button>
@@ -810,19 +810,19 @@ export default function HotelsList() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left: hotel list */}
-        <div className="flex w-72 shrink-0 flex-col border-r border-slate-200 bg-white">
+        <div className="flex w-72 shrink-0 flex-col border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
           {/* Search */}
-          <div className="border-b border-slate-100 p-3">
+          <div className="border-b border-slate-100 dark:border-slate-700 p-3">
             <input
               value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="Search hotels…"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008]"
+              className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008]"
             />
           </div>
 
           {/* Sort toggle */}
-          <div className="flex items-center gap-1 border-b border-slate-100 px-3 py-2">
-            <span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Sort:</span>
+          <div className="flex items-center gap-1 border-b border-slate-100 dark:border-slate-700 px-3 py-2">
+            <span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Sort:</span>
             {(['brand', 'city', 'name'] as SortBy[]).map((s) => (
               <button
                 key={s}
@@ -830,7 +830,7 @@ export default function HotelsList() {
                 className={`rounded px-2 py-0.5 text-xs font-medium transition-colors capitalize ${
                   sortBy === s
                     ? 'bg-[#1C1008] text-white'
-                    : 'text-slate-500 hover:bg-slate-100'
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
               >
                 {s}
@@ -840,12 +840,12 @@ export default function HotelsList() {
 
           {/* League filter */}
           {availableLeagues.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1 border-b border-slate-100 px-3 py-2">
-              <span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">League:</span>
+            <div className="flex flex-wrap items-center gap-1 border-b border-slate-100 dark:border-slate-700 px-3 py-2">
+              <span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">League:</span>
               <button
                 onClick={() => setLeagueFilter('')}
                 className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${
-                  leagueFilter === '' ? 'bg-[#1C1008] text-white' : 'text-slate-500 hover:bg-slate-100'
+                  leagueFilter === '' ? 'bg-[#1C1008] text-white' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
               >
                 All
@@ -855,7 +855,7 @@ export default function HotelsList() {
                   key={lg}
                   onClick={() => setLeagueFilter(leagueFilter === lg ? '' : lg)}
                   className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${
-                    leagueFilter === lg ? 'bg-[#1C1008] text-white' : 'text-slate-500 hover:bg-slate-100'
+                    leagueFilter === lg ? 'bg-[#1C1008] text-white' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
                   }`}
                 >
                   {lg}
@@ -867,14 +867,14 @@ export default function HotelsList() {
           {/* Hotel list */}
           <div className="flex-1 overflow-y-auto">
             {filtered.length === 0 && (
-              <p className="px-4 py-6 text-center text-xs text-slate-400">No hotels found.</p>
+              <p className="px-4 py-6 text-center text-xs text-slate-400 dark:text-slate-500">No hotels found.</p>
             )}
 
             {sortBy === 'brand' ? (
               /* Grouped by chain */
               sortedChains.map(([chain, chainHotels]) => (
                 <div key={chain}>
-                  <div className="sticky top-0 bg-slate-50 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-100">
+                  <div className="sticky top-0 bg-slate-50 dark:bg-slate-700 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-600">
                     {chain}
                   </div>
                   {chainHotels.map((hotel) => {
@@ -883,16 +883,16 @@ export default function HotelsList() {
                       <button
                         key={hotel.id}
                         onClick={() => { setSelectedId(hotel.id); setMode('view') }}
-                        className={`flex w-full items-center gap-3 border-b border-slate-50 px-4 py-3 text-left transition-colors ${
-                          isSelected ? 'bg-slate-100' : 'hover:bg-slate-50'
+                        className={`flex w-full items-center gap-3 border-b border-slate-50 dark:border-slate-700 px-4 py-3 text-left transition-colors ${
+                          isSelected ? 'bg-slate-100 dark:bg-slate-700' : 'hover:bg-slate-50 dark:hover:bg-slate-700'
                         }`}
                       >
                         <HotelAvatar chain={hotel.chain} name={hotel.name} logoUrl={hotel.logo_url} />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-slate-800">{hotel.name}</p>
-                          <p className="truncate text-xs text-slate-400">{hotel.city ?? '—'}</p>
+                          <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{hotel.name}</p>
+                          <p className="truncate text-xs text-slate-400 dark:text-slate-500">{hotel.city ?? '—'}</p>
                         </div>
-                        {isSelected && <span className="text-slate-300 shrink-0">›</span>}
+                        {isSelected && <span className="text-slate-300 dark:text-slate-500 shrink-0">›</span>}
                       </button>
                     )
                   })}
@@ -912,20 +912,20 @@ export default function HotelsList() {
                     <button
                       key={hotel.id}
                       onClick={() => { setSelectedId(hotel.id); setMode('view') }}
-                      className={`flex w-full items-center gap-3 border-b border-slate-50 px-4 py-3 text-left transition-colors ${
-                        isSelected ? 'bg-slate-100' : 'hover:bg-slate-50'
+                      className={`flex w-full items-center gap-3 border-b border-slate-50 dark:border-slate-700 px-4 py-3 text-left transition-colors ${
+                        isSelected ? 'bg-slate-100 dark:bg-slate-700' : 'hover:bg-slate-50 dark:hover:bg-slate-700'
                       }`}
                     >
                       <HotelAvatar chain={hotel.chain} name={hotel.name} logoUrl={hotel.logo_url} />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-slate-800">{hotel.name}</p>
-                        <p className="truncate text-xs text-slate-400">
+                        <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{hotel.name}</p>
+                        <p className="truncate text-xs text-slate-400 dark:text-slate-500">
                           {sortBy === 'city'
                             ? (hotel.city ?? '—')
                             : [hotel.chain, hotel.city].filter(Boolean).join(' · ') || '—'}
                         </p>
                       </div>
-                      {isSelected && <span className="text-slate-300 shrink-0">›</span>}
+                      {isSelected && <span className="text-slate-300 dark:text-slate-500 shrink-0">›</span>}
                     </button>
                   )
                 })
@@ -934,10 +934,10 @@ export default function HotelsList() {
         </div>
 
         {/* Right: detail / form */}
-        <div className="flex-1 overflow-hidden bg-slate-50">
+        <div className="flex-1 overflow-hidden bg-slate-50 dark:bg-slate-900">
           {mode === 'add' && (
             <div className="mx-auto max-w-lg pt-8">
-              <div className="rounded-xl border border-slate-200 bg-white">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
                 <HotelForm
                   onSave={() => { setMode('view'); load() }}
                   onCancel={() => setMode('view')}
@@ -947,7 +947,7 @@ export default function HotelsList() {
           )}
           {mode === 'edit' && selected && (
             <div className="mx-auto max-w-lg pt-8">
-              <div className="rounded-xl border border-slate-200 bg-white">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
                 <HotelForm
                   initial={selected}
                   onSave={() => { setMode('view'); load() }}
@@ -964,7 +964,7 @@ export default function HotelsList() {
             />
           )}
           {mode === 'view' && !selected && (
-            <div className="flex h-full items-center justify-center text-sm text-slate-400">
+            <div className="flex h-full items-center justify-center text-sm text-slate-400 dark:text-slate-500">
               Select a hotel to view details
             </div>
           )}

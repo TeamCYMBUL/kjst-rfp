@@ -1,9 +1,23 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Button, Card, ErrorNote, Loading, PageHeader } from '../../components/ui'
+import { Button, Card, ErrorNote, Loading, PageHeader, TextField } from '../../components/ui'
 
+type ActiveTab = 'header' | 'concessions' | 'facilities' | 'in_season_tournament' | 'postseason'
 type Section = 'concessions' | 'facilities' | 'in_season_tournament' | 'postseason'
 type AnswerType = 'yes_no' | 'percent' | 'quantity' | 'currency' | 'text'
+
+// ── Org / header info types ──────────────────────────────────────────────────
+type OrgInfo = {
+  id: string
+  name: string
+  iata_number: string
+  season_label: string
+  contact_name: string
+  contact_title: string
+  contact_address: string
+  contact_phone: string
+  contact_email: string
+}
 
 type TemplateItem = {
   id: string
@@ -21,6 +35,14 @@ type EditState = {
   requested_value: string
   allow_comment: boolean
 }
+
+const TABS: { key: ActiveTab; label: string }[] = [
+  { key: 'header', label: 'Header & Contact Info' },
+  { key: 'concessions', label: 'Concessions & Facilities' },
+  { key: 'facilities', label: 'Facilities' },
+  { key: 'in_season_tournament', label: 'In-Season Tournament' },
+  { key: 'postseason', label: 'Postseason' },
+]
 
 const SECTIONS: { key: Section; label: string }[] = [
   { key: 'concessions', label: 'Concessions & Facilities' },
@@ -114,12 +136,139 @@ function ItemForm({
   )
 }
 
+// ── Header & Contact Info tab ─────────────────────────────────────────────────
+
+const blankOrg: OrgInfo = {
+  id: '',
+  name: '',
+  iata_number: '',
+  season_label: '',
+  contact_name: '',
+  contact_title: '',
+  contact_address: '',
+  contact_phone: '',
+  contact_email: '',
+}
+
+function HeaderTab({ orgId }: { orgId: string | null }) {
+  const [org, setOrg] = useState<OrgInfo>(blankOrg)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!orgId) {
+      // orgId not yet resolved — stop showing the spinner so the tab isn't stuck
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    supabase
+      .from('organizations')
+      .select('id, name, iata_number, season_label, contact_name, contact_title, contact_address, contact_phone, contact_email')
+      .eq('id', orgId)
+      .single()
+      .then(({ data, error }) => {
+        if (error) setError(error.message)
+        else if (data) {
+          setOrg({
+            id: data.id ?? '',
+            name: data.name ?? '',
+            iata_number: data.iata_number ?? '',
+            season_label: data.season_label ?? '',
+            contact_name: data.contact_name ?? '',
+            contact_title: data.contact_title ?? '',
+            contact_address: data.contact_address ?? '',
+            contact_phone: data.contact_phone ?? '',
+            contact_email: data.contact_email ?? '',
+          })
+        }
+        setLoading(false)
+      })
+  }, [orgId])
+
+  const set = (k: keyof OrgInfo) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setOrg((o) => ({ ...o, [k]: e.target.value }))
+
+  const save = async () => {
+    if (!orgId) return
+    setSaving(true)
+    setError(null)
+    const { error } = await supabase.from('organizations').update({
+      name: org.name.trim() || null,
+      iata_number: org.iata_number.trim() || null,
+      season_label: org.season_label.trim() || null,
+      contact_name: org.contact_name.trim() || null,
+      contact_title: org.contact_title.trim() || null,
+      contact_address: org.contact_address.trim() || null,
+      contact_phone: org.contact_phone.trim() || null,
+      contact_email: org.contact_email.trim() || null,
+    }).eq('id', orgId)
+    setSaving(false)
+    if (error) setError(error.message)
+    else { setSaved(true); setTimeout(() => setSaved(false), 3000) }
+  }
+
+  if (loading) return <div className="px-6 py-10 text-center text-sm text-slate-400">Loading…</div>
+
+  return (
+    <div className="p-6 space-y-6">
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
+      <div>
+        <h3 className="mb-1 text-sm font-semibold text-slate-700">RFP Season Label</h3>
+        <p className="mb-3 text-xs text-slate-400">Shown at the top of every hotel RFP form, e.g. "2025-2026 RFP"</p>
+        <div className="max-w-xs">
+          <TextField
+            label="Season label"
+            value={org.season_label}
+            onChange={set('season_label')}
+            placeholder="e.g. 2025-2026 RFP"
+          />
+        </div>
+      </div>
+
+      <div>
+        <h3 className="mb-1 text-sm font-semibold text-slate-700">Organization</h3>
+        <p className="mb-3 text-xs text-slate-400">Appears in the "Third Party Travel Agency Contact" column on every hotel RFP.</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField label="Agency name" value={org.name} onChange={set('name')} placeholder="KJ Sports Travel" />
+          <TextField label="IATA number" value={org.iata_number} onChange={set('iata_number')} placeholder="05732731" />
+        </div>
+      </div>
+
+      <div>
+        <h3 className="mb-1 text-sm font-semibold text-slate-700">KJST Contact</h3>
+        <p className="mb-3 text-xs text-slate-400">The travel manager's contact info shown to hotels on the RFP header.</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField label="Full name" value={org.contact_name} onChange={set('contact_name')} placeholder="Jon Cohen" />
+          <TextField label="Title" value={org.contact_title} onChange={set('contact_title')} placeholder="Owner" />
+          <TextField label="Phone" value={org.contact_phone} onChange={set('contact_phone')} placeholder="213-992-1044" />
+          <TextField label="Email" value={org.contact_email} onChange={set('contact_email')} placeholder="jcohen@kjsportstravel.com" />
+          <div className="sm:col-span-2">
+            <TextField label="Address" value={org.contact_address} onChange={set('contact_address')} placeholder="572 East Green Street Suite 200, Pasadena CA 91101" />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Button onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save changes'}
+        </Button>
+        {saved && <span className="text-sm text-emerald-600">✓ Saved</span>}
+      </div>
+    </div>
+  )
+}
+
 export default function TemplateEditor() {
   const [items, setItems] = useState<TemplateItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [orgId, setOrgId] = useState<string | null>(null)
-  const [activeSection, setActiveSection] = useState<Section>('concessions')
+  const [activeTab, setActiveTab] = useState<ActiveTab>('header')
+  const activeSection: Section = (activeTab === 'header' ? 'concessions' : activeTab) as Section
 
   // Edit state
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -301,16 +450,18 @@ export default function TemplateEditor() {
         </div>
       )}
 
-      {/* Section tabs */}
-      <div className="mb-0 flex gap-1 border-b border-slate-200">
-        {SECTIONS.map((s) => {
-          const count = items.filter((i) => i.section === s.key).length
-          const isActive = activeSection === s.key
+      {/* Tabs */}
+      <div className="mb-0 flex gap-1 border-b border-slate-200 flex-wrap">
+        {TABS.map((tab) => {
+          const isActive = activeTab === tab.key
+          const count = tab.key !== 'header'
+            ? items.filter((i) => i.section === tab.key).length
+            : null
           return (
             <button
-              key={s.key}
+              key={tab.key}
               onClick={() => {
-                setActiveSection(s.key)
+                setActiveTab(tab.key)
                 setEditingId(null)
                 setShowAdd(false)
               }}
@@ -320,22 +471,27 @@ export default function TemplateEditor() {
                   : 'border-transparent text-slate-500 hover:text-slate-700'
               }`}
             >
-              {s.label}
-              <span
-                className={`ml-2 rounded-full px-1.5 py-0.5 text-xs font-semibold ${
-                  isActive ? 'bg-[#1C1008]/10 text-[#1C1008]' : 'bg-slate-100 text-slate-500'
-                }`}
-              >
-                {count}
-              </span>
+              {tab.label}
+              {count !== null && (
+                <span
+                  className={`ml-2 rounded-full px-1.5 py-0.5 text-xs font-semibold ${
+                    isActive ? 'bg-[#1C1008]/10 text-[#1C1008]' : 'bg-slate-100 text-slate-500'
+                  }`}
+                >
+                  {count}
+                </span>
+              )}
             </button>
           )
         })}
       </div>
 
       <Card className="overflow-hidden rounded-tl-none">
-        {/* Item rows */}
-        <div className="divide-y divide-slate-100">
+        {/* Header tab */}
+        {activeTab === 'header' && <HeaderTab orgId={orgId} />}
+
+        {/* Item rows (concession tabs only) */}
+        {activeTab !== 'header' && <div className="divide-y divide-slate-100">
           {sectionItems.length === 0 && (
             <p className="px-6 py-8 text-center text-sm text-slate-400">
               No items in this section yet.
@@ -423,10 +579,10 @@ export default function TemplateEditor() {
               )}
             </div>
           ))}
-        </div>
+        </div>}
 
-        {/* Add item footer */}
-        <div className="border-t border-slate-200 px-4 py-4">
+        {/* Add item footer (concession tabs only) */}
+        {activeTab !== 'header' && <div className="border-t border-slate-200 px-4 py-4">
           {!showAdd ? (
             <Button
               variant="secondary"
@@ -436,14 +592,14 @@ export default function TemplateEditor() {
                 setEditingId(null)
               }}
             >
-              + Add item to {SECTIONS.find((s) => s.key === activeSection)?.label}
+              + Add item to {SECTIONS.find((s) => s.key === (activeTab as Section))?.label}
             </Button>
           ) : (
             <div>
               <p className="mb-4 text-sm font-medium text-slate-700">
                 New item in{' '}
                 <span className="text-[#1C1008]">
-                  {SECTIONS.find((s) => s.key === activeSection)?.label}
+                  {SECTIONS.find((s) => s.key === (activeTab as Section))?.label}
                 </span>
               </p>
               <ItemForm value={addState} onChange={setAddState} uid="new" />
@@ -457,7 +613,7 @@ export default function TemplateEditor() {
               </div>
             </div>
           )}
-        </div>
+        </div>}
       </Card>
     </div>
   )

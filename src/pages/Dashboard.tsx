@@ -59,21 +59,21 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
   return (
     <Link
       to={`/trips/${trip.id}`}
-      className="block rounded-xl border border-slate-200 bg-white px-5 py-4 transition hover:border-[#E5D5C8] hover:shadow-sm"
+      className="block rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4 transition hover:border-[#E5D5C8] hover:shadow-sm dark:hover:border-slate-600"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-slate-900">
+            <span className="font-semibold text-slate-900 dark:text-slate-100">
               {trip.opponent_label || 'Untitled trip'}
             </span>
-            {trip.city && <span className="text-slate-400">· {trip.city}</span>}
+            {trip.city && <span className="text-slate-400 dark:text-slate-500">· {trip.city}</span>}
             <Badge status={trip.status} />
             <DeadlineChip deadline={trip.response_deadline} />
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+          <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
             {showClient && trip.clients?.team_name && (
-              <span className="font-medium text-slate-600">{trip.clients.team_name}</span>
+              <span className="font-medium text-slate-600 dark:text-slate-300">{trip.clients.team_name}</span>
             )}
             {trip.arrival_date && <span>{formatDate(trip.arrival_date)}</span>}
             {trip.response_deadline && (
@@ -84,20 +84,20 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
         <div className="flex items-center gap-4 text-right">
           {invited > 0 && (
             <div>
-              <div className="text-lg font-bold text-slate-800">
+              <div className="text-lg font-bold text-slate-800 dark:text-slate-200">
                 {submitted}/{invited}
               </div>
-              <div className="text-xs text-slate-400">submitted</div>
+              <div className="text-xs text-slate-400 dark:text-slate-500">submitted</div>
             </div>
           )}
           {opened > 0 && (
             <div>
               <div className="text-lg font-bold text-amber-500">{opened}</div>
-              <div className="text-xs text-slate-400">opened</div>
+              <div className="text-xs text-slate-400 dark:text-slate-500">opened</div>
             </div>
           )}
           {invited === 0 && (
-            <span className="text-xs text-slate-400">No hotels added yet</span>
+            <span className="text-xs text-slate-400 dark:text-slate-500">No hotels added yet</span>
           )}
         </div>
       </div>
@@ -146,24 +146,24 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
         return (
           <div key={key}>
             {/* Client header */}
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-700 pb-2">
               <div className="flex items-center gap-3">
-                <span className="text-base font-semibold text-slate-800">{group.name}</span>
+                <span className="text-base font-semibold text-slate-800 dark:text-slate-200">{group.name}</span>
                 {hasUrgent && (
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                     ⏰ Deadline soon
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-4 text-xs text-slate-500">
+              <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
                 <span>
-                  <strong className="text-slate-700">{group.trips.length}</strong> trip
+                  <strong className="text-slate-700 dark:text-slate-300">{group.trips.length}</strong> trip
                   {group.trips.length !== 1 ? 's' : ''}
                 </span>
                 {allInvited > 0 && (
                   <span>
                     <strong className="text-emerald-600">{allSubmitted}</strong>
-                    <span className="text-slate-400">/{allInvited}</span> bids in
+                    <span className="text-slate-400 dark:text-slate-500">/{allInvited}</span> bids in
                   </span>
                 )}
               </div>
@@ -231,11 +231,11 @@ function StatusView({ trips }: { trips: DashTrip[] }) {
         .filter((g) => g.trips.length > 0)
         .map((g) => (
           <div key={g.key}>
-            <div className="mb-3 border-b border-slate-200 pb-2">
+            <div className="mb-3 border-b border-slate-200 dark:border-slate-700 pb-2">
               <span className={`text-sm font-semibold ${g.color}`}>
                 {g.emoji} {g.label}
               </span>
-              <span className="ml-2 text-xs text-slate-400">{g.trips.length} trip{g.trips.length !== 1 ? 's' : ''}</span>
+              <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">{g.trips.length} trip{g.trips.length !== 1 ? 's' : ''}</span>
             </div>
             <div className="space-y-3">
               {g.trips.map((trip) => (
@@ -246,9 +246,9 @@ function StatusView({ trips }: { trips: DashTrip[] }) {
         ))}
       {remaining.length > 0 && (
         <div>
-          <div className="mb-3 border-b border-slate-200 pb-2">
-            <span className="text-sm font-semibold text-slate-500">📋 Other active trips</span>
-            <span className="ml-2 text-xs text-slate-400">{remaining.length} trip{remaining.length !== 1 ? 's' : ''}</span>
+          <div className="mb-3 border-b border-slate-200 dark:border-slate-700 pb-2">
+            <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">📋 Other active trips</span>
+            <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">{remaining.length} trip{remaining.length !== 1 ? 's' : ''}</span>
           </div>
           <div className="space-y-3">
             {remaining.map((trip) => (
@@ -291,40 +291,26 @@ function OnboardingBanner() {
       {/* Steps */}
       <div className="space-y-2">
         {steps.map((step) => (
-          <div key={step.n} className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2.5">
-              {step.done ? (
-                <span className="text-emerald-500 text-sm font-bold">✅</span>
-              ) : (
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#1C1008]/20 text-[10px] font-bold text-[#1C1008]/40">
-                  {step.n}
-                </span>
-              )}
-              <span className={`text-sm ${step.done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+          <div key={step.n} className="flex items-start gap-2.5">
+            {step.done ? (
+              <span className="mt-0.5 text-sm font-bold text-emerald-500">✅</span>
+            ) : (
+              <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-[#1C1008]/20 text-[10px] font-bold text-[#1C1008]/40">
+                {step.n}
+              </span>
+            )}
+            <div>
+              <span className={`text-sm font-medium ${step.done ? 'text-slate-400 dark:text-slate-600 line-through' : 'text-slate-700 dark:text-slate-300'}`}>
                 {step.title}
               </span>
+              {!step.done && (
+                <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{step.description}</p>
+              )}
             </div>
-            {!step.done && (
-              <Link
-                to={step.href}
-                className="shrink-0 rounded-lg border border-[#1C1008]/20 bg-white px-3 py-1 text-xs font-medium text-[#1C1008] hover:bg-[#1C1008]/5 transition-colors"
-              >
-                {step.cta} →
-              </Link>
-            )}
           </div>
         ))}
       </div>
 
-      {/* Footer */}
-      <div className="mt-4 text-right">
-        <Link
-          to="/getting-started"
-          className="text-xs font-medium text-[#1C1008]/70 hover:text-[#1C1008] hover:underline transition-colors"
-        >
-          View full guide →
-        </Link>
-      </div>
     </div>
   )
 }
@@ -407,10 +393,10 @@ export default function Dashboard() {
       <div className="mx-auto max-w-2xl space-y-8">
         <div className="text-center">
           <div className="mb-2 text-4xl">🏀</div>
-          <h1 className="text-2xl font-bold text-slate-900">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
             Welcome to the KJST RFP Platform
           </h1>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
             {hasClients
               ? 'You have clients set up — create a trip to start sending RFPs.'
               : 'Replace the manual Word-doc process with one clean, live comparison grid.'}
@@ -422,19 +408,19 @@ export default function Dashboard() {
             {hasClients && <LinkButton to="/trips/new">Create a trip</LinkButton>}
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white px-6 py-5">
-          <h2 className="mb-3 text-sm font-semibold text-slate-700">How this works</h2>
-          <div className="grid gap-3 sm:grid-cols-3 text-sm text-slate-500">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-5">
+          <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">How this works</h2>
+          <div className="grid gap-3 sm:grid-cols-3 text-sm text-slate-500 dark:text-slate-400">
             <div>
-              <p className="font-medium text-slate-700 mb-1">1. Set up clients &amp; hotels</p>
+              <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">1. Set up clients &amp; hotels</p>
               <p>Add each sports team you work with under Clients. Add your hotel contacts under Hotels — they'll auto-fill when you invite hotels to a trip.</p>
             </div>
             <div>
-              <p className="font-medium text-slate-700 mb-1">2. Create trips &amp; send RFPs</p>
+              <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">2. Create trips &amp; send RFPs</p>
               <p>Every away game that needs a hotel block is a Trip. Add hotels to the trip and each one gets a unique, secure link to fill out their bid.</p>
             </div>
             <div>
-              <p className="font-medium text-slate-700 mb-1">3. Compare &amp; present</p>
+              <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">3. Compare &amp; present</p>
               <p>As hotels submit, the comparison grid updates live. When ready, export an internal sheet for your team or a clean proposal PDF for the client.</p>
             </div>
           </div>
@@ -447,7 +433,7 @@ export default function Dashboard() {
     <div className="space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-900">Dashboard</h1>
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Dashboard</h1>
         <div className="flex items-center gap-2">
           <LinkButton to="/clients/new" variant="secondary">
             + New client
@@ -462,19 +448,19 @@ export default function Dashboard() {
       <OnboardingBanner />
 
       {/* How this works — always-visible explanation */}
-      <div className="rounded-xl border border-slate-200 bg-white px-6 py-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">How this works</h2>
-        <div className="grid gap-3 sm:grid-cols-3 text-sm text-slate-500">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-5">
+        <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">How this works</h2>
+        <div className="grid gap-3 sm:grid-cols-3 text-sm text-slate-500 dark:text-slate-400">
           <div>
-            <p className="font-medium text-slate-700 mb-1">1. Set up clients &amp; hotels</p>
+            <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">1. Set up clients &amp; hotels</p>
             <p>Add each sports team you work with under Clients. Add your hotel contacts under Hotels — they'll auto-fill when you invite hotels to a trip.</p>
           </div>
           <div>
-            <p className="font-medium text-slate-700 mb-1">2. Create trips &amp; send RFPs</p>
+            <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">2. Create trips &amp; send RFPs</p>
             <p>Every away game that needs a hotel block is a Trip. Add hotels to the trip and each one gets a unique, secure link to fill out their bid.</p>
           </div>
           <div>
-            <p className="font-medium text-slate-700 mb-1">3. Compare &amp; present</p>
+            <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">3. Compare &amp; present</p>
             <p>As hotels submit, the comparison grid updates live. When ready, export an internal sheet for your team or a clean proposal PDF for the client.</p>
           </div>
         </div>
@@ -495,18 +481,18 @@ export default function Dashboard() {
         ].map((s) => (
           <div
             key={s.label}
-            className="rounded-xl border border-slate-200 bg-white px-5 py-4"
+            className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4"
           >
             <div className={`text-3xl font-bold ${s.color}`}>{s.value}</div>
-            <div className="mt-1 text-sm font-medium text-slate-600">{s.label}</div>
-            <div className="text-xs text-slate-400">{s.sublabel}</div>
+            <div className="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">{s.label}</div>
+            <div className="text-xs text-slate-400 dark:text-slate-500">{s.sublabel}</div>
           </div>
         ))}
       </div>
 
       {/* Upcoming deadlines alert */}
       {upcomingSoon > 0 && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
           ⏰{' '}
           <strong>
             {upcomingSoon} trip{upcomingSoon > 1 ? 's' : ''}
@@ -517,33 +503,33 @@ export default function Dashboard() {
 
       {/* Overdue invitations — cross-trip panel (feature from old Invitations page) */}
       {overdueInvitations.length > 0 && (
-        <details className="rounded-xl border border-red-200 bg-red-50 open:pb-0" open>
+        <details className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 open:pb-0" open>
           <summary className="flex cursor-pointer select-none list-none items-center gap-3 px-5 py-3.5">
             <span className="text-base">🚨</span>
             <div className="flex-1">
-              <span className="text-sm font-semibold text-red-800">
+              <span className="text-sm font-semibold text-red-800 dark:text-red-400">
                 {overdueInvitations.length} overdue invitation{overdueInvitations.length !== 1 ? 's' : ''}
               </span>
-              <span className="ml-2 text-xs text-red-600">
+              <span className="ml-2 text-xs text-red-600 dark:text-red-500">
                 — hotels past deadline with no response
               </span>
             </div>
-            <span className="text-xs text-red-400">click to expand ▾</span>
+            <span className="text-xs text-red-400 dark:text-red-500">click to expand ▾</span>
           </summary>
-          <div className="border-t border-red-200 px-5 pb-4 pt-3">
+          <div className="border-t border-red-200 dark:border-red-800 px-5 pb-4 pt-3">
             <div className="space-y-2">
               {overdueInvitations.map((item, i) => (
                 <div
                   key={i}
-                  className="flex items-center justify-between rounded-lg border border-red-200 bg-white px-4 py-2.5"
+                  className="flex items-center justify-between rounded-lg border border-red-200 dark:border-red-800 bg-white dark:bg-slate-800 px-4 py-2.5"
                 >
                   <div>
-                    <span className="text-sm font-medium text-slate-800">{item.hotelName}</span>
-                    <span className="mx-2 text-slate-300">·</span>
-                    <span className="text-sm text-slate-500">{item.tripName}</span>
+                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{item.hotelName}</span>
+                    <span className="mx-2 text-slate-300 dark:text-slate-600">·</span>
+                    <span className="text-sm text-slate-500 dark:text-slate-400">{item.tripName}</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs font-medium text-red-600">
+                    <span className="text-xs font-medium text-red-600 dark:text-red-400">
                       {item.daysOverdue} day{item.daysOverdue !== 1 ? 's' : ''} overdue
                     </span>
                     <Link
@@ -562,7 +548,7 @@ export default function Dashboard() {
 
       {/* View toggle + closed toggle */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1">
+        <div className="flex items-center gap-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1">
           {VIEW_OPTIONS.map((opt) => (
             <button
               key={opt.key}
@@ -570,7 +556,7 @@ export default function Dashboard() {
               className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                 view === opt.key
                   ? 'bg-[#1C1008] text-white shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
               }`}
             >
               <span>{opt.icon}</span>
@@ -583,8 +569,8 @@ export default function Dashboard() {
             onClick={() => setShowClosed((v) => !v)}
             className={`flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors ${
               showClosed
-                ? 'border-slate-400 bg-slate-100 text-slate-700'
-                : 'border-slate-200 bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                ? 'border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                : 'border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
             }`}
           >
             {showClosed ? '✓' : '○'} Show closed ({closedCount})
@@ -596,7 +582,7 @@ export default function Dashboard() {
       <div>
         {view === 'deadline' && (
           <>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               {showClosed ? 'All trips' : 'Active & draft trips'} · soonest deadline first
             </h2>
             <DeadlineView trips={displayedTrips} />
@@ -604,7 +590,7 @@ export default function Dashboard() {
         )}
         {view === 'client' && (
           <>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               {showClosed ? 'All trips' : 'Active & draft trips'} · grouped by client
             </h2>
             <ClientView trips={displayedTrips} />
@@ -612,7 +598,7 @@ export default function Dashboard() {
         )}
         {view === 'status' && (
           <>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               {showClosed ? 'All trips' : 'Active & draft trips'} · grouped by status
             </h2>
             <StatusView trips={displayedTrips} />
