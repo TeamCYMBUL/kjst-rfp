@@ -683,10 +683,12 @@ export default function RfpForm() {
   const [nightScenarios, setNightScenarios] = useState<number[]>([1])
 
   // Per-space detail state for meeting spaces
-  // Per-room meeting space details keyed by concession item ID
-  type SpaceDetail = { dimensions: string; fb_minimum: string; wifi: string }
-  const emptySpace = (): SpaceDetail => ({ dimensions: '', fb_minimum: '', wifi: '' })
+  // Per-room meeting space details keyed by concession item ID (or index for additional)
+  type SpaceDetail = { name: string; dimensions: string; fb_minimum: string; wifi: string; additional_info: string }
+  const emptySpace = (): SpaceDetail => ({ name: '', dimensions: '', fb_minimum: '', wifi: '', additional_info: '' })
   const [meetingSpaceDetails, setMeetingSpaceDetails] = useState<Record<string, SpaceDetail>>({})
+  // Additional spaces beyond the 4 requested rooms
+  const [additionalSpaces, setAdditionalSpaces] = useState<SpaceDetail[]>([])
 
   // Form state
   const [resp, setResp] = useState<RespState>({
@@ -757,12 +759,13 @@ export default function RfpForm() {
             scenario_rates: savedScenarioRates,
           })
 
-          // Restore per-room meeting space details from saved JSON
+          // Restore per-room meeting space details and additional spaces from saved JSON
           if (r.meeting_space_notes) {
             try {
               const parsed = JSON.parse(r.meeting_space_notes)
               if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                setMeetingSpaceDetails(parsed)
+                if (parsed.__details) setMeetingSpaceDetails(parsed.__details)
+                if (Array.isArray(parsed.__additional)) setAdditionalSpaces(parsed.__additional)
               }
             } catch {
               // Legacy plain-text — ignore, hotel will re-enter
@@ -825,7 +828,10 @@ export default function RfpForm() {
         best_suite_rate: r.best_suite_rate ? Number(r.best_suite_rate) : null,
         occupancy_tax: r.occupancy_tax,
         resort_fee: r.resort_fee,
-        meeting_space_notes: Object.keys(meetingSpaceDetails).length > 0 ? JSON.stringify(meetingSpaceDetails) : '',
+        meeting_space_notes:
+          Object.keys(meetingSpaceDetails).length > 0 || additionalSpaces.length > 0
+            ? JSON.stringify({ __details: meetingSpaceDetails, __additional: additionalSpaces })
+            : '',
         meeting_space_type: r.meeting_space_type || null,
         meeting_space_count: r.meeting_space_count ? Number(r.meeting_space_count) : null,
         general_comments: r.general_comments,
@@ -843,7 +849,7 @@ export default function RfpForm() {
         return false
       }
     },
-    [token, meetingSpaceDetails],
+    [token, meetingSpaceDetails, additionalSpaces],
   )
 
   // --- Autosave: debounce 1.5s after any field change ---
@@ -988,7 +994,8 @@ export default function RfpForm() {
     item.answer_type === 'percent' &&
     (item.label.toLowerCase().includes('commission') || item.label.toLowerCase().includes('commissionable'))
   const isMeetingSpaceYesNoItem = (item: ConcessionItem) =>
-    item.answer_type === 'yes_no' && item.label.toLowerCase().includes('meeting')
+    item.answer_type === 'yes_no' &&
+    item.label.toLowerCase().includes('complimentary meeting space')
   const isSuiteConcessionItem = (item: ConcessionItem) =>
     item.label.toLowerCase().includes('suite') &&
     (item.answer_type === 'quantity' || item.answer_type === 'currency')
@@ -1161,7 +1168,22 @@ export default function RfpForm() {
                   {answeredYes && (
                     <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
                       <p className="text-xs font-medium text-slate-500 mb-3">Room details</p>
-                      <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <FieldLabel htmlFor={`msd-${item.id}-name`} required>Name of space</FieldLabel>
+                          <input
+                            id={`msd-${item.id}-name`}
+                            type="text"
+                            className={inputCls}
+                            value={detail.name}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              setMeetingSpaceDetails((prev) => ({ ...prev, [item.id]: { ...detail, name: v } }))
+                            }}
+                            disabled={isReadOnly}
+                            placeholder="e.g. Grand Ballroom A"
+                          />
+                        </div>
                         <div>
                           <FieldLabel htmlFor={`msd-${item.id}-dim`} required>Dimensions (sq. ft.)</FieldLabel>
                           <input
@@ -1211,11 +1233,122 @@ export default function RfpForm() {
                           </select>
                         </div>
                       </div>
+                      <div className="mt-3">
+                        <FieldLabel htmlFor={`msd-${item.id}-info`}>Additional info</FieldLabel>
+                        <textarea
+                          id={`msd-${item.id}-info`}
+                          className={`${inputCls} resize-none`}
+                          rows={2}
+                          value={detail.additional_info}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            setMeetingSpaceDetails((prev) => ({ ...prev, [item.id]: { ...detail, additional_info: v } }))
+                          }}
+                          disabled={isReadOnly}
+                          placeholder="Any other details (AV equipment, pillars, natural light, etc.)"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
               )
             })}
+
+            {/* Additional spaces beyond the requested rooms */}
+            <div className="mt-5 border-t border-slate-100 pt-5">
+              <div className="flex items-center gap-4">
+                <p className="text-sm font-medium text-slate-700">Any additional spaces?</p>
+                <input
+                  type="number"
+                  min="0"
+                  max="10"
+                  className={`w-20 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#1C1008] focus:ring-1 focus:ring-[#1C1008] focus:outline-none disabled:bg-slate-50`}
+                  value={additionalSpaces.length || ''}
+                  onChange={(e) => {
+                    const n = parseInt(e.target.value) || 0
+                    setAdditionalSpaces((prev) => {
+                      const next = [...prev]
+                      while (next.length < n) next.push(emptySpace())
+                      return next.slice(0, n)
+                    })
+                  }}
+                  disabled={isReadOnly}
+                  placeholder="0"
+                />
+                <span className="text-xs text-slate-400">Enter a number to add detail cards</span>
+              </div>
+
+              {additionalSpaces.map((space, idx) => (
+                <div key={idx} className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-sm font-semibold text-slate-700 mb-3">Additional Space {idx + 1}</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <FieldLabel htmlFor={`add-${idx}-name`} required>Name of space</FieldLabel>
+                      <input
+                        id={`add-${idx}-name`}
+                        type="text"
+                        className={inputCls}
+                        value={space.name}
+                        onChange={(e) => { const v = e.target.value; setAdditionalSpaces((prev) => prev.map((s, i) => i === idx ? { ...s, name: v } : s)) }}
+                        disabled={isReadOnly}
+                        placeholder="e.g. Boardroom B"
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel htmlFor={`add-${idx}-dim`} required>Dimensions (sq. ft.)</FieldLabel>
+                      <input
+                        id={`add-${idx}-dim`}
+                        type="text"
+                        className={inputCls}
+                        value={space.dimensions}
+                        onChange={(e) => { const v = e.target.value; setAdditionalSpaces((prev) => prev.map((s, i) => i === idx ? { ...s, dimensions: v } : s)) }}
+                        disabled={isReadOnly}
+                        placeholder="e.g. 800 sq. ft."
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel htmlFor={`add-${idx}-fb`}>F&B minimum</FieldLabel>
+                      <input
+                        id={`add-${idx}-fb`}
+                        type="text"
+                        className={inputCls}
+                        value={space.fb_minimum}
+                        onChange={(e) => { const v = e.target.value; setAdditionalSpaces((prev) => prev.map((s, i) => i === idx ? { ...s, fb_minimum: v } : s)) }}
+                        disabled={isReadOnly}
+                        placeholder="e.g. $500 or None"
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel htmlFor={`add-${idx}-wifi`} required>Wi-Fi</FieldLabel>
+                      <select
+                        id={`add-${idx}-wifi`}
+                        className={inputCls}
+                        value={space.wifi}
+                        onChange={(e) => { const v = e.target.value; setAdditionalSpaces((prev) => prev.map((s, i) => i === idx ? { ...s, wifi: v } : s)) }}
+                        disabled={isReadOnly}
+                      >
+                        <option value="">Select…</option>
+                        <option value="Complimentary">Complimentary</option>
+                        <option value="Available at cost">Available at cost</option>
+                        <option value="Not available">Not available</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <FieldLabel htmlFor={`add-${idx}-info`}>Additional info</FieldLabel>
+                    <textarea
+                      id={`add-${idx}-info`}
+                      className={`${inputCls} resize-none`}
+                      rows={2}
+                      value={space.additional_info}
+                      onChange={(e) => { const v = e.target.value; setAdditionalSpaces((prev) => prev.map((s, i) => i === idx ? { ...s, additional_info: v } : s)) }}
+                      disabled={isReadOnly}
+                      placeholder="Any other details (AV equipment, pillars, natural light, etc.)"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* ── Section 5: Suite Concessions ─── */}
