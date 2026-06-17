@@ -247,7 +247,7 @@ function ConcessionRow({
               <ValueInput item={item} value={answer.answer_value} onChange={(v) => onChange({ answer_value: v })} disabled={disabled} />
               {warnZeroCommission && (
                 <p className="mt-1 text-xs text-amber-600">
-                  ⚠️ Zero commission bids are typically ineligible for team selection.
+                  Please confirm your commission percentage is correct before submitting.
                 </p>
               )}
             </div>
@@ -1178,9 +1178,9 @@ export default function RfpForm() {
                             disabled={isReadOnly}
                           >
                             <option value="">Select type…</option>
-                            <option value="function_room">Function Room / Ballroom ✅</option>
-                            <option value="restaurant">Restaurant / F&B outlet ⚠️</option>
-                            <option value="suite_converted">Suite with furniture removed ⚠️</option>
+                            <option value="function_room">Function Room / Ballroom</option>
+                            <option value="restaurant">Restaurant / F&B outlet</option>
+                            <option value="suite_converted">Suite with furniture removed</option>
                             <option value="other">Other</option>
                           </select>
                         </div>
@@ -1304,9 +1304,9 @@ export default function RfpForm() {
                         disabled={isReadOnly}
                       >
                         <option value="">Select type…</option>
-                        <option value="function_room">Function Room / Ballroom ✅</option>
-                        <option value="restaurant">Restaurant / F&B outlet ⚠️</option>
-                        <option value="suite_converted">Suite with furniture removed ⚠️</option>
+                        <option value="function_room">Function Room / Ballroom</option>
+                        <option value="restaurant">Restaurant / F&B outlet</option>
+                        <option value="suite_converted">Suite with furniture removed</option>
                         <option value="other">Other</option>
                       </select>
                     </div>
