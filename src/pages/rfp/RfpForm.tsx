@@ -682,6 +682,11 @@ export default function RfpForm() {
   // Night scenarios state — populated from loaded trip data
   const [nightScenarios, setNightScenarios] = useState<number[]>([1])
 
+  // Per-space detail state for meeting spaces
+  type SpaceDetail = { name: string; dimensions: string; fb_minimum: string; wifi: string }
+  const emptySpace = (): SpaceDetail => ({ name: '', dimensions: '', fb_minimum: '', wifi: '' })
+  const [meetingSpaces, setMeetingSpaces] = useState<SpaceDetail[]>([])
+
   // Form state
   const [resp, setResp] = useState<RespState>({
     completed_by_name: '',
@@ -744,12 +749,29 @@ export default function RfpForm() {
             best_suite_rate: r.best_suite_rate != null ? String(r.best_suite_rate) : '',
             occupancy_tax: r.occupancy_tax ?? '',
             resort_fee: r.resort_fee ?? '',
-            meeting_space_notes: r.meeting_space_notes ?? '',
+            meeting_space_notes: '',   // serialised from meetingSpaces on save
             meeting_space_type: r.meeting_space_type ?? '',
             meeting_space_count: r.meeting_space_count != null ? String(r.meeting_space_count) : '',
             general_comments: r.general_comments ?? '',
             scenario_rates: savedScenarioRates,
           })
+
+          // Restore per-space details from saved JSON (or initialise blank slots from count)
+          const count = r.meeting_space_count ?? 0
+          if (r.meeting_space_notes) {
+            try {
+              const parsed = JSON.parse(r.meeting_space_notes)
+              if (Array.isArray(parsed)) {
+                setMeetingSpaces(parsed)
+              }
+            } catch {
+              // Legacy plain-text notes — seed blank slots
+              const slots = Array.from({ length: count }, emptySpace)
+              setMeetingSpaces(slots)
+            }
+          } else if (count > 0) {
+            setMeetingSpaces(Array.from({ length: count }, emptySpace))
+          }
         }
 
         // Populate existing answers
@@ -807,7 +829,7 @@ export default function RfpForm() {
         best_suite_rate: r.best_suite_rate ? Number(r.best_suite_rate) : null,
         occupancy_tax: r.occupancy_tax,
         resort_fee: r.resort_fee,
-        meeting_space_notes: r.meeting_space_notes,
+        meeting_space_notes: meetingSpaces.length > 0 ? JSON.stringify(meetingSpaces) : '',
         meeting_space_type: r.meeting_space_type || null,
         meeting_space_count: r.meeting_space_count ? Number(r.meeting_space_count) : null,
         general_comments: r.general_comments,
@@ -825,7 +847,7 @@ export default function RfpForm() {
         return false
       }
     },
-    [token],
+    [token, meetingSpaces],
   )
 
   // --- Autosave: debounce 1.5s after any field change ---
@@ -1134,24 +1156,100 @@ export default function RfpForm() {
                       max="20"
                       className={inputCls}
                       value={resp.meeting_space_count}
-                      onChange={(e) => setResp((r) => ({ ...r, meeting_space_count: e.target.value }))}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setResp((r) => ({ ...r, meeting_space_count: val }))
+                        const n = parseInt(val) || 0
+                        setMeetingSpaces((prev) => {
+                          const next = [...prev]
+                          while (next.length < n) next.push(emptySpace())
+                          return next.slice(0, n)
+                        })
+                      }}
                       disabled={isReadOnly}
                       placeholder="e.g. 2"
                     />
                   </div>
                 </div>
-                <div>
-                  <FieldLabel htmlFor="rfp-meeting-notes">Meeting space details (names, dimensions, F&B minimum)</FieldLabel>
-                  <textarea
-                    id="rfp-meeting-notes"
-                    className={`${inputCls} resize-none`}
-                    rows={3}
-                    value={resp.meeting_space_notes}
-                    onChange={setRespField('meeting_space_notes')}
-                    disabled={isReadOnly}
-                    placeholder="Room names, square footage, any food & beverage minimum requirement…"
-                  />
-                </div>
+
+                {/* Per-space numbered detail cards */}
+                {meetingSpaces.length > 0 && (
+                  <div className="space-y-4 mt-2">
+                    <p className="text-xs text-slate-500">
+                      Please fill in the details for each meeting space below. All fields are required.
+                    </p>
+                    {meetingSpaces.map((space, idx) => (
+                      <div key={idx} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                        <p className="text-sm font-semibold text-slate-700 mb-3">Space {idx + 1}</p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <FieldLabel htmlFor={`space-${idx}-name`} required>Room name</FieldLabel>
+                            <input
+                              id={`space-${idx}-name`}
+                              type="text"
+                              className={inputCls}
+                              value={space.name}
+                              onChange={(e) => {
+                                const v = e.target.value
+                                setMeetingSpaces((prev) => prev.map((s, i) => i === idx ? { ...s, name: v } : s))
+                              }}
+                              disabled={isReadOnly}
+                              placeholder="e.g. Grand Ballroom A"
+                            />
+                          </div>
+                          <div>
+                            <FieldLabel htmlFor={`space-${idx}-dim`} required>Dimensions (sq. ft.)</FieldLabel>
+                            <input
+                              id={`space-${idx}-dim`}
+                              type="text"
+                              className={inputCls}
+                              value={space.dimensions}
+                              onChange={(e) => {
+                                const v = e.target.value
+                                setMeetingSpaces((prev) => prev.map((s, i) => i === idx ? { ...s, dimensions: v } : s))
+                              }}
+                              disabled={isReadOnly}
+                              placeholder="e.g. 3,200 sq. ft."
+                            />
+                          </div>
+                          <div>
+                            <FieldLabel htmlFor={`space-${idx}-fb`}>F&B minimum (if any)</FieldLabel>
+                            <input
+                              id={`space-${idx}-fb`}
+                              type="text"
+                              className={inputCls}
+                              value={space.fb_minimum}
+                              onChange={(e) => {
+                                const v = e.target.value
+                                setMeetingSpaces((prev) => prev.map((s, i) => i === idx ? { ...s, fb_minimum: v } : s))
+                              }}
+                              disabled={isReadOnly}
+                              placeholder="e.g. $500 or None"
+                            />
+                          </div>
+                          <div>
+                            <FieldLabel htmlFor={`space-${idx}-wifi`} required>Wi-Fi available?</FieldLabel>
+                            <select
+                              id={`space-${idx}-wifi`}
+                              className={inputCls}
+                              value={space.wifi}
+                              onChange={(e) => {
+                                const v = e.target.value
+                                setMeetingSpaces((prev) => prev.map((s, i) => i === idx ? { ...s, wifi: v } : s))
+                              }}
+                              disabled={isReadOnly}
+                            >
+                              <option value="">Select…</option>
+                              <option value="Complimentary">Complimentary</option>
+                              <option value="Available at cost">Available at cost</option>
+                              <option value="Not available">Not available</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
