@@ -1124,25 +1124,6 @@ export default function RfpForm() {
               Teams use meeting space for massage tables, recovery equipment, and trainer setups. Answer Yes or No for each room — if Yes, fill in the space details.
             </p>
 
-            {/* Type of meeting space — always shown */}
-            <div className="mb-5">
-              <FieldLabel htmlFor="rfp-meeting-type">Type of meeting space available at your property</FieldLabel>
-              <select
-                id="rfp-meeting-type"
-                className={inputCls}
-                value={resp.meeting_space_type}
-                onChange={(e) => setResp((r) => ({ ...r, meeting_space_type: e.target.value }))}
-                disabled={isReadOnly}
-              >
-                <option value="">Select type…</option>
-                <option value="function_room">Function Room / Ballroom ✅</option>
-                <option value="ballroom">Ballroom ✅</option>
-                <option value="restaurant">Restaurant / F&B outlet ⚠️ (may not qualify)</option>
-                <option value="suite_converted">Suite with furniture removed ⚠️ (may not qualify)</option>
-                <option value="none">None available</option>
-              </select>
-            </div>
-
             {/* Per-room Yes/No with inline detail form on Yes */}
             {meetingSpaceYesNoItems.map((item) => {
               const ans = answers[item.id] ?? { answer_yes_no: null, answer_value: '', comment: '', commentOpen: false }
