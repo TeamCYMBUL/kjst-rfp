@@ -684,8 +684,8 @@ export default function RfpForm() {
 
   // Per-space detail state for meeting spaces
   // Per-room meeting space details keyed by concession item ID (or index for additional)
-  type SpaceDetail = { name: string; dimensions: string; fb_minimum: string; wifi: string; additional_info: string }
-  const emptySpace = (): SpaceDetail => ({ name: '', dimensions: '', fb_minimum: '', wifi: '', additional_info: '' })
+  type SpaceDetail = { name: string; space_type: string; dimensions: string; fb_minimum: string; wifi: string; additional_info: string }
+  const emptySpace = (): SpaceDetail => ({ name: '', space_type: '', dimensions: '', fb_minimum: '', wifi: '', additional_info: '' })
   const [meetingSpaceDetails, setMeetingSpaceDetails] = useState<Record<string, SpaceDetail>>({})
   // Additional spaces beyond the 4 requested rooms
   const [additionalSpaces, setAdditionalSpaces] = useState<SpaceDetail[]>([])
@@ -1166,6 +1166,25 @@ export default function RfpForm() {
                           />
                         </div>
                         <div>
+                          <FieldLabel htmlFor={`msd-${item.id}-type`} required>Type of space</FieldLabel>
+                          <select
+                            id={`msd-${item.id}-type`}
+                            className={inputCls}
+                            value={detail.space_type}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              setMeetingSpaceDetails((prev) => ({ ...prev, [item.id]: { ...detail, space_type: v } }))
+                            }}
+                            disabled={isReadOnly}
+                          >
+                            <option value="">Select type…</option>
+                            <option value="function_room">Function Room / Ballroom ✅</option>
+                            <option value="restaurant">Restaurant / F&B outlet ⚠️</option>
+                            <option value="suite_converted">Suite with furniture removed ⚠️</option>
+                            <option value="other">Other</option>
+                          </select>
+                        </div>
+                        <div>
                           <FieldLabel htmlFor={`msd-${item.id}-dim`} required>Dimensions (sq. ft.)</FieldLabel>
                           <input
                             id={`msd-${item.id}-dim`}
@@ -1274,6 +1293,22 @@ export default function RfpForm() {
                         disabled={isReadOnly}
                         placeholder="e.g. Boardroom B"
                       />
+                    </div>
+                    <div>
+                      <FieldLabel htmlFor={`add-${idx}-type`} required>Type of space</FieldLabel>
+                      <select
+                        id={`add-${idx}-type`}
+                        className={inputCls}
+                        value={space.space_type}
+                        onChange={(e) => { const v = e.target.value; setAdditionalSpaces((prev) => prev.map((s, i) => i === idx ? { ...s, space_type: v } : s)) }}
+                        disabled={isReadOnly}
+                      >
+                        <option value="">Select type…</option>
+                        <option value="function_room">Function Room / Ballroom ✅</option>
+                        <option value="restaurant">Restaurant / F&B outlet ⚠️</option>
+                        <option value="suite_converted">Suite with furniture removed ⚠️</option>
+                        <option value="other">Other</option>
+                      </select>
                     </div>
                     <div>
                       <FieldLabel htmlFor={`add-${idx}-dim`} required>Dimensions (sq. ft.)</FieldLabel>
