@@ -7,6 +7,26 @@
 import * as XLSX from 'xlsx'
 import type { ConcessionItem } from './rfpApi'
 
+// ── Revenue helpers ───────────────────────────────────────────────────────────
+
+/** Parse a tax string like "15.5%", "15.5", or null → decimal rate (0.155). */
+function parseTaxRate(raw: string | null | undefined): number {
+  if (raw == null) return 0
+  const stripped = raw.trim().replace('%', '')
+  const n = parseFloat(stripped)
+  if (!isFinite(n) || n < 0) return 0
+  // Values stored as a percent (e.g. 15.5) → divide by 100
+  return n / 100
+}
+
+/** Number of nights between two ISO date strings. Returns 1 if inputs are missing/invalid. */
+function calcNights(arrival: string | null | undefined, departure: string | null | undefined): number {
+  if (!arrival || !departure) return 1
+  const ms = new Date(departure).getTime() - new Date(arrival).getTime()
+  const nights = Math.round(ms / 86_400_000)
+  return nights > 0 ? nights : 1
+}
+
 export type GridHotel = {
   hotel_name: string
   status: string
@@ -90,6 +110,10 @@ export function exportComparisonXlsx(
   rows.push(row('DATE', hotels.map((h) => fmt(h.completed_date))))
   rows.push([])
 
+  // ── Pre-compute revenue inputs ────────────────────────────────────────────
+  const kingRooms = trip.king_rooms_requested ?? 0
+  const nights = calcNights(trip.arrival_date, trip.departure_date)
+
   // ── Rates ────────────────────────────────────────────────────────────────
   rows.push(['RATES'])
   rows.push(row('RATE (Best King)', hotels.map((h) => h.best_king_rate ?? '—')))
@@ -97,6 +121,25 @@ export function exportComparisonXlsx(
   rows.push(row('CURRENT SELLING RATE', hotels.map((h) => fmt(h.current_selling_rate))))
   rows.push(row('BEST SUITE RATE', hotels.map((h) => h.best_suite_rate ?? '—')))
   rows.push(row('TAXES & FEES', hotels.map((h) => fmt(h.occupancy_tax))))
+
+  // Revenue per hotel (numeric where calculable, '—' otherwise)
+  const revenueInclTax = hotels.map((h) => {
+    if (h.best_king_rate == null || kingRooms === 0) return '—' as const
+    const taxRate = parseTaxRate(h.occupancy_tax)
+    return h.best_king_rate * kingRooms * nights * (1 + taxRate)
+  })
+  const revenueExclTax = hotels.map((h) => {
+    if (h.best_king_rate == null || kingRooms === 0) return '—' as const
+    return h.best_king_rate * kingRooms * nights
+  })
+  const adr = hotels.map((h) => h.best_king_rate ?? ('—' as const))
+
+  const revenueInclTaxRowIdx = rows.length
+  rows.push(row('ROOM REVENUE (INCL. TAX)', revenueInclTax))
+  const revenueExclTaxRowIdx = rows.length
+  rows.push(row('ROOM REVENUE (EXCL. TAX)', revenueExclTax))
+  const adrRowIdx = rows.length
+  rows.push(row('ADR (EXCL. TAX)', adr))
   rows.push([])
 
   // ── Concession items by section ───────────────────────────────────────────
@@ -127,6 +170,17 @@ export function exportComparisonXlsx(
   rows.push(row('MEETING SPACE NOTES', hotels.map((h) => fmt(h.meeting_space_notes))))
   rows.push(row('GENERAL COMMENTS', hotels.map((h) => fmt(h.general_comments))))
   rows.push(row('STAFF NOTES (Team Export)', hotels.map((h) => fmt(h.staff_notes))))
+  rows.push([])
+
+  // ── Grand Total row ───────────────────────────────────────────────────────
+  const grandTotalValues = hotels.map((h) => {
+    if (h.best_king_rate == null || kingRooms === 0) return '—' as const
+    const taxRate = parseTaxRate(h.occupancy_tax)
+    return h.best_king_rate * kingRooms * nights * (1 + taxRate)
+  })
+  const grandTotalRowIdx = rows.length
+  const grandTotalRow = ['GRAND TOTAL', ...grandTotalValues.map((v) => (v === '—' ? '—' : v))]
+  rows.push(grandTotalRow)
 
   // ── Build workbook ───────────────────────────────────────────────────────
   const ws = XLSX.utils.aoa_to_sheet(rows)
@@ -136,6 +190,40 @@ export function exportComparisonXlsx(
     { wch: 55 },
     ...hotels.map(() => ({ wch: 28 })),
   ]
+
+  // ── Cell formatting ───────────────────────────────────────────────────────
+  const currencyFmt = '$#,##0.00'
+
+  // Helper: apply format to all hotel value cells in a given row index
+  const applyRowFmt = (rowIdx: number, numFmt: string) => {
+    for (let c = 1; c <= hotels.length; c++) {
+      const addr = XLSX.utils.encode_cell({ r: rowIdx, c })
+      if (ws[addr] && typeof ws[addr].v === 'number') {
+        ws[addr].t = 'n'
+        ws[addr].z = numFmt
+      }
+    }
+  }
+
+  applyRowFmt(revenueInclTaxRowIdx, currencyFmt)
+  applyRowFmt(revenueExclTaxRowIdx, currencyFmt)
+  applyRowFmt(adrRowIdx, currencyFmt)
+
+  // Grand total row: currency format + bold + thick top border
+  for (let c = 0; c <= hotels.length; c++) {
+    const addr = XLSX.utils.encode_cell({ r: grandTotalRowIdx, c })
+    if (!ws[addr]) ws[addr] = { t: 's', v: '' }
+    ws[addr].s = {
+      font: { bold: true },
+      border: {
+        top: { style: 'medium', color: { rgb: '000000' } },
+      },
+    }
+    if (c > 0 && typeof ws[addr].v === 'number') {
+      ws[addr].t = 'n'
+      ws[addr].z = currencyFmt
+    }
+  }
 
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'RFP Comparison')
