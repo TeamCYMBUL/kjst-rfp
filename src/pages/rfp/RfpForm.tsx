@@ -288,8 +288,8 @@ function ConcessionRow({
 const SECTION_LABELS: Record<string, string> = {
   concessions: 'Concessions & Facilities',
   facilities: 'Facilities',
-  in_season_tournament: 'In-Season Tournament Guarantee',
-  postseason: 'Postseason / Playoff Guarantee',
+  in_season_tournament: 'In-Season Tournament',
+  postseason: 'Postseason',
 }
 
 // ── RFP header — mirrors the Word doc layout ─────────────────────────────────
@@ -1017,7 +1017,10 @@ export default function RfpForm() {
     ...meetingSpaceYesNoItems,
     ...suiteConcessionItems,
   ].map((i) => i.id))
-  const otherConcessionItems = allConcessionItems.filter((i) => !specialItemIds.has(i.id))
+  const remainingItems = allConcessionItems.filter((i) => !specialItemIds.has(i.id))
+  // Split remaining into the two template tabs: Concessions & Facilities vs Facilities
+  const otherConcessionItems = remainingItems.filter((i) => i.section === 'concessions')
+  const facilitiesItems = remainingItems.filter((i) => i.section === 'facilities')
 
   // Determine if meeting space is answered Yes (to show type/count fields)
   // (meetingSpaceAnsweredYes removed — details now expand inline per item)
@@ -1098,7 +1101,7 @@ export default function RfpForm() {
             </div>
           </div>
 
-          {/* ── Section 2: Flexible Cancellation (#1 dealbreaker) ─── */}
+          {/* ── Section 2: Flexible Cancellation ─── */}
           {flexCancelItems.length > 0 && (
             <div className="rounded-xl border border-slate-200 bg-white p-6">
               <SectionHeading>Flexible Cancellation</SectionHeading>
@@ -1391,11 +1394,19 @@ export default function RfpForm() {
             </div>
           )}
 
-          {/* ── Section 7: Other concession / facility items ─── */}
+          {/* ── Section 7: Concessions & Facilities (remaining concession items) ─── */}
           {otherConcessionItems.length > 0 && (
             <div className="rounded-xl border border-slate-200 bg-white p-6">
               <SectionHeading>Concessions &amp; Facilities</SectionHeading>
               {renderItems(otherConcessionItems)}
+            </div>
+          )}
+
+          {/* ── Section 7b: Facilities ─── */}
+          {facilitiesItems.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-6">
+              <SectionHeading>Facilities</SectionHeading>
+              {renderItems(facilitiesItems)}
             </div>
           )}
 
