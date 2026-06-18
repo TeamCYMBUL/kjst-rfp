@@ -437,3 +437,238 @@ export function exportTeamGridXlsx(
   XLSX.utils.book_append_sheet(wb, ws, 'Team Grid')
   XLSX.writeFile(wb, outputFile)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// exportMultiCityConsolidatedXlsx
+// One sheet: all cities stacked vertically, hotels as rows, attributes as columns.
+// This is the final grid KJST sends to the client — no commission, no flex cancel.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ConsolidatedHotel = {
+  hotel_name: string
+  status: string
+  best_king_rate: number | null
+  current_selling_rate: string | null
+  occupancy_tax: string | null
+  resort_fee: string | null
+  meeting_space_type: string | null
+  meeting_space_count: number | null
+  answers: Record<string, { answer_yes_no: boolean | null; answer_value: string | null; comment: string | null }>
+}
+
+export type ConsolidatedCity = {
+  trip: {
+    city: string | null
+    opponent_label: string | null
+    arrival_date: string | null
+    departure_date: string | null
+    game_date: string | null
+  }
+  hotels: ConsolidatedHotel[]
+  items: ConcessionItem[]
+}
+
+const MTG_LABELS: Record<string, string> = {
+  function_room: 'Function Room',
+  ballroom: 'Ballroom',
+  restaurant: 'Restaurant ⚠️',
+  suite_converted: 'Suite (converted) ⚠️',
+  none: 'None',
+}
+
+export function exportMultiCityConsolidatedXlsx(
+  cities: ConsolidatedCity[],
+  clientName: string,
+  filename?: string,
+): void {
+  const COLS = [
+    'HOTEL',
+    'KING RATE / NIGHT',
+    'VS. CURRENT RATE',
+    'TAXES & FEES',
+    'RESORT FEE',
+    'COMP SUITES (FREE)',
+    'SUITE UPGRADES AT KING RATE',
+    'COMP TVs',
+    'COMP WHITEBOARDS',
+    'PORTERAGE ($/BAG)',
+    'PLAYOFF CLAUSE',
+    'MEETING SPACE',
+    'NOTES',
+  ]
+
+  const rows: (string | number | null)[][] = []
+
+  for (const { trip, hotels, items } of cities) {
+    const eligible = hotels.filter((h) => ['submitted', 'awarded'].includes(h.status))
+    if (eligible.length === 0) continue
+
+    // Find relevant concession items by label
+    const compSuitesItem = items.find((i) => i.label.toLowerCase().includes('complimentary one bedroom suite'))
+    const suiteUpgItem = items.find((i) => i.label.toLowerCase().includes('suite upgrades at the group'))
+    const tvItem = items.find((i) => i.label.toLowerCase().includes('tv') || i.label.toLowerCase().includes('television'))
+    const wbItem = items.find((i) => i.label.toLowerCase().includes('white board') || i.label.toLowerCase().includes('whiteboard'))
+    const portItem = items.find((i) => i.label.toLowerCase().includes('baggage') || i.label.toLowerCase().includes('porterage'))
+    const playoffItem = items.find((i) => i.section === 'postseason')
+
+    // City section header
+    const arrival = trip.arrival_date ? fmtDate(trip.arrival_date) : '—'
+    const departure = trip.departure_date ? fmtDate(trip.departure_date) : '—'
+    const cityHeader = [
+      `${(trip.city ?? 'City').toUpperCase()}  ·  ${trip.opponent_label ?? ''}  ·  ${arrival} – ${departure}`,
+      ...Array(COLS.length - 1).fill(''),
+    ]
+    rows.push(cityHeader)
+    rows.push(COLS)
+
+    for (const h of eligible) {
+      const compAns = compSuitesItem ? h.answers[compSuitesItem.id] : undefined
+      const upgAns = suiteUpgItem ? h.answers[suiteUpgItem.id] : undefined
+      const tvAns = tvItem ? h.answers[tvItem.id] : undefined
+      const wbAns = wbItem ? h.answers[wbItem.id] : undefined
+      const portAns = portItem ? h.answers[portItem.id] : undefined
+      const playoffAns = playoffItem ? h.answers[playoffItem.id] : undefined
+
+      const mtgLabel = h.meeting_space_type
+        ? (MTG_LABELS[h.meeting_space_type] ?? h.meeting_space_type)
+        : '—'
+      const mtgDisplay =
+        h.meeting_space_type && h.meeting_space_count != null && h.meeting_space_count > 1
+          ? `${mtgLabel} ×${h.meeting_space_count}`
+          : mtgLabel
+
+      const noteFrags: string[] = []
+      if (h.meeting_space_type === 'restaurant' || h.meeting_space_type === 'suite_converted') {
+        noteFrags.push('Meeting space not traditional — confirm eligibility')
+      }
+      if (h.status === 'awarded') noteFrags.push('AWARDED')
+
+      rows.push([
+        h.hotel_name,
+        h.best_king_rate ?? '—',
+        h.current_selling_rate ?? '—',
+        h.occupancy_tax ?? '—',
+        h.resort_fee ?? '—',
+        compAns ? (compAns.answer_value ?? (compAns.answer_yes_no === false ? 'None' : '—')) : '—',
+        upgAns?.answer_value ?? '—',
+        tvAns ? (tvAns.answer_yes_no === true ? 'Yes' : tvAns.answer_yes_no === false ? 'No' : (tvAns.answer_value ?? '—')) : '—',
+        wbAns ? (wbAns.answer_yes_no === true ? 'Yes' : wbAns.answer_yes_no === false ? 'No' : (wbAns.answer_value ?? '—')) : '—',
+        portAns?.answer_value ?? (portAns?.answer_yes_no === false ? 'No' : '—'),
+        playoffAns?.answer_yes_no === true ? 'Yes' : playoffAns?.answer_yes_no === false ? 'No' : '—',
+        mtgDisplay,
+        noteFrags.join('; '),
+      ])
+    }
+
+    rows.push([]) // blank spacer between cities
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(rows)
+
+  ws['!cols'] = [
+    { wch: 32 }, // Hotel
+    { wch: 16 }, // King Rate
+    { wch: 16 }, // VS Current
+    { wch: 16 }, // Taxes
+    { wch: 12 }, // Resort Fee
+    { wch: 20 }, // Comp Suites
+    { wch: 28 }, // Suite Upgrades
+    { wch: 12 }, // Comp TVs
+    { wch: 18 }, // Comp Whiteboards
+    { wch: 16 }, // Porterage
+    { wch: 14 }, // Playoff
+    { wch: 24 }, // Mtg Space
+    { wch: 44 }, // Notes
+  ]
+
+  const clientStr = clientName.replace(/\s+/g, '_')
+  const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const outputFile = filename ?? `${clientStr}_All_Cities_Grid_${dateStr}.xlsx`
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'All Cities')
+  XLSX.writeFile(wb, outputFile)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// exportSingleHotelXlsx — one hotel's full bid in a vertical label/value layout
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function exportSingleHotelXlsx(
+  hotel: GridHotel,
+  trip: GridTrip,
+  items: ConcessionItem[],
+): void {
+  const row2 = (label: string, value: string | number | null) =>
+    [label, value == null ? '—' : value]
+
+  const rows: (string | number | null)[][] = []
+
+  // Trip header
+  rows.push(['TRIP'])
+  rows.push(row2('Client', trip.client_name ?? '—'))
+  rows.push(row2('Opponent', trip.opponent_label))
+  rows.push(row2('City', trip.city))
+  rows.push(row2('Arrival', trip.arrival_date))
+  rows.push(row2('Departure', trip.departure_date))
+  rows.push(row2('Game date', trip.game_date))
+  rows.push(row2('Kings requested', trip.king_rooms_requested))
+  rows.push(row2('Suites requested', trip.suites_requested))
+  rows.push(row2('Total rooms', trip.total_rooms_requested))
+  rows.push([])
+
+  // Hotel info
+  rows.push(['HOTEL'])
+  rows.push(row2('Hotel name', hotel.hotel_name))
+  rows.push(row2('Status', hotel.status.toUpperCase()))
+  rows.push(row2('Completed by', hotel.completed_by_name))
+  rows.push(row2('Completed date', hotel.completed_date))
+  rows.push([])
+
+  // Rates
+  rows.push(['RATES'])
+  rows.push(row2('Best king rate', hotel.best_king_rate))
+  rows.push(row2('King rate notes', hotel.king_rate_notes))
+  rows.push(row2('Current selling rate', hotel.current_selling_rate))
+  rows.push(row2('Best suite rate', hotel.best_suite_rate))
+  rows.push(row2('Occupancy tax', hotel.occupancy_tax))
+  rows.push([])
+
+  // Concession items by section
+  const sections: Array<{ key: string; label: string }> = [
+    { key: 'concessions', label: 'CONCESSIONS & FACILITIES' },
+    { key: 'facilities', label: 'FACILITIES' },
+    { key: 'in_season_tournament', label: 'IN-SEASON TOURNAMENT GUARANTEE' },
+    { key: 'postseason', label: 'POSTSEASON / PLAYOFF GUARANTEE' },
+  ]
+
+  for (const { key, label } of sections) {
+    const sectionItems = items.filter((i) => i.section === key)
+    if (sectionItems.length === 0) continue
+    rows.push([label])
+    for (const item of sectionItems) {
+      rows.push(row2(
+        item.label.length > 80 ? item.label.slice(0, 77) + '…' : item.label,
+        answerText(item, hotel.answers[item.id]),
+      ))
+    }
+    rows.push([])
+  }
+
+  // Notes
+  rows.push(['ADDITIONAL NOTES'])
+  rows.push(row2('Meeting space', hotel.meeting_space_notes))
+  rows.push(row2('General comments', hotel.general_comments))
+  rows.push(row2('Staff notes', hotel.staff_notes))
+
+  const ws = XLSX.utils.aoa_to_sheet(rows)
+  ws['!cols'] = [{ wch: 45 }, { wch: 55 }]
+
+  const hotelSlug = hotel.hotel_name.replace(/\s+/g, '_').replace(/[^A-Za-z0-9_]/g, '').slice(0, 30)
+  const citySlug = (trip.city ?? 'City').replace(/\s+/g, '_').replace(/[^A-Za-z0-9_]/g, '')
+  const filename = `${hotelSlug}_${citySlug}_Bid.xlsx`
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Hotel Bid')
+  XLSX.writeFile(wb, filename)
+}

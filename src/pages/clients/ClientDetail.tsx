@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import type { Client, Trip } from '../../lib/types'
 import { formatDate } from '../../lib/format'
+import { exportMultiCityConsolidatedXlsx } from '../../lib/excelExport'
+import type { ConsolidatedCity } from '../../lib/excelExport'
 import {
   Badge,
   Button,
@@ -12,11 +14,39 @@ import {
   LinkButton,
   Loading,
   PageHeader,
+  TextField,
 } from '../../components/ui'
+
+type ClientConcessionItem = {
+  id: string
+  sort_order: number
+  section: string
+  label: string
+  answer_type: string
+  requested_value: string | null
+  allow_comment: boolean
+}
+
+const SECTION_OPTIONS = [
+  { value: 'concessions', label: 'Concessions & Facilities' },
+  { value: 'facilities', label: 'Facilities' },
+  { value: 'in_season_tournament', label: 'In-Season Tournament' },
+  { value: 'postseason', label: 'Postseason' },
+]
+
+const ANSWER_TYPE_OPTIONS = [
+  { value: 'yes_no', label: 'Yes / No' },
+  { value: 'percent', label: 'Percent %' },
+  { value: 'quantity', label: 'Quantity' },
+  { value: 'currency', label: 'Currency $' },
+  { value: 'text', label: 'Text' },
+]
+
+const selectCls = 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#1C1008]'
 
 type TripRow = Pick<
   Trip,
-  'id' | 'opponent_label' | 'city' | 'arrival_date' | 'departure_date' | 'status'
+  'id' | 'opponent_label' | 'city' | 'arrival_date' | 'departure_date' | 'game_date' | 'status'
 >
 
 type HistoryRow = {
@@ -56,6 +86,20 @@ export default function ClientDetail() {
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  // Custom concession items
+  const [customItems, setCustomItems] = useState<ClientConcessionItem[] | null>(null)
+  const [addingItem, setAddingItem] = useState(false)
+  const [newItem, setNewItem] = useState({
+    section: 'concessions',
+    label: '',
+    answer_type: 'yes_no',
+    requested_value: '',
+    allow_comment: true,
+  })
+  const [savingItem, setSavingItem] = useState(false)
+  const [itemError, setItemError] = useState<string | null>(null)
+  const [exportingAllCities, setExportingAllCities] = useState(false)
+
   useEffect(() => {
     supabase
       .from('clients')
@@ -69,13 +113,21 @@ export default function ClientDetail() {
 
     supabase
       .from('trips')
-      .select('id, opponent_label, city, arrival_date, departure_date, status')
+      .select('id, opponent_label, city, arrival_date, departure_date, game_date, status')
       .eq('client_id', id)
       .order('arrival_date', { ascending: false })
       .then(({ data, error }) => {
         if (error) setError(error.message)
         else setTrips(data as TripRow[])
       })
+
+    supabase
+      .from('client_concession_items')
+      .select('id, sort_order, section, label, answer_type, requested_value, allow_comment')
+      .eq('client_id', id)
+      .eq('archived', false)
+      .order('sort_order')
+      .then(({ data }) => setCustomItems((data as ClientConcessionItem[]) ?? []))
 
     // Season history — awarded hotel per trip for this client
     supabase
@@ -115,6 +167,117 @@ export default function ClientDetail() {
       })
   }, [id])
 
+  const saveCustomItem = async () => {
+    if (!newItem.label.trim()) { setItemError('Label is required.'); return }
+    setSavingItem(true)
+    setItemError(null)
+    const maxSort = customItems && customItems.length > 0
+      ? Math.max(...customItems.map((i) => i.sort_order)) + 10
+      : 10
+    const { data, error: err } = await supabase
+      .from('client_concession_items')
+      .insert({
+        client_id: id,
+        sort_order: maxSort,
+        section: newItem.section,
+        label: newItem.label.trim(),
+        answer_type: newItem.answer_type,
+        requested_value: newItem.requested_value.trim() || null,
+        allow_comment: newItem.allow_comment,
+      })
+      .select('id, sort_order, section, label, answer_type, requested_value, allow_comment')
+      .single()
+    setSavingItem(false)
+    if (err) { setItemError(err.message); return }
+    setCustomItems((prev) => [...(prev ?? []), data as ClientConcessionItem])
+    setNewItem({ section: 'concessions', label: '', answer_type: 'yes_no', requested_value: '', allow_comment: true })
+    setAddingItem(false)
+  }
+
+  const deleteCustomItem = async (itemId: string) => {
+    await supabase.from('client_concession_items').update({ archived: true }).eq('id', itemId)
+    setCustomItems((prev) => (prev ?? []).filter((i) => i.id !== itemId))
+  }
+
+  const handleExportAllCities = async () => {
+    if (!client || !trips || trips.length === 0) return
+    setExportingAllCities(true)
+    try {
+      // Fetch org concession items (for finding comp suites, suite upgrades, playoff items)
+      const { data: orgItems } = await supabase
+        .from('concession_items')
+        .select('id, label, section, answer_type, requested_value, allow_comment, sort_order')
+        .order('sort_order')
+
+      // Fetch all client_concession_items for this client
+      const { data: clientItems } = await supabase
+        .from('client_concession_items')
+        .select('id, label, section, answer_type, requested_value, allow_comment, sort_order')
+        .eq('client_id', id)
+        .eq('archived', false)
+        .order('sort_order')
+
+      const allItems = [...(orgItems ?? []), ...(clientItems ?? [])]
+
+      // For each trip, fetch invitations + responses + answers
+      const cityData: ConsolidatedCity[] = []
+      for (const trip of trips) {
+        const { data: invs } = await supabase
+          .from('rfp_invitations')
+          .select(`
+            id, hotel_name, status,
+            rfp_responses(
+              best_king_rate, current_selling_rate, occupancy_tax, resort_fee,
+              meeting_space_type, meeting_space_count
+            ),
+            rfp_answers(concession_item_id, answer_yes_no, answer_value, comment)
+          `)
+          .eq('trip_id', trip.id)
+
+        if (!invs || invs.length === 0) continue
+
+        const hotels = invs.map((inv: any) => {
+          const r = inv.rfp_responses
+          const answerMap: ConsolidatedCity['hotels'][0]['answers'] = {}
+          for (const a of (inv.rfp_answers ?? [])) {
+            answerMap[a.concession_item_id] = {
+              answer_yes_no: a.answer_yes_no,
+              answer_value: a.answer_value,
+              comment: a.comment,
+            }
+          }
+          return {
+            hotel_name: inv.hotel_name,
+            status: inv.status,
+            best_king_rate: r?.best_king_rate ?? null,
+            current_selling_rate: r?.current_selling_rate ?? null,
+            occupancy_tax: r?.occupancy_tax ?? null,
+            resort_fee: r?.resort_fee ?? null,
+            meeting_space_type: r?.meeting_space_type ?? null,
+            meeting_space_count: r?.meeting_space_count ?? null,
+            answers: answerMap,
+          }
+        })
+
+        cityData.push({
+          trip: {
+            city: trip.city,
+            opponent_label: trip.opponent_label,
+            arrival_date: trip.arrival_date,
+            departure_date: trip.departure_date,
+            game_date: trip.game_date,
+          },
+          hotels,
+          items: allItems as any,
+        })
+      }
+
+      exportMultiCityConsolidatedXlsx(cityData, client.team_name)
+    } finally {
+      setExportingAllCities(false)
+    }
+  }
+
   const remove = async () => {
     if (!confirm('Delete this client? This cannot be undone.')) return
     setDeleting(true)
@@ -142,6 +305,13 @@ export default function ClientDetail() {
             <LinkButton to={`/clients/${id}/edit`} variant="secondary">
               Edit
             </LinkButton>
+            <Button
+              variant="secondary"
+              onClick={handleExportAllCities}
+              disabled={exportingAllCities || !trips || trips.length === 0}
+            >
+              {exportingAllCities ? 'Exporting…' : '↓ Export All Cities'}
+            </Button>
             <LinkButton to={`/trips/new?client=${id}`}>New Trip</LinkButton>
           </div>
         }
@@ -317,6 +487,119 @@ export default function ClientDetail() {
               <Field label="Postseason window" value={t.postseason_window} />
               <Field label="Postseason rooms" value={t.postseason_rooms_text} />
             </dl>
+          </Card>
+          {/* Custom Concession Items */}
+          <Card className="p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Custom Concession Items
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                  Items added here appear at the end of every RFP sent for this client.
+                </p>
+              </div>
+              {!addingItem && (
+                <button
+                  onClick={() => setAddingItem(true)}
+                  className="rounded-lg border border-dashed border-slate-300 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:border-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                >
+                  + Add item
+                </button>
+              )}
+            </div>
+
+            {customItems === null ? (
+              <Loading />
+            ) : customItems.length === 0 && !addingItem ? (
+              <p className="text-sm text-slate-400 dark:text-slate-500 italic">No custom items yet.</p>
+            ) : (
+              <div className="space-y-2 mb-4">
+                {customItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-start justify-between gap-3 rounded-lg bg-slate-50 dark:bg-slate-700/50 px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{item.label}</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                        {SECTION_OPTIONS.find((s) => s.value === item.section)?.label ?? item.section}
+                        {' · '}
+                        {ANSWER_TYPE_OPTIONS.find((a) => a.value === item.answer_type)?.label ?? item.answer_type}
+                        {item.requested_value ? ` · Requested: ${item.requested_value}` : ''}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => deleteCustomItem(item.id)}
+                      className="shrink-0 text-xs text-slate-400 hover:text-red-500 transition-colors"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {addingItem && (
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Section</label>
+                    <select
+                      className={selectCls}
+                      value={newItem.section}
+                      onChange={(e) => setNewItem((n) => ({ ...n, section: e.target.value }))}
+                    >
+                      {SECTION_OPTIONS.map((s) => (
+                        <option key={s.value} value={s.value}>{s.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Answer type</label>
+                    <select
+                      className={selectCls}
+                      value={newItem.answer_type}
+                      onChange={(e) => setNewItem((n) => ({ ...n, answer_type: e.target.value }))}
+                    >
+                      {ANSWER_TYPE_OPTIONS.map((a) => (
+                        <option key={a.value} value={a.value}>{a.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <TextField
+                  label="Label (concession item text)"
+                  placeholder="e.g. Complimentary Wi-Fi in all guest rooms"
+                  value={newItem.label}
+                  onChange={(e) => setNewItem((n) => ({ ...n, label: e.target.value }))}
+                />
+                <TextField
+                  label="Requested value (optional)"
+                  placeholder="e.g. Yes or 10%"
+                  value={newItem.requested_value}
+                  onChange={(e) => setNewItem((n) => ({ ...n, requested_value: e.target.value }))}
+                />
+                <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 accent-[#1C1008]"
+                    checked={newItem.allow_comment}
+                    onChange={(e) => setNewItem((n) => ({ ...n, allow_comment: e.target.checked }))}
+                  />
+                  Allow hotel to add a comment or counteroffer
+                </label>
+                {itemError && <p className="text-xs text-red-500">{itemError}</p>}
+                <div className="flex gap-2 pt-1">
+                  <Button onClick={saveCustomItem} disabled={savingItem}>
+                    {savingItem ? 'Saving…' : 'Save item'}
+                  </Button>
+                  <Button variant="secondary" onClick={() => { setAddingItem(false); setItemError(null) }}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
         </div>
 

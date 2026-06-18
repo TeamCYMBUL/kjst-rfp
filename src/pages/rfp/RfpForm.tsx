@@ -10,6 +10,7 @@ import type {
   RfpData,
   ScenarioRate,
 } from '../../lib/rfpApi'
+import type { DateScenario } from '../../lib/types'
 
 // ── Types for local form state ────────────────────────────────────────────────
 
@@ -242,15 +243,20 @@ function ConcessionRow({
         <div className="flex-shrink-0 sm:w-48">
           {isYesNo ? (
             <YesNoToggle value={answer.answer_yes_no} onChange={handleYesNo} disabled={disabled} />
-          ) : (
-            <div>
-              <ValueInput item={item} value={answer.answer_value} onChange={(v) => onChange({ answer_value: v })} disabled={disabled} />
+          ) : showCommissionWarning ? (
+            <div className="flex flex-col gap-1.5">
+              {(['10', '7'] as const).map((pct) => (
+                <label key={pct} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${answer.answer_value === pct ? 'border-blue-500 bg-blue-50 font-medium text-blue-700' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'} ${disabled ? 'pointer-events-none opacity-50' : ''}`}>
+                  <input type="radio" name={`commission-${item.id}`} value={pct} checked={answer.answer_value === pct} onChange={() => onChange({ answer_value: pct })} disabled={disabled} className="sr-only" />
+                  {pct}% commission
+                </label>
+              ))}
               {warnZeroCommission && (
-                <p className="mt-1 text-xs text-amber-600">
-                  Please confirm your commission percentage is correct before submitting.
-                </p>
+                <p className="mt-0.5 text-xs text-amber-600">Please select a commission rate.</p>
               )}
             </div>
+          ) : (
+            <ValueInput item={item} value={answer.answer_value} onChange={(v) => onChange({ answer_value: v })} disabled={disabled} />
           )}
         </div>
       </div>
@@ -299,9 +305,13 @@ type RfpHeaderProps = {
   resp: RespState
   setResp: React.Dispatch<React.SetStateAction<RespState>>
   isReadOnly: boolean
+  dateScenarios: DateScenario[]
+  scenarioAvailability: Record<string, boolean>
+  setScenarioAvailability: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
+  scheduleAutosave: () => void
 }
 
-function RfpHeader({ data, resp, setResp, isReadOnly }: RfpHeaderProps) {
+function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAvailability, setScenarioAvailability, scheduleAutosave }: RfpHeaderProps) {
   const { invitation, org } = data
   const trip = invitation.trips
   const client = trip.clients
@@ -630,6 +640,56 @@ function RfpHeader({ data, resp, setResp, isReadOnly }: RfpHeaderProps) {
           </div>
         )}
 
+        {/* ── Date Scenario Availability ── */}
+        {dateScenarios.length > 0 && (
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              Date Scenario Availability
+            </p>
+            <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+              The team's travel dates are not yet confirmed. Please indicate which of the following date windows you can accommodate.
+            </div>
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr>
+                  <th className={th}>Scenario</th>
+                  <th className={th}>Arrival</th>
+                  <th className={th}>Departure</th>
+                  <th className={th}>Game Date</th>
+                  <th className={th}>Available?</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dateScenarios.map((s) => (
+                  <tr key={s.label}>
+                    <td className={td}><span className="font-semibold">Scenario {s.label}</span></td>
+                    <td className={td}>{formatDate(s.arrival_date)}</td>
+                    <td className={td}>{formatDate(s.departure_date)}</td>
+                    <td className={td}>{s.game_date ? formatDate(s.game_date) : '—'}</td>
+                    <td className={td}>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-slate-300 accent-[#1C1008]"
+                          checked={scenarioAvailability[s.label] ?? true}
+                          onChange={(e) => {
+                            setScenarioAvailability((prev) => ({ ...prev, [s.label]: e.target.checked }))
+                            scheduleAutosave()
+                          }}
+                          disabled={isReadOnly}
+                        />
+                        <span className={`text-xs ${(scenarioAvailability[s.label] ?? true) ? 'text-slate-700' : 'text-slate-400'}`}>
+                          {(scenarioAvailability[s.label] ?? true) ? 'Available' : 'Not available'}
+                        </span>
+                      </label>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {/* ── Resort Fee (optional) ── */}
         <div>
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
@@ -682,6 +742,11 @@ export default function RfpForm() {
   // Night scenarios state — populated from loaded trip data
   const [nightScenarios, setNightScenarios] = useState<number[]>([1])
 
+  // Date scenarios — candidate date sets when exact dates are TBD
+  const [dateScenarios, setDateScenarios] = useState<DateScenario[]>([])
+  // Which date scenarios this hotel confirms availability for
+  const [scenarioAvailability, setScenarioAvailability] = useState<Record<string, boolean>>({})
+
   // Per-space detail state for meeting spaces
   // Per-room meeting space details keyed by concession item ID (or index for additional)
   type SpaceDetail = { name: string; space_type: string; dimensions: string; fb_minimum: string; wifi: string; additional_info: string }
@@ -730,6 +795,15 @@ export default function RfpForm() {
         // Populate night scenarios from the trip
         setNightScenarios(d.invitation.trips.night_scenarios ?? [1])
 
+        // Populate date scenarios from the trip
+        if (d.invitation.trips.date_scenarios?.length) {
+          setDateScenarios(d.invitation.trips.date_scenarios)
+          // Default all scenarios to available until hotel says otherwise
+          const defaultAvail: Record<string, boolean> = {}
+          for (const s of d.invitation.trips.date_scenarios) defaultAvail[s.label] = true
+          setScenarioAvailability(defaultAvail)
+        }
+
         // Populate existing response if save-and-resume
         if (d.response) {
           const r = d.response
@@ -758,6 +832,11 @@ export default function RfpForm() {
             general_comments: r.general_comments ?? '',
             scenario_rates: savedScenarioRates,
           })
+
+          // Restore date scenario availability
+          if (r.scenario_availability) {
+            setScenarioAvailability(r.scenario_availability)
+          }
 
           // Restore per-room meeting space details and additional spaces from saved JSON
           if (r.meeting_space_notes) {
@@ -836,6 +915,7 @@ export default function RfpForm() {
         meeting_space_count: r.meeting_space_count ? Number(r.meeting_space_count) : null,
         general_comments: r.general_comments,
         scenario_rates: scenarioRatesPayload,
+        scenario_availability: Object.keys(scenarioAvailability).length > 0 ? scenarioAvailability : null,
       }
 
       try {
@@ -849,7 +929,7 @@ export default function RfpForm() {
         return false
       }
     },
-    [token, meetingSpaceDetails, additionalSpaces],
+    [token, meetingSpaceDetails, additionalSpaces, scenarioAvailability],
   )
 
   // --- Autosave: debounce 1.5s after any field change ---
@@ -1043,7 +1123,16 @@ export default function RfpForm() {
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-8">
       <div className="mx-auto max-w-3xl">
-        <RfpHeader data={data} resp={resp} setResp={setResp} isReadOnly={isReadOnly} />
+        <RfpHeader
+          data={data}
+          resp={resp}
+          setResp={setResp}
+          isReadOnly={isReadOnly}
+          dateScenarios={dateScenarios}
+          scenarioAvailability={scenarioAvailability}
+          setScenarioAvailability={setScenarioAvailability}
+          scheduleAutosave={scheduleAutosave}
+        />
 
         {/* Save status indicator */}
         {!isReadOnly && saveStatus !== 'idle' && (
@@ -1126,6 +1215,11 @@ export default function RfpForm() {
             <p className="mb-4 text-sm text-slate-500">
               Teams use meeting space for massage tables, recovery equipment, and trainer setups. Answer Yes or No for each room — if Yes, fill in the space details.
             </p>
+            {data.invitation.trips.clients.default_terms?.default_meeting_spaces && (
+              <p className="mb-4 rounded-lg bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+                This team requires <strong>{data.invitation.trips.clients.default_terms.default_meeting_spaces} meeting spaces</strong>.
+              </p>
+            )}
 
             {/* Per-room Yes/No with inline detail form on Yes */}
             {meetingSpaceYesNoItems.map((item) => {

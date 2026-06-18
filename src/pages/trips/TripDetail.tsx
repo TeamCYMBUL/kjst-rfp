@@ -3,9 +3,9 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import type { Client, Invitation, Trip } from '../../lib/types'
 import { formatDate, generateToken } from '../../lib/format'
-import { sendInvitationEmail, sendReminderEmails } from '../../lib/emailApi'
+import { sendInvitationEmail, sendReminderEmails, sendSingleReminderEmail } from '../../lib/emailApi'
 import { Badge, ErrorNote, LinkButton, Loading } from '../../components/ui'
-import { exportTeamGrid } from '../../lib/excelExport'
+import { exportTeamGrid, exportSingleHotelXlsx } from '../../lib/excelExport'
 import { useRole } from '../../lib/useRole'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -23,6 +23,9 @@ type HotelResponse = {
   stay2_king_rate: number | null
   stay2_suite_rate: number | null
   stay2_selling_rate: string | null
+  scenario_availability: Record<string, boolean> | null
+  completed_by_name: string | null
+  completed_date: string | null
 }
 
 type ConcessionItem = {
@@ -616,11 +619,14 @@ function HotelPanel({
   preloadedAnswers,
   score,
   onSendEmail,
+  onSendReminder,
   onMarkUnavailable,
   onResetStatus,
   onCopyLink,
   onContactUpdated,
   sendingEmail,
+  sendingReminder,
+  reminderFlash,
   emailFlash,
   copied,
 }: {
@@ -630,11 +636,14 @@ function HotelPanel({
   preloadedAnswers: Answer[] | undefined
   score: number | undefined
   onSendEmail: (inv: Invitation) => void
+  onSendReminder: (inv: Invitation) => void
   onMarkUnavailable: (inv: Invitation) => void
   onResetStatus: (inv: Invitation) => void
   onCopyLink: (token: string) => void
   onContactUpdated: (id: string, name: string | null, email: string | null) => void
   sendingEmail: string | null
+  sendingReminder: string | null
+  reminderFlash: string | null
   emailFlash: string | null
   copied: string | null
 }) {
@@ -783,6 +792,16 @@ function HotelPanel({
                 {sendingEmail === inv.id ? 'Sending…' : emailFlash === inv.id ? '✓ Sent!' : inv.sent_at ? 'Resend email' : 'Send email'}
               </button>
             )}
+            {inv.sent_at && (inv.status === 'sent' || inv.status === 'opened') && (
+              <button
+                onClick={() => onSendReminder(inv)}
+                disabled={!inv.hotel_contact_email || sendingReminder === inv.id}
+                title={!inv.hotel_contact_email ? 'No email address on file' : 'Send a short follow-up nudge (not the full proposal)'}
+                className="rounded-lg border border-amber-200 dark:border-amber-700 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-40 transition-colors"
+              >
+                {sendingReminder === inv.id ? 'Sending…' : reminderFlash === inv.id ? '✓ Reminder sent!' : 'Send reminder'}
+              </button>
+            )}
             {['sent', 'opened'].includes(inv.status) && (
               <button
                 onClick={() => onMarkUnavailable(inv)}
@@ -919,6 +938,36 @@ function HotelPanel({
               </div>
             )}
 
+            {/* Date scenario availability */}
+            {trip.date_scenarios?.length > 0 && response.scenario_availability && (
+              <div className="px-6 py-5">
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  Date Scenario Availability
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {trip.date_scenarios.map((s) => {
+                    const avail = response.scenario_availability![s.label] ?? true
+                    return (
+                      <span
+                        key={s.label}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
+                          avail
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                            : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                        }`}
+                      >
+                        <span>{avail ? '✓' : '✗'}</span>
+                        <span>Scenario {s.label}</span>
+                        <span className="text-[10px] opacity-70">
+                          {fmt(s.arrival_date)} – {fmt(s.departure_date)}
+                        </span>
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Meeting space & comments */}
             {(response.meeting_space_notes || response.general_comments) && (
               <div className="px-6 py-5 space-y-3">
@@ -930,6 +979,49 @@ function HotelPanel({
                 )}
               </div>
             )}
+
+            {/* Download single-hotel bid */}
+            <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700">
+              <button
+                onClick={() => {
+                  const answerRecord: Record<string, { answer_yes_no: boolean | null; answer_value: string | null; comment: string | null }> = {}
+                  for (const a of [...answers]) {
+                    answerRecord[a.concession_item_id] = { answer_yes_no: a.answer_yes_no, answer_value: a.answer_value, comment: a.comment }
+                  }
+                  exportSingleHotelXlsx(
+                    {
+                      hotel_name: inv.hotel_name,
+                      status: inv.status,
+                      completed_by_name: response.completed_by_name ?? null,
+                      completed_date: response.completed_date ?? null,
+                      best_king_rate: response.best_king_rate,
+                      king_rate_notes: response.king_rate_notes,
+                      current_selling_rate: response.current_selling_rate,
+                      best_suite_rate: response.best_suite_rate,
+                      occupancy_tax: response.occupancy_tax,
+                      meeting_space_notes: response.meeting_space_notes,
+                      general_comments: response.general_comments,
+                      staff_notes: inv.staff_notes ?? null,
+                      answers: answerRecord,
+                    },
+                    {
+                      opponent_label: trip.opponent_label,
+                      city: trip.city,
+                      arrival_date: trip.arrival_date,
+                      departure_date: trip.departure_date,
+                      game_date: trip.game_date,
+                      king_rooms_requested: trip.king_rooms_requested,
+                      suites_requested: trip.suites_requested,
+                      total_rooms_requested: trip.total_rooms_requested,
+                    },
+                    concessionItems as any,
+                  )
+                }}
+                className="w-full rounded-lg border border-slate-200 dark:border-slate-600 px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-center"
+              >
+                ↓ Download bid (.xlsx)
+              </button>
+            </div>
 
             {/* Concessions */}
             {sections.map((section) => {
@@ -1060,6 +1152,8 @@ export default function TripDetail() {
   const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [sendingEmail, setSendingEmail] = useState<string | null>(null)
+  const [sendingReminder, setSendingReminder] = useState<string | null>(null)
+  const [reminderFlash, setReminderFlash] = useState<string | null>(null)
   const [emailFlash, setEmailFlash] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const [sendingReminders, setSendingReminders] = useState(false)
@@ -1162,6 +1256,15 @@ export default function TripDetail() {
     setSendingEmail(null)
     if ('error' in result) { setError(result.error) }
     else { setEmailFlash(inv.id); setTimeout(() => setEmailFlash((f) => (f === inv.id ? null : f)), 2000); loadInvites() }
+  }
+
+  const sendReminder = async (inv: Invitation) => {
+    if (!inv.hotel_contact_email) return
+    setSendingReminder(inv.id); setError(null)
+    const result = await sendSingleReminderEmail(inv.id)
+    setSendingReminder(null)
+    if ('error' in result) { setError(result.error) }
+    else { setReminderFlash(inv.id); setTimeout(() => setReminderFlash((f) => (f === inv.id ? null : f)), 2500) }
   }
 
   const markUnavailable = async (inv: Invitation) => {
@@ -1603,6 +1706,7 @@ export default function TripDetail() {
               preloadedAnswers={allAnswers.get(selectedInvite.id)}
               score={scores.get(selectedInvite.id)?.score}
               onSendEmail={sendEmail}
+              onSendReminder={sendReminder}
               onMarkUnavailable={markUnavailable}
               onResetStatus={resetHotelStatus}
               onCopyLink={copyLink}
@@ -1616,6 +1720,8 @@ export default function TripDetail() {
                 )
               }}
               sendingEmail={sendingEmail}
+              sendingReminder={sendingReminder}
+              reminderFlash={reminderFlash}
               emailFlash={emailFlash}
               copied={copied}
             />

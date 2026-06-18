@@ -27,6 +27,18 @@ export async function sendInvitationEmail(
   return res.json()
 }
 
+/** Send a short nudge reminder to a single hotel (not the full proposal). */
+export async function sendSingleReminderEmail(
+  invitation_id: string,
+): Promise<{ ok: true; sent_to: string } | { error: string }> {
+  const res = await fetch(`${FN_BASE}/send-single-reminder`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ invitation_id, base_url: window.location.origin }),
+  })
+  return res.json()
+}
+
 /** Send reminder emails to all non-submitted hotels for a trip. */
 export async function sendReminderEmails(
   trip_id: string,

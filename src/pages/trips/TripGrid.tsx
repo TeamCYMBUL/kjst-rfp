@@ -33,6 +33,8 @@ type Response = {
   meeting_space_type: string | null
   meeting_space_count: number | null
   scenario_rates: Record<string, { rate: number | null; available: boolean }> | null
+  scenario_availability: Record<string, boolean> | null
+  resort_fee: string | null
   general_comments: string | null
   concession_answers: Answer[]
 }
@@ -159,12 +161,19 @@ function getDealbreakerBadges(
     badges.push({ label: 'No Mtg Space', level: 'yellow' })
   }
 
-  // 4. Scenario unavailable
+  // 4. Night scenario unavailable
   if (resp.scenario_rates) {
     const unavailable = Object.entries(resp.scenario_rates)
       .filter(([, v]) => v.available === false)
       .map(([k]) => `${k}n N/A`)
     for (const u of unavailable) badges.push({ label: u, level: 'yellow' })
+  }
+
+  // 5. Date scenario unavailable
+  if (resp.scenario_availability) {
+    for (const [label, avail] of Object.entries(resp.scenario_availability)) {
+      if (!avail) badges.push({ label: `Scenario ${label} N/A`, level: 'yellow' })
+    }
   }
 
   return badges
@@ -286,6 +295,24 @@ export default function TripGrid() {
   // Per-hotel staff notes (persisted to rfp_invitations.staff_notes on blur)
   const [staffNotes, setStaffNotes] = useState<Record<string, string>>({})
   const [noteSaving, setNoteSaving] = useState<Record<string, boolean>>({})
+  const [versionSaving, setVersionSaving] = useState(false)
+
+  const saveGridVersion = async (label: string, currentInvitations?: typeof invitations) => {
+    if (!id) return
+    const snapshotInvitations = currentInvitations ?? invitations
+    const snapshot = {
+      saved_at: new Date().toISOString(),
+      trip: { city: trip?.city, opponent_label: trip?.opponent_label, arrival_date: trip?.arrival_date, departure_date: trip?.departure_date },
+      invitations: snapshotInvitations.map((inv) => ({
+        id: inv.id,
+        hotel_name: inv.hotel_name,
+        status: inv.status,
+        response: inv.rfp_responses ?? null,
+        answers: answerMaps[inv.id] ?? {},
+      })),
+    }
+    await supabase.from('grid_versions').insert({ trip_id: id, version_label: label, snapshot })
+  }
 
   const loadData = async () => {
     if (!id) return
@@ -314,8 +341,8 @@ export default function TripGrid() {
             rfp_responses (
               id, completed_by_name, completed_date, best_king_rate, king_rate_notes,
               current_selling_rate, stay2_king_rate, stay2_suite_rate, stay2_selling_rate,
-              best_suite_rate, occupancy_tax, meeting_space_notes, meeting_space_type,
-              meeting_space_count, scenario_rates, general_comments,
+              best_suite_rate, occupancy_tax, resort_fee, meeting_space_notes, meeting_space_type,
+              meeting_space_count, scenario_rates, scenario_availability, general_comments,
               concession_answers (
                 id, concession_item_id, answer_yes_no, answer_value, comment
               )
@@ -453,6 +480,12 @@ export default function TripGrid() {
         .neq('id', invitationId)
         .neq('status', 'awarded')
       await supabase.from('trips').update({ status: 'closed' }).eq('id', id!)
+      // Snapshot with updated statuses before re-render
+      const awardedInvitations = invitations.map((inv) => ({
+        ...inv,
+        status: inv.id === invitationId ? 'awarded' : inv.status === 'submitted' ? 'passed' : inv.status,
+      }))
+      await saveGridVersion(`Awarded: ${hotelName}`, awardedInvitations)
       await loadData()
     } finally {
       setSaving(false)
@@ -502,6 +535,17 @@ export default function TripGrid() {
       await loadData()
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleSaveSnapshot = async () => {
+    setVersionSaving(true)
+    try {
+      const d = new Date()
+      const label = `Snapshot – ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+      await saveGridVersion(label)
+    } finally {
+      setVersionSaving(false)
     }
   }
 
@@ -566,13 +610,23 @@ export default function TripGrid() {
             {trip?.arrival_date ? ` · ${formatDate(trip.arrival_date)} – ${formatDate(trip.departure_date)}` : ''}
           </p>
         </div>
-        <button
-          onClick={handleExport}
-          disabled={invitations.length === 0}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-        >
-          ↓ Export Excel
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSaveSnapshot}
+            disabled={versionSaving || invitations.length === 0}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+            title="Save a snapshot of the current grid state"
+          >
+            {versionSaving ? 'Saving…' : '📌 Save Snapshot'}
+          </button>
+          <button
+            onClick={handleExport}
+            disabled={invitations.length === 0}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+          >
+            ↓ Export Excel
+          </button>
+        </div>
       </div>
 
       {/* Summary bar */}
@@ -911,6 +965,46 @@ export default function TripGrid() {
                 getValue={(r) => r?.occupancy_tax ?? null}
                 lowestRateId={lowestRateId}
               />
+              <RateRow
+                label="Resort Fee"
+                invitations={invitations}
+                getValue={(r) => r?.resort_fee ?? null}
+                lowestRateId={lowestRateId}
+              />
+              {/* Date scenario availability */}
+              {(trip?.date_scenarios?.length ?? 0) > 0 && (
+                <tr className="border-b border-slate-100 hover:bg-slate-50">
+                  <td className="sticky left-0 w-64 bg-white px-4 py-2.5 align-top">
+                    <p className="text-xs font-medium text-slate-600">Date Scenarios</p>
+                  </td>
+                  {invitations.map((inv) => {
+                    const r = inv.rfp_responses
+                    const avail: Record<string, boolean> | null = r?.scenario_availability ?? null
+                    const scenarios = trip?.date_scenarios ?? []
+                    return (
+                      <td key={inv.id} className="px-4 py-2.5 align-top text-xs">
+                        {avail ? (
+                          <div className="flex flex-wrap gap-1">
+                            {scenarios.map((s) => {
+                              const ok = avail[s.label] ?? true
+                              return (
+                                <span
+                                  key={s.label}
+                                  className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-medium ${ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}
+                                >
+                                  {ok ? '✓' : '✗'} {s.label}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )}
               {/* King rate notes only shown for single-stay trips */}
               {!trip?.stay2_arrival_date && (
                 <RateRow

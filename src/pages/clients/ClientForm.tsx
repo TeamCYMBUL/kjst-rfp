@@ -39,6 +39,7 @@ const blankTerms: DefaultTerms = {
   in_season_tournament_window: '',
   postseason_window: '',
   postseason_rooms_text: '',
+  default_meeting_spaces: '',
 }
 
 function numOrNull(v: string): number | null {
@@ -54,6 +55,7 @@ export default function ClientForm() {
 
   const [fields, setFields] = useState(blank)
   const [terms, setTerms] = useState<DefaultTerms>(blankTerms)
+  const [alwaysCc, setAlwaysCc] = useState({ enabled: false, name: '', email: '' })
   const [showTerms, setShowTerms] = useState(editing)
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -94,6 +96,11 @@ export default function ClientForm() {
           })
           setLogoUrl(c.logo_url ?? null)
           setTerms({ ...blankTerms, ...(c.default_terms ?? {}) })
+          setAlwaysCc({
+            enabled: c.always_cc_enabled ?? false,
+            name: c.always_cc_name ?? '',
+            email: c.always_cc_email ?? '',
+          })
         }
         setLoading(false)
       })
@@ -148,6 +155,9 @@ export default function ClientForm() {
       primary_contact_email: clean(fields.primary_contact_email),
       logo_url: logoUrl ?? null,
       assigned_to: fields.assigned_to || null,
+      always_cc_enabled: alwaysCc.enabled,
+      always_cc_name: clean(alwaysCc.name) ?? null,
+      always_cc_email: clean(alwaysCc.email) ?? null,
       default_terms: {
         agreement_status: clean(terms.agreement_status ?? '') ?? undefined,
         default_king_rooms: numOrNull(String(terms.default_king_rooms ?? '')),
@@ -156,6 +166,7 @@ export default function ClientForm() {
         in_season_tournament_window: clean(terms.in_season_tournament_window ?? '') ?? undefined,
         postseason_window: clean(terms.postseason_window ?? '') ?? undefined,
         postseason_rooms_text: clean(terms.postseason_rooms_text ?? '') ?? undefined,
+        default_meeting_spaces: clean(terms.default_meeting_spaces ?? '') ?? undefined,
       },
     }
 
@@ -392,6 +403,50 @@ export default function ClientForm() {
                 hint="Leave blank to use the same block as the regular stay"
                 value={terms.postseason_rooms_text ?? ''}
                 onChange={setTerm('postseason_rooms_text')}
+              />
+              <TextField
+                label="Default meeting spaces required"
+                hint="e.g. 3–4 or 5–6 — auto-populates on RFPs for this client"
+                value={terms.default_meeting_spaces ?? ''}
+                onChange={setTerm('default_meeting_spaces')}
+              />
+            </div>
+          )}
+        </Card>
+
+        {/* Always CC */}
+        <Card className="p-6">
+          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Always CC on Emails
+          </h2>
+          <p className="mb-4 text-xs text-slate-400 dark:text-slate-500">
+            When enabled, this contact is automatically CC'd on every RFP invitation and reminder sent for this client.
+          </p>
+          <label className="mb-4 flex cursor-pointer items-center gap-3">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 accent-[#1C1008]"
+              checked={alwaysCc.enabled}
+              onChange={(e) => setAlwaysCc((a) => ({ ...a, enabled: e.target.checked }))}
+            />
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+              Always CC a client contact on all emails for this team
+            </span>
+          </label>
+          {alwaysCc.enabled && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <TextField
+                label="CC contact name"
+                placeholder="e.g. John Smith"
+                value={alwaysCc.name}
+                onChange={(e) => setAlwaysCc((a) => ({ ...a, name: e.target.value }))}
+              />
+              <TextField
+                label="CC contact email"
+                type="email"
+                placeholder="e.g. jsmith@nationals.com"
+                value={alwaysCc.email}
+                onChange={(e) => setAlwaysCc((a) => ({ ...a, email: e.target.value }))}
               />
             </div>
           )}

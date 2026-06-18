@@ -28,6 +28,8 @@ export type RfpTrip = {
   response_deadline: string | null
   // Night scenarios — which night-count options to quote rates for (e.g. [1,2])
   night_scenarios: number[] | null
+  // Date scenarios — up to 3 candidate date ranges when exact dates are TBD
+  date_scenarios: import('./types').DateScenario[] | null
 }
 
 export type RfpClient = {
@@ -39,6 +41,7 @@ export type RfpClient = {
   primary_contact_address: string | null
   primary_contact_phone: string | null
   primary_contact_email: string | null
+  default_terms?: { default_meeting_spaces?: string } | null
 }
 
 export type RfpOrg = {
@@ -94,6 +97,8 @@ export type ExistingResponse = {
   stay2_selling_rate: string | null
   // Per-scenario rates: {"1": {rate: 199, available: true}, "2": {rate: 189, available: true}}
   scenario_rates: Record<string, ScenarioRate> | null
+  // Date scenario availability: {"A": true, "B": false, "C": true}
+  scenario_availability: Record<string, boolean> | null
   resort_fee: string | null
 }
 
@@ -133,6 +138,8 @@ export type ResponseFields = {
   stay2_selling_rate: string
   // Per-scenario rates (null when trip has only one night scenario)
   scenario_rates: Record<string, ScenarioRate> | null
+  // Date scenario availability (null when trip has no date scenarios)
+  scenario_availability: Record<string, boolean> | null
   resort_fee: string
 }
 

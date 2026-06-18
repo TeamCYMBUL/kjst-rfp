@@ -14,6 +14,7 @@ export type DefaultTerms = {
   in_season_tournament_window?: string
   postseason_window?: string
   postseason_rooms_text?: string
+  default_meeting_spaces?: string
 }
 
 export type Client = {
@@ -30,7 +31,18 @@ export type Client = {
   primary_contact_email: string | null
   season: string | null
   default_terms: DefaultTerms
+  always_cc_enabled: boolean
+  always_cc_name: string | null
+  always_cc_email: string | null
   created_at: string
+}
+
+export type DateScenario = {
+  label: 'A' | 'B' | 'C'
+  arrival_date: string
+  departure_date: string
+  game_date: string | null
+  notes: string | null
 }
 
 export type Trip = {
@@ -56,6 +68,8 @@ export type Trip = {
   postseason_rooms_text: string | null
   status: TripStatus
   response_deadline: string | null
+  night_scenarios: number[]
+  date_scenarios: DateScenario[]
   created_at: string
 }
 

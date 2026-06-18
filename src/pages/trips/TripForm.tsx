@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import type { DateScenario } from '../../lib/types'
 import type { Client, DefaultTerms, Trip, TripStatus } from '../../lib/types'
 import { nightsBetween } from '../../lib/format'
 import {
@@ -55,6 +56,7 @@ export default function TripForm() {
   const [fields, setFields] = useState<FormState>({ ...blank, client_id: presetClient })
   const [showStay2, setShowStay2] = useState(false)
   const [nightScenarios, setNightScenarios] = useState<number[]>([1])
+  const [dateScenarios, setDateScenarios] = useState<DateScenario[]>([])
   const [needsPlayoffClause, setNeedsPlayoffClause] = useState(false)
   const [needsTournamentClause, setNeedsTournamentClause] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -89,6 +91,7 @@ export default function TripForm() {
           const t = data as Trip
           if (t.stay2_arrival_date) setShowStay2(true)
           if ((t as any).night_scenarios?.length) setNightScenarios((t as any).night_scenarios)
+          if ((t as any).date_scenarios?.length) setDateScenarios((t as any).date_scenarios)
           if (t.postseason_window || t.postseason_rooms_text) setNeedsPlayoffClause(true)
           if (t.in_season_tournament_window) setNeedsTournamentClause(true)
           setFields({
@@ -190,6 +193,7 @@ export default function TripForm() {
       status: fields.status,
       response_deadline: clean(fields.response_deadline),
       night_scenarios: nightScenarios.length > 0 ? nightScenarios : [1],
+      date_scenarios: dateScenarios,
     }
 
     if (editing) {
@@ -314,6 +318,81 @@ export default function TripForm() {
           </div>
         </Card>
 
+        {/* Date Scenarios */}
+        <Card className="p-6">
+          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Date Scenarios
+          </h2>
+          <p className="mb-4 text-xs text-slate-400 dark:text-slate-500">
+            Use when exact dates aren't confirmed yet. Hotels will be asked to confirm availability for each scenario. Leave empty if dates above are confirmed.
+          </p>
+          <div className="space-y-4">
+            {dateScenarios.map((s, i) => (
+              <div key={s.label} className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    Scenario {s.label}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setDateScenarios((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="text-xs text-slate-400 hover:text-red-500 transition-colors"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <TextField
+                    label="Arrival date"
+                    type="date"
+                    value={s.arrival_date}
+                    onChange={(e) => setDateScenarios((prev) => prev.map((x, idx) => idx === i ? { ...x, arrival_date: e.target.value } : x))}
+                  />
+                  <TextField
+                    label="Departure date"
+                    type="date"
+                    value={s.departure_date}
+                    onChange={(e) => setDateScenarios((prev) => prev.map((x, idx) => idx === i ? { ...x, departure_date: e.target.value } : x))}
+                  />
+                  <TextField
+                    label="Game date (optional)"
+                    type="date"
+                    value={s.game_date ?? ''}
+                    onChange={(e) => setDateScenarios((prev) => prev.map((x, idx) => idx === i ? { ...x, game_date: e.target.value || null } : x))}
+                  />
+                </div>
+                <div className="mt-3">
+                  <TextField
+                    label="Notes (optional)"
+                    placeholder="e.g. If team travels directly from Boston"
+                    value={s.notes ?? ''}
+                    onChange={(e) => setDateScenarios((prev) => prev.map((x, idx) => idx === i ? { ...x, notes: e.target.value || null } : x))}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          {dateScenarios.length < 3 && (
+            <button
+              type="button"
+              onClick={() => {
+                const labels: ('A' | 'B' | 'C')[] = ['A', 'B', 'C']
+                const used = new Set(dateScenarios.map((s) => s.label))
+                const next = labels.find((l) => !used.has(l))
+                if (next) setDateScenarios((prev) => [...prev, { label: next, arrival_date: '', departure_date: '', game_date: null, notes: null }])
+              }}
+              className="mt-4 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 px-4 py-2 text-sm text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-700 dark:hover:text-slate-200 transition-colors w-full"
+            >
+              + Add scenario {(['A', 'B', 'C'] as const).find((l) => !dateScenarios.map((s) => s.label).includes(l)) ?? ''}
+            </button>
+          )}
+          {dateScenarios.length > 0 && (
+            <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+              Hotels will see all {dateScenarios.length} scenario{dateScenarios.length > 1 ? 's' : ''} and confirm which they can accommodate.
+            </p>
+          )}
+        </Card>
+
         {/* Night Scenarios */}
         <Card className="p-6">
           <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -323,7 +402,7 @@ export default function TripForm() {
             Hotels will quote a separate rate for each option you select. Not sure yet? Check all that apply — you can narrow it down before sending.
           </p>
           <div className="flex flex-wrap gap-3">
-            {[1, 2, 3].map((n) => {
+            {[1, 2, 3, 4, 5, 6, 7].map((n) => {
               const checked = nightScenarios.includes(n)
               return (
                 <label
