@@ -1076,9 +1076,6 @@ export default function RfpForm() {
   const isMeetingSpaceYesNoItem = (item: ConcessionItem) =>
     item.answer_type === 'yes_no' &&
     item.label.toLowerCase().includes('complimentary meeting space')
-  const isSuiteConcessionItem = (item: ConcessionItem) =>
-    item.label.toLowerCase().includes('suite') &&
-    (item.answer_type === 'quantity' || item.answer_type === 'currency')
 
   const allConcessionItems = data.items.filter(
     (i) => i.section === 'concessions' || i.section === 'facilities',
@@ -1086,33 +1083,37 @@ export default function RfpForm() {
   const flexCancelItems = allConcessionItems.filter(isFlexCancelItem)
   const commissionItems = allConcessionItems.filter(isCommissionItem)
   const meetingSpaceYesNoItems = allConcessionItems.filter(isMeetingSpaceYesNoItem)
-  const suiteConcessionItems = allConcessionItems.filter(isSuiteConcessionItem)
   const postseasonItems = data.items.filter((i) => i.section === 'postseason')
   const inSeasonItems = data.items.filter((i) => i.section === 'in_season_tournament')
 
   // "Other" = concessions/facilities not in any of the above special groups
+  // Suites stay in the main list (sort_order 9-10) to match the real RFP order
   const specialItemIds = new Set([
     ...flexCancelItems,
     ...commissionItems,
     ...meetingSpaceYesNoItems,
-    ...suiteConcessionItems,
   ].map((i) => i.id))
   const remainingItems = allConcessionItems.filter((i) => !specialItemIds.has(i.id))
-  // Split remaining into the two template tabs: Concessions & Facilities vs Facilities
   const otherConcessionItems = remainingItems.filter((i) => i.section === 'concessions')
   const facilitiesItems = remainingItems.filter((i) => i.section === 'facilities')
 
-  // Determine if meeting space is answered Yes (to show type/count fields)
-  // (meetingSpaceAnsweredYes removed — details now expand inline per item)
-
   const isReadOnly = data.invitation.status === 'submitted'
+
+  // Substitute [TEAM NAME], [ROOMS], [SUITES], [KINGS] placeholders with real trip data
+  const teamName = data.invitation.trips.clients.team_name ?? 'Team'
+  const substituteLabel = (label: string) =>
+    label
+      .replace(/\[TEAM NAME\]/g, teamName)
+      .replace(/\[ROOMS\]/g, String(data.invitation.trips.total_rooms_requested ?? ''))
+      .replace(/\[SUITES\]/g, String(data.invitation.trips.suites_requested ?? ''))
+      .replace(/\[KINGS\]/g, String(data.invitation.trips.king_rooms_requested ?? ''))
 
   // Helper: render a list of concession items
   const renderItems = (items: ConcessionItem[]) =>
     items.map((item) => (
       <ConcessionRow
         key={item.id}
-        item={item}
+        item={{ ...item, label: substituteLabel(item.label) }}
         answer={answers[item.id] ?? { answer_yes_no: null, answer_value: '', comment: '', commentOpen: false }}
         onChange={(update) => setAnswer(item.id, update)}
         disabled={isReadOnly}
@@ -1464,15 +1465,36 @@ export default function RfpForm() {
             </div>
           </div>
 
-          {/* ── Section 5: Suite Concessions ─── */}
-          {suiteConcessionItems.length > 0 && (
+          {/* ── Section 5: Concessions (remaining items in RFP sort order) ─── */}
+          {otherConcessionItems.length > 0 && (
             <div className="rounded-xl border border-slate-200 bg-white p-6">
-              <SectionHeading>Suite Concessions</SectionHeading>
-              {renderItems(suiteConcessionItems)}
+              <SectionHeading>Concessions</SectionHeading>
+              {renderItems(otherConcessionItems)}
             </div>
           )}
 
-          {/* ── Section 6: Postseason / Playoff Clause ─── */}
+          {/* ── Section 6: Facilities ─── */}
+          {facilitiesItems.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-6">
+              <SectionHeading>Facilities</SectionHeading>
+              {renderItems(facilitiesItems)}
+            </div>
+          )}
+
+          {/* ── Section 7: In-Season Tournament ─── */}
+          {inSeasonItems.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-6">
+              <SectionHeading>{SECTION_LABELS['in_season_tournament']}</SectionHeading>
+              {data.invitation.trips.in_season_tournament_window && (
+                <div className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                  Window: {data.invitation.trips.in_season_tournament_window}
+                </div>
+              )}
+              {renderItems(inSeasonItems)}
+            </div>
+          )}
+
+          {/* ── Section 8: Postseason / Playoff Clause ─── */}
           {postseasonItems.length > 0 && (
             <div className="rounded-xl border border-slate-200 bg-white p-6">
               <SectionHeading>{SECTION_LABELS['postseason']}</SectionHeading>
@@ -1485,35 +1507,6 @@ export default function RfpForm() {
                 </div>
               )}
               {renderItems(postseasonItems)}
-            </div>
-          )}
-
-          {/* ── Section 7: Concessions & Facilities (remaining concession items) ─── */}
-          {otherConcessionItems.length > 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white p-6">
-              <SectionHeading>Concessions &amp; Facilities</SectionHeading>
-              {renderItems(otherConcessionItems)}
-            </div>
-          )}
-
-          {/* ── Section 7b: Facilities ─── */}
-          {facilitiesItems.length > 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white p-6">
-              <SectionHeading>Facilities</SectionHeading>
-              {renderItems(facilitiesItems)}
-            </div>
-          )}
-
-          {/* ── Section 8: In-Season Tournament ─── */}
-          {inSeasonItems.length > 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white p-6">
-              <SectionHeading>{SECTION_LABELS['in_season_tournament']}</SectionHeading>
-              {data.invitation.trips.in_season_tournament_window && (
-                <div className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                  Window: {data.invitation.trips.in_season_tournament_window}
-                </div>
-              )}
-              {renderItems(inSeasonItems)}
             </div>
           )}
 
