@@ -1160,38 +1160,7 @@ export default function RfpForm() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-8">
-          {/* ── Section 1: Submitter info ─── */}
-          <div className="rounded-xl border border-slate-200 bg-white p-6">
-            <SectionHeading>Submitter</SectionHeading>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <FieldLabel required htmlFor="rfp-completed-by">RFP completed by</FieldLabel>
-                <input
-                  id="rfp-completed-by"
-                  type="text"
-                  className={inputCls}
-                  value={resp.completed_by_name}
-                  onChange={setRespField('completed_by_name')}
-                  disabled={isReadOnly}
-                  placeholder="Full name"
-                  aria-required="true"
-                />
-              </div>
-              <div>
-                <FieldLabel htmlFor="rfp-date">Date</FieldLabel>
-                <input
-                  id="rfp-date"
-                  type="date"
-                  className={inputCls}
-                  value={resp.completed_date}
-                  onChange={setRespField('completed_date')}
-                  disabled={isReadOnly}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* ── Section 2: Flexible Cancellation ─── */}
+          {/* ── Section 1: Flexible Cancellation ─── */}
           {flexCancelItems.length > 0 && (
             <div className="rounded-xl border border-slate-200 bg-white p-6">
               <SectionHeading>Flexible Cancellation</SectionHeading>
@@ -1509,6 +1478,25 @@ export default function RfpForm() {
               {renderItems(postseasonItems)}
             </div>
           )}
+
+          {/* ── Submitter info (matches Word doc — "RFP completed by" at bottom) ─── */}
+          <div className="rounded-xl border border-slate-200 bg-white p-6">
+            <SectionHeading>RFP Completed By</SectionHeading>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <FieldLabel required htmlFor="rfp-completed-by">Name</FieldLabel>
+                <input id="rfp-completed-by" type="text" className={inputCls}
+                  value={resp.completed_by_name} onChange={setRespField('completed_by_name')}
+                  disabled={isReadOnly} placeholder="Full name" aria-required="true" />
+              </div>
+              <div>
+                <FieldLabel htmlFor="rfp-date">Date</FieldLabel>
+                <input id="rfp-date" type="date" className={inputCls}
+                  value={resp.completed_date} onChange={setRespField('completed_date')}
+                  disabled={isReadOnly} />
+              </div>
+            </div>
+          </div>
 
           {/* ── Section 9: General comments ─── */}
           <div className="rounded-xl border border-slate-200 bg-white p-6">
