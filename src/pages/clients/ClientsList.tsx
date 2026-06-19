@@ -174,12 +174,14 @@ export default function ClientsList() {
           <p className="mt-1 text-sm text-slate-400 dark:text-slate-500">
             Add your first sports team to get started.
           </p>
-          <Link
-            to="/clients/new"
-            className="mt-4 rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#2d1e0e]"
-          >
-            Add client
-          </Link>
+          {role === 'admin' && (
+            <Link
+              to="/clients/new"
+              className="mt-4 rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#2d1e0e]"
+            >
+              Add client
+            </Link>
+          )}
         </div>
       ) : (
         /* ── Split panel ── */
@@ -409,12 +411,14 @@ export default function ClientsList() {
                 {selTrips.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-slate-200 dark:border-slate-600 p-8 text-center">
                     <p className="text-sm text-slate-400 dark:text-slate-500">No trips yet for this team.</p>
-                    <Link
-                      to={`/trips/new?client=${selected.id}`}
-                      className="mt-3 inline-block rounded-lg bg-[#1C1008] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#2d1e0e]"
-                    >
-                      Create first trip
-                    </Link>
+                    {canEditClient(selected.id) && (
+                      <Link
+                        to={`/trips/new?client=${selected.id}`}
+                        className="mt-3 inline-block rounded-lg bg-[#1C1008] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#2d1e0e]"
+                      >
+                        Create first trip
+                      </Link>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2">
