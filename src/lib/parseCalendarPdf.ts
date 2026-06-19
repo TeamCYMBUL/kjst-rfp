@@ -118,9 +118,12 @@ export async function parseCalendarSchedulePdf(buffer: ArrayBuffer): Promise<{
   const hasDayNames = rawItems.filter(it => DAY_NAMES.has(it.str.toUpperCase())).length >= 7
   if (!hasDayNames) return { isCalendar: false, rows: [] }
 
-  // Year
-  const yearItem = rawItems.find(it => /^20\d\d$/.test(it.str))
-  const baseYear = yearItem ? parseInt(yearItem.str) : new Date().getFullYear()
+  // Year — take the max 4-digit year found so the schedule year (e.g. 2027)
+  // beats any earlier publication/copyright dates printed in the document
+  const yearItems = rawItems.filter(it => /^20\d\d$/.test(it.str))
+  const baseYear = yearItems.length > 0
+    ? Math.max(...yearItems.map(it => parseInt(it.str)))
+    : new Date().getFullYear()
 
   const rows = groupIntoRows(rawItems)
 
@@ -223,12 +226,11 @@ export async function parseCalendarSchedulePdf(buffer: ArrayBuffer): Promise<{
           const city = TEAM_CITIES[abbrev]
           if (!city) { j++; continue }
 
-          // Match to nearest date in the same column by x proximity
-          const ci = colOf(oppItem.x, colBounds)
-          if (ci < 0) { j++; continue }
-          const colDates = dateCells.filter(d => d.ci === ci)
-          if (colDates.length === 0) { j++; continue }
-          const nearest = colDates.reduce((b, c) => Math.abs(c.x - oppItem.x) < Math.abs(b.x - oppItem.x) ? c : b)
+          // Match to nearest date cell by x proximity across all columns.
+          // Avoids mis-assigning codes when column boundary midpoints are imprecise.
+          if (dateCells.length === 0) { j++; continue }
+          const nearest = dateCells.reduce((b, c) => Math.abs(c.x - oppItem.x) < Math.abs(b.x - oppItem.x) ? c : b)
+          const ci = nearest.ci
 
           games.push({
             date: isoDate(curMonth[ci].y, curMonth[ci].m, nearest.day),
