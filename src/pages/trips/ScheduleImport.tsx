@@ -69,6 +69,7 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
+  const [skippedMapping, setSkippedMapping] = useState(false)
 
   useEffect(() => {
     if (!isOpen || role === null) return
@@ -82,13 +83,14 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
   // Reset on open
   useEffect(() => {
     if (isOpen) {
-      setStep(1); setHeaders([]); setRows([]); setMapping({}); setClientId(''); setError(null)
+      setStep(1); setHeaders([]); setRows([]); setMapping({}); setClientId(''); setError(null); setSkippedMapping(false)
     }
   }, [isOpen])
 
   if (!isOpen) return null
 
   const handleFile = (file: File) => {
+    if (!clientId) { setError('Please select a team before uploading your file.'); return }
     setError(null)
     const reader = new FileReader()
     const isCsv = file.name.toLowerCase().endsWith('.csv')
@@ -123,7 +125,12 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
           }
         })
         setMapping(detected)
-        setStep(2)
+        // Skip column mapping if required fields were auto-detected
+        const hasOpponent = Object.values(detected).includes('opponent')
+        const hasCity = Object.values(detected).includes('city')
+        const skip = hasOpponent && hasCity
+        setSkippedMapping(skip)
+        setStep(skip ? 3 : 2)
       } catch (err: any) {
         setError('Could not parse file: ' + err.message)
       }
@@ -197,7 +204,7 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
 
         {/* Step indicator */}
         <div className="flex border-b border-slate-100 px-6 py-2 shrink-0 gap-4">
-          {(['1. Upload', '2. Map columns', '3. Preview', '4. Done'] as const).map((label, i) => {
+          {(['1. Upload', '2. Map columns', '3. Preview & import', '4. Done'] as const).map((label, i) => {
             const n = (i + 1) as 1 | 2 | 3 | 4
             const active = step === n
             const done = step > n
@@ -215,9 +222,22 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
             <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">{error}</div>
           )}
 
-          {/* Step 1: Upload */}
+          {/* Step 1: Upload + client select */}
           {step === 1 && (
             <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">Team *</label>
+                <select
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#1C1008] focus:outline-none"
+                  value={clientId}
+                  onChange={(e) => setClientId(e.target.value)}
+                >
+                  <option value="">Choose a team…</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>{c.team_name}</option>
+                  ))}
+                </select>
+              </div>
               <div
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
                 onDragLeave={() => setDragOver(false)}
@@ -290,23 +310,9 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
             </div>
           )}
 
-          {/* Step 3: Preview + client select */}
+          {/* Step 3: Preview & import */}
           {step === 3 && (
             <div className="space-y-4">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">Client *</label>
-                <select
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#1C1008] focus:outline-none"
-                  value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
-                >
-                  <option value="">Choose a client…</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>{c.team_name}</option>
-                  ))}
-                </select>
-              </div>
-
               <div>
                 <p className="mb-2 text-xs text-slate-500">
                   <strong className="text-slate-700">{validRows.length}</strong> of {rows.length} rows are valid and will be imported.
@@ -358,7 +364,7 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
                 >
                   {importing ? 'Creating…' : `Create ${validRows.length} draft trip${validRows.length !== 1 ? 's' : ''}`}
                 </button>
-                <button onClick={() => setStep(2)} className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-medium text-slate-500 hover:bg-slate-50">
+                <button onClick={() => setStep(skippedMapping ? 1 : 2)} className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-medium text-slate-500 hover:bg-slate-50">
                   Back
                 </button>
               </div>
