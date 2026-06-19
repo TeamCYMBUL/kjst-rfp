@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
 import * as XLSX from 'xlsx'
+import * as pdfjsLib from 'pdfjs-dist'
+import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { supabase } from '../../lib/supabase'
 import { useRole } from '../../lib/useRole'
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
 
 type Props = {
   isOpen: boolean
@@ -40,6 +44,42 @@ function autoDetect(header: string): string | null {
   return null
 }
 
+async function parsePdfToRows(buffer: ArrayBuffer): Promise<string[][]> {
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
+  const allRows: string[][] = []
+
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p)
+    const content = await page.getTextContent()
+
+    // Cluster text items by y-position (same row = within 4pt of each other)
+    type Item = { x: number; y: number; str: string }
+    const items: Item[] = (content.items as any[])
+      .filter((it) => it.str && it.str.trim())
+      .map((it) => ({ x: it.transform[4], y: Math.round(it.transform[5]), str: it.str.trim() }))
+
+    const buckets = new Map<number, Item[]>()
+    for (const item of items) {
+      // Find existing bucket within 4pt tolerance
+      let key = item.y
+      for (const k of buckets.keys()) {
+        if (Math.abs(k - item.y) <= 4) { key = k; break }
+      }
+      if (!buckets.has(key)) buckets.set(key, [])
+      buckets.get(key)!.push(item)
+    }
+
+    // Sort rows top-to-bottom (PDF y=0 is bottom), sort cells left-to-right
+    const sortedYs = [...buckets.keys()].sort((a, b) => b - a)
+    for (const y of sortedYs) {
+      const cells = buckets.get(y)!.sort((a, b) => a.x - b.x).map((it) => it.str)
+      if (cells.some((c) => c.length > 0)) allRows.push(cells)
+    }
+  }
+
+  return allRows
+}
+
 function parseDate(val: string | number | null | undefined): string | null {
   if (val == null || val === '') return null
   const s = String(val).trim()
@@ -67,6 +107,7 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
   const [clients, setClients] = useState<{ id: string; team_name: string }[]>([])
   const [clientId, setClientId] = useState('')
   const [importing, setImporting] = useState(false)
+  const [parsing, setParsing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [skippedMapping, setSkippedMapping] = useState(false)
@@ -89,12 +130,55 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
 
   if (!isOpen) return null
 
+  const processRows = (raw: string[][]) => {
+    if (raw.length < 2) { setError('File is empty or has no data rows.'); return }
+    const hdrs = raw[0].map((h) => String(h ?? ''))
+    const dataRows: RawRow[] = raw.slice(1)
+      .filter((r) => r.some((c) => c != null && c !== ''))
+      .map((r) => {
+        const obj: RawRow = {}
+        hdrs.forEach((h, i) => { obj[h] = String(r[i] ?? '') })
+        return obj
+      })
+    setHeaders(hdrs)
+    setRows(dataRows)
+    const detected: Record<string, string> = {}
+    hdrs.forEach((h) => {
+      const field = autoDetect(h)
+      if (field && !Object.values(detected).includes(field)) detected[h] = field
+    })
+    setMapping(detected)
+    const hasOpponent = Object.values(detected).includes('opponent')
+    const hasCity = Object.values(detected).includes('city')
+    const skip = hasOpponent && hasCity
+    setSkippedMapping(skip)
+    setStep(skip ? 3 : 2)
+  }
+
   const handleFile = (file: File) => {
     if (!clientId) { setError('Please select a team before uploading your file.'); return }
     setError(null)
-    const reader = new FileReader()
-    const isCsv = file.name.toLowerCase().endsWith('.csv')
+    const ext = file.name.toLowerCase().split('.').pop()
 
+    if (ext === 'pdf') {
+      setParsing(true)
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        try {
+          const raw = await parsePdfToRows(e.target!.result as ArrayBuffer)
+          processRows(raw)
+        } catch (err: any) {
+          setError('Could not read PDF: ' + err.message)
+        } finally {
+          setParsing(false)
+        }
+      }
+      reader.readAsArrayBuffer(file)
+      return
+    }
+
+    const reader = new FileReader()
+    const isCsv = ext === 'csv'
     reader.onload = (e) => {
       try {
         let wb: XLSX.WorkBook
@@ -105,42 +189,13 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
         }
         const ws = wb.Sheets[wb.SheetNames[0]]
         const raw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 })
-        if (raw.length < 2) { setError('File is empty or has no data rows.'); return }
-        const hdrs = (raw[0] as any[]).map((h) => String(h ?? ''))
-        const dataRows: RawRow[] = raw.slice(1)
-          .filter((r: any[]) => r.some((c) => c != null && c !== ''))
-          .map((r: any[]) => {
-            const obj: RawRow = {}
-            hdrs.forEach((h, i) => { obj[h] = String(r[i] ?? '') })
-            return obj
-          })
-        setHeaders(hdrs)
-        setRows(dataRows)
-        // Auto-detect mapping
-        const detected: Record<string, string> = {}
-        hdrs.forEach((h) => {
-          const field = autoDetect(h)
-          if (field && !Object.values(detected).includes(field)) {
-            detected[h] = field
-          }
-        })
-        setMapping(detected)
-        // Skip column mapping if required fields were auto-detected
-        const hasOpponent = Object.values(detected).includes('opponent')
-        const hasCity = Object.values(detected).includes('city')
-        const skip = hasOpponent && hasCity
-        setSkippedMapping(skip)
-        setStep(skip ? 3 : 2)
+        processRows(raw.map((r) => r.map((c) => String(c ?? ''))))
       } catch (err: any) {
         setError('Could not parse file: ' + err.message)
       }
     }
-
-    if (isCsv) {
-      reader.readAsText(file)
-    } else {
-      reader.readAsArrayBuffer(file)
-    }
+    if (isCsv) reader.readAsText(file)
+    else reader.readAsArrayBuffer(file)
   }
 
   const downloadTemplate = () => {
@@ -197,7 +252,7 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 shrink-0">
           <div>
             <h2 className="text-base font-semibold text-slate-800">Import from Schedule</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Upload a CSV or Excel file to create multiple draft trips at once.</p>
+            <p className="text-xs text-slate-400 mt-0.5">Upload a CSV, Excel, or PDF file to create multiple draft trips at once.</p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
         </div>
@@ -242,16 +297,26 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
-                className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-8 py-12 transition-colors cursor-pointer ${dragOver ? 'border-[#1C1008] bg-[#1C1008]/5' : 'border-slate-300 hover:border-slate-400'}`}
-                onClick={() => document.getElementById('schedule-file-input')?.click()}
+                className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-8 py-12 transition-colors cursor-pointer ${dragOver ? 'border-[#1C1008] bg-[#1C1008]/5' : 'border-slate-300 hover:border-slate-400'} ${parsing ? 'opacity-60 pointer-events-none' : ''}`}
+                onClick={() => !parsing && document.getElementById('schedule-file-input')?.click()}
               >
-                <div className="text-3xl mb-3">📁</div>
-                <p className="text-sm font-medium text-slate-700">Drop a file here, or click to browse</p>
-                <p className="mt-1 text-xs text-slate-400">Accepts .csv, .xlsx, .xls</p>
+                {parsing ? (
+                  <>
+                    <div className="text-3xl mb-3 animate-spin">⏳</div>
+                    <p className="text-sm font-medium text-slate-700">Reading PDF…</p>
+                    <p className="mt-1 text-xs text-slate-400">Extracting schedule data</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-3xl mb-3">📁</div>
+                    <p className="text-sm font-medium text-slate-700">Drop a file here, or click to browse</p>
+                    <p className="mt-1 text-xs text-slate-400">Accepts .csv, .xlsx, .xls, .pdf</p>
+                  </>
+                )}
                 <input
                   id="schedule-file-input"
                   type="file"
-                  accept=".csv,.xlsx,.xls"
+                  accept=".csv,.xlsx,.xls,.pdf"
                   className="hidden"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
                 />
