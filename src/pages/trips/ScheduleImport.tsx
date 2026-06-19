@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import * as XLSX from 'xlsx'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { parseCalendarSchedulePdf } from '../../lib/parseCalendarPdf'
 import { supabase } from '../../lib/supabase'
 import { useRole } from '../../lib/useRole'
 
@@ -165,8 +166,21 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
       const reader = new FileReader()
       reader.onload = async (e) => {
         try {
-          const raw = await parsePdfToRows(e.target!.result as ArrayBuffer)
-          processRows(raw)
+          const buf = e.target!.result as ArrayBuffer
+          // Try calendar format first (sports schedule wall-calendar PDFs)
+          const cal = await parseCalendarSchedulePdf(buf)
+          if (cal.isCalendar) {
+            if (cal.rows.length <= 1) {
+              setError('Calendar PDF detected but no away games were found. Check that the file has games marked with "@" for away teams.')
+              setParsing(false)
+              return
+            }
+            processRows(cal.rows)
+          } else {
+            // Fall back to generic table extraction
+            const raw = await parsePdfToRows(buf)
+            processRows(raw)
+          }
         } catch (err: any) {
           setError('Could not read PDF: ' + err.message)
         } finally {
