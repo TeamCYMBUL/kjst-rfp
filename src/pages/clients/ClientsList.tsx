@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { formatDate } from '../../lib/format'
 import { Badge, ErrorNote, Loading } from '../../components/ui'
+import { useRole } from '../../lib/useRole'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -108,6 +109,7 @@ export default function ClientsList() {
   const [search, setSearch] = useState('')
   const [leagueFilter, setLeagueFilter] = useState<string>('all')
   const [error, setError] = useState<string | null>(null)
+  const { role, canEditClient } = useRole()
 
   useEffect(() => {
     supabase
@@ -154,12 +156,14 @@ export default function ClientsList() {
             {totalTrips !== 1 ? 's' : ''}
           </p>
         </div>
-        <Link
-          to="/clients/new"
-          className="rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#2d1e0e]"
-        >
-          + Add Client
-        </Link>
+        {role === 'admin' && (
+          <Link
+            to="/clients/new"
+            className="rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#2d1e0e]"
+          >
+            + Add Client
+          </Link>
+        )}
       </div>
 
       {clients.length === 0 ? (
@@ -293,20 +297,22 @@ export default function ClientsList() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Link
-                      to={`/trips/new?client=${selected.id}`}
-                      className="rounded-lg border border-[#1C1008]/20 bg-[#1C1008]/5 px-3 py-1.5 text-xs font-semibold text-[#1C1008] transition-colors hover:bg-[#1C1008]/10"
-                    >
-                      + New trip
-                    </Link>
-                    <Link
-                      to={`/clients/${selected.id}/edit`}
-                      className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700"
-                    >
-                      Edit
-                    </Link>
-                  </div>
+                  {canEditClient(selected.id) && (
+                    <div className="flex items-center gap-2">
+                      <Link
+                        to={`/trips/new?client=${selected.id}`}
+                        className="rounded-lg border border-[#1C1008]/20 bg-[#1C1008]/5 px-3 py-1.5 text-xs font-semibold text-[#1C1008] transition-colors hover:bg-[#1C1008]/10"
+                      >
+                        + New trip
+                      </Link>
+                      <Link
+                        to={`/clients/${selected.id}/edit`}
+                        className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700"
+                      >
+                        Edit
+                      </Link>
+                    </div>
+                  )}
                 </div>
 
                 {/* Stats */}
@@ -382,13 +388,15 @@ export default function ClientsList() {
                         )}
                       </div>
                     </div>
-                    <Link
-                      to={`/clients/${selected.id}/edit`}
-                      className="shrink-0 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                      title="Edit contact info"
-                    >
-                      ✎
-                    </Link>
+                    {canEditClient(selected.id) && (
+                      <Link
+                        to={`/clients/${selected.id}/edit`}
+                        className="shrink-0 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                        title="Edit contact info"
+                      >
+                        ✎
+                      </Link>
+                    )}
                   </div>
                 </div>
               )}

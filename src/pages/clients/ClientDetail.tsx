@@ -16,6 +16,7 @@ import {
   PageHeader,
   TextField,
 } from '../../components/ui'
+import { useRole } from '../../lib/useRole'
 
 type ClientConcessionItem = {
   id: string
@@ -79,6 +80,7 @@ function Field({ label, value }: { label: string; value: string | null | undefin
 export default function ClientDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { canEditClient } = useRole()
   const [client, setClient] = useState<Client | null>(null)
   const [trips, setTrips] = useState<TripRow[] | null>(null)
   const [history, setHistory] = useState<HistoryRow[] | null>(null)
@@ -302,9 +304,11 @@ export default function ClientDetail() {
         subtitle={[client.league, client.season].filter(Boolean).join(' · ') || undefined}
         action={
           <div className="flex gap-2">
-            <LinkButton to={`/clients/${id}/edit`} variant="secondary">
-              Edit
-            </LinkButton>
+            {canEditClient(id!) && (
+              <LinkButton to={`/clients/${id}/edit`} variant="secondary">
+                Edit
+              </LinkButton>
+            )}
             <Button
               variant="secondary"
               onClick={handleExportAllCities}
@@ -312,7 +316,9 @@ export default function ClientDetail() {
             >
               {exportingAllCities ? 'Exporting…' : '↓ Export All Cities'}
             </Button>
-            <LinkButton to={`/trips/new?client=${id}`}>New Trip</LinkButton>
+            {canEditClient(id!) && (
+              <LinkButton to={`/trips/new?client=${id}`}>New Trip</LinkButton>
+            )}
           </div>
         }
       />

@@ -171,9 +171,18 @@ export default function ClientForm() {
     }
 
     if (editing) {
-      const { error } = await supabase.from('clients').update(payload).eq('id', id)
+      const { data: updated, error } = await supabase
+        .from('clients')
+        .update(payload)
+        .eq('id', id)
+        .select('id')
       if (error) {
         setError(error.message)
+        setSaving(false)
+        return
+      }
+      if (!updated || updated.length === 0) {
+        setError("You don't have permission to edit this team. Only assigned managers and admins can make changes.")
         setSaving(false)
         return
       }
