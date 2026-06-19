@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabase'
+import { useRole } from '../../lib/useRole'
 
 type Props = {
   isOpen: boolean
@@ -58,6 +59,7 @@ function parseDate(val: string | number | null | undefined): string | null {
 }
 
 export default function ScheduleImportModal({ isOpen, onClose, onImported }: Props) {
+  const { role, assignedClientIds, canEditClient } = useRole()
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
   const [headers, setHeaders] = useState<string[]>([])
   const [rows, setRows] = useState<RawRow[]>([])
@@ -69,10 +71,13 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
   const [dragOver, setDragOver] = useState(false)
 
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen || role === null) return
     supabase.from('clients').select('id, team_name').order('team_name')
-      .then(({ data }) => setClients((data as any[]) ?? []))
-  }, [isOpen])
+      .then(({ data }) => {
+        const all = (data as any[]) ?? []
+        setClients(role === 'admin' ? all : all.filter((c: any) => assignedClientIds.has(c.id)))
+      })
+  }, [isOpen, role, assignedClientIds])
 
   // Reset on open
   useEffect(() => {
@@ -155,6 +160,7 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
 
   const doImport = async () => {
     if (!clientId) { setError('Please select a client.'); return }
+    if (!canEditClient(clientId)) { setError("You don't have permission to create trips for this team."); return }
     setImporting(true); setError(null)
     const inserts = validRows.map((r) => {
       const rec: any = {

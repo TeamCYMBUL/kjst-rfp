@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useRole } from '../../lib/useRole'
 import type { DateScenario } from '../../lib/types'
 import type { Client, DefaultTerms, Trip, TripStatus } from '../../lib/types'
 import { nightsBetween } from '../../lib/format'
@@ -51,6 +52,7 @@ export default function TripForm() {
   const navigate = useNavigate()
   const [search] = useSearchParams()
   const presetClient = search.get('client') ?? ''
+  const { role, assignedClientIds, canEditClient } = useRole()
 
   const [clients, setClients] = useState<Pick<Client, 'id' | 'team_name' | 'default_terms'>[]>([])
   const [fields, setFields] = useState<FormState>({ ...blank, client_id: presetClient })
@@ -64,17 +66,22 @@ export default function TripForm() {
   const [error, setError] = useState<string | null>(null)
 
   // Load the client list (for the selector and for default-term pre-fill).
+  // Managers only see their assigned clients; admins see all.
   useEffect(() => {
+    if (role === null) return // wait for role to load
     supabase
       .from('clients')
       .select('id, team_name, default_terms')
       .order('team_name')
       .then(({ data, error }) => {
         if (error) setError(error.message)
-        else setClients(data as Pick<Client, 'id' | 'team_name' | 'default_terms'>[])
+        else {
+          const all = data as Pick<Client, 'id' | 'team_name' | 'default_terms'>[]
+          setClients(role === 'admin' ? all : all.filter((c) => assignedClientIds.has(c.id)))
+        }
         if (!editing) setLoading(false)
       })
-  }, [editing])
+  }, [editing, role, assignedClientIds])
 
   // When editing, load the existing trip.
   useEffect(() => {
@@ -164,6 +171,10 @@ export default function TripForm() {
     e.preventDefault()
     if (!fields.client_id) {
       setError('Please choose a client.')
+      return
+    }
+    if (!canEditClient(fields.client_id)) {
+      setError("You don't have permission to create or edit trips for this team.")
       return
     }
     setSaving(true)

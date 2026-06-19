@@ -1141,7 +1141,7 @@ function InfoRow({ label, value }: { label: string; value: string | null | undef
 export default function TripDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { role } = useRole()
+  const { role, canEditClient } = useRole()
   const isViewer = role === 'viewer'
   const [trip, setTrip] = useState<(Trip & { clients: Pick<Client, 'id' | 'team_name'> | null }) | null>(null)
   const [invites, setInvites] = useState<Invitation[] | null>(null)
@@ -1505,12 +1505,12 @@ export default function TripDetail() {
           <LinkButton to={`/trips/${id}/grid`} variant="secondary">
             Full grid →
           </LinkButton>
-          {!isViewer && (
+          {trip && canEditClient(trip.client_id) && (
             <LinkButton to={`/trips/${id}/edit`} variant="secondary">
               Edit
             </LinkButton>
           )}
-          {!isViewer && (
+          {trip && canEditClient(trip.client_id) && (
             <button
               onClick={removeTrip}
               disabled={deleting}
