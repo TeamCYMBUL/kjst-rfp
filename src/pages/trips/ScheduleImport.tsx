@@ -99,9 +99,11 @@ function parseDate(val: string | number | null | undefined, fallbackYear?: numbe
   if (raw.toLowerCase() === 'n/a') return null
   // If comma-separated list (e.g. "3/25, 3/27, 3/28"), take the first date
   const s = raw.includes(',') ? raw.split(',')[0].trim() : raw
-  // Excel serial number
-  if (/^\d+$/.test(s) && Number(s) > 40000) {
-    return new Date(Math.round((Number(s) - 25569) * 86400 * 1000)).toISOString().slice(0, 10)
+  // Excel serial number (integer or fractional — XLSX auto-converts CSV ISO dates to serials)
+  // Round to nearest day first to handle timezone-shifted fractional serials
+  if (/^\d+(\.\d+)?$/.test(s) && Number(s) > 40000) {
+    const daySerial = Math.round(Number(s))
+    return new Date((daySerial - 25569) * 86400 * 1000).toISOString().slice(0, 10)
   }
   // YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
