@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import type { Client, Invitation, Trip } from '../../lib/types'
+import type { Client, DateScenario, Invitation, Trip } from '../../lib/types'
 import { formatDate, generateToken } from '../../lib/format'
 import { sendInvitationEmail, sendReminderEmails, sendSingleReminderEmail } from '../../lib/emailApi'
 import { Badge, ErrorNote, LinkButton, Loading } from '../../components/ui'
@@ -1171,6 +1171,8 @@ export default function TripDetail() {
   const [showDeclineModal, setShowDeclineModal] = useState(false)
   const [sendingDeclines, setSendingDeclines] = useState(false)
   const [declineToast, setDeclineToast] = useState<string | null>(null)
+  const [confirmingScenario, setConfirmingScenario] = useState(false)
+  const [confirmingScenarioSaving, setConfirmingScenarioSaving] = useState(false)
 
   const loadInvites = () => {
     supabase.from('rfp_invitations').select('*').eq('trip_id', id).order('created_at', { ascending: true })
@@ -1338,6 +1340,20 @@ export default function TripDetail() {
     setSendingDeclines(false)
     setDeclineToast(`Decline emails sent to ${passed.length} hotel${passed.length !== 1 ? 's' : ''}`)
     setTimeout(() => setDeclineToast(null), 4000)
+  }
+
+  const confirmScenario = async (scenario: DateScenario) => {
+    setConfirmingScenarioSaving(true)
+    await supabase.from('trips').update({
+      arrival_date: scenario.arrival_date,
+      departure_date: scenario.departure_date,
+      game_date: scenario.game_date ?? null,
+      date_scenarios: [],
+    }).eq('id', id!)
+    const { data } = await supabase.from('trips').select('*, clients(id, team_name)').eq('id', id!).single()
+    if (data) setTrip(data as Trip & { clients: Pick<Client, 'id' | 'team_name'> | null })
+    setConfirmingScenarioSaving(false)
+    setConfirmingScenario(false)
   }
 
   const removeTrip = async () => {
@@ -1532,6 +1548,24 @@ export default function TripDetail() {
       {!awarded && allResponded && invites.length > 0 && (
         <div className="border-b border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-6 py-2 text-xs text-emerald-800 dark:text-emerald-300">
           ✅ All hotels have responded — select a winner below or open the <Link to={`/trips/${id}/grid`} className="font-semibold underline">full comparison grid</Link>.
+        </div>
+      )}
+
+      {/* ── Scenario collapse banner ── */}
+      {trip.date_scenarios?.length > 0 && !isViewer && (
+        <div className="border-b border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-900/20 px-6 py-2 flex items-center justify-between gap-4">
+          <p className="text-xs text-violet-800 dark:text-violet-300">
+            <strong>Dates TBD</strong> — {trip.date_scenarios.length} scenario{trip.date_scenarios.length !== 1 ? 's' : ''} pending confirmation
+            {' ('}
+            {trip.date_scenarios.map((s) => `${s.label}: ${formatDate(s.arrival_date)} – ${formatDate(s.departure_date)}`).join(', ')}
+            {')'}
+          </p>
+          <button
+            onClick={() => setConfirmingScenario(true)}
+            className="shrink-0 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 transition-colors"
+          >
+            Confirm dates
+          </button>
         </div>
       )}
 
@@ -1774,6 +1808,51 @@ export default function TripDetail() {
           </div>
         )
       })()}
+
+      {/* ── Scenario confirmation modal ── */}
+      {confirmingScenario && trip.date_scenarios?.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-800 shadow-2xl p-6">
+            <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1">Confirm date scenario</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+              Select the scenario that was confirmed. The trip's dates will be updated and the other scenarios dismissed.
+            </p>
+            <div className="space-y-2 mb-5">
+              {trip.date_scenarios.map((s) => (
+                <button
+                  key={s.label}
+                  onClick={() => confirmScenario(s)}
+                  disabled={confirmingScenarioSaving}
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-left hover:border-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 disabled:opacity-50 transition-colors group"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-800 dark:text-slate-100 group-hover:text-violet-700 dark:group-hover:text-violet-300">
+                      Scenario {s.label}
+                    </span>
+                    <span className="text-xs text-slate-400 dark:text-slate-500 group-hover:text-violet-600">Select →</span>
+                  </div>
+                  <div className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+                    {formatDate(s.arrival_date)} – {formatDate(s.departure_date)}
+                    {s.game_date && ` · Game: ${formatDate(s.game_date)}`}
+                  </div>
+                  {s.notes && (
+                    <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 italic">{s.notes}</p>
+                  )}
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setConfirmingScenario(false)}
+                disabled={confirmingScenarioSaving}
+                className="rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-2 text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
+              >
+                {confirmingScenarioSaving ? 'Saving…' : 'Cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Version history modal ── */}
       {viewingVersion && (
