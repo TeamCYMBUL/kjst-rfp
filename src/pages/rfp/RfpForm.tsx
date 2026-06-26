@@ -991,15 +991,24 @@ export default function RfpForm() {
       }
     }
 
-    // Warn about unanswered Yes/No items
-    const unanswered = data?.items.filter(
+    // Hard block: every question must be answered before submitting
+    const unansweredYesNo = (data?.items ?? []).filter(
       (item) => item.answer_type === 'yes_no' && answers[item.id]?.answer_yes_no === null,
     )
-    if (unanswered && unanswered.length > 0) {
-      const ok = window.confirm(
-        `${unanswered.length} question${unanswered.length > 1 ? 's' : ''} still need${unanswered.length === 1 ? 's' : ''} a Yes/No answer. Submit anyway?`,
+    const unansweredValue = (data?.items ?? []).filter(
+      (item) => item.answer_type !== 'yes_no' && !answers[item.id]?.answer_value?.trim(),
+    )
+    const allMissing = [...unansweredYesNo, ...unansweredValue]
+    if (allMissing.length > 0) {
+      const preview = allMissing
+        .slice(0, 4)
+        .map((i) => `• ${i.label.replace(/\[.*?\]/g, '…').slice(0, 70).trim()}`)
+      const extra = allMissing.length > 4 ? `\n…and ${allMissing.length - 4} more` : ''
+      setValidationError(
+        `Please answer all questions before submitting — ${allMissing.length} item${allMissing.length > 1 ? 's' : ''} still need${allMissing.length === 1 ? 's' : ''} a response:\n${preview.join('\n')}${extra}`,
       )
-      if (!ok) return
+      document.getElementById('rfp-validation-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
     }
 
     setSubmitting(true)
@@ -1514,7 +1523,7 @@ export default function RfpForm() {
 
           {/* ── Validation error + Submit ─── */}
           {validationError && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div id="rfp-validation-error" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 whitespace-pre-line">
               {validationError}
             </div>
           )}
