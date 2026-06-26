@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import * as XLSX from 'xlsx'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import mammoth from 'mammoth'
 import { parseCalendarSchedulePdf } from '../../lib/parseCalendarPdf'
 import { supabase } from '../../lib/supabase'
 import { useRole } from '../../lib/useRole'
@@ -12,6 +13,7 @@ type Props = {
   isOpen: boolean
   onClose: () => void
   onImported: (count: number) => void
+  defaultClientId?: string
 }
 
 type RawRow = Record<string, string>
@@ -118,14 +120,14 @@ function parseDate(val: string | number | null | undefined, fallbackYear?: numbe
   return null
 }
 
-export default function ScheduleImportModal({ isOpen, onClose, onImported }: Props) {
+export default function ScheduleImportModal({ isOpen, onClose, onImported, defaultClientId }: Props) {
   const { role, assignedClientIds, canEditClient } = useRole()
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
   const [headers, setHeaders] = useState<string[]>([])
   const [rows, setRows] = useState<RawRow[]>([])
   const [mapping, setMapping] = useState<Record<string, string>>({})
   const [clients, setClients] = useState<{ id: string; team_name: string }[]>([])
-  const [clientId, setClientId] = useState('')
+  const [clientId, setClientId] = useState(defaultClientId ?? '')
   const [importing, setImporting] = useState(false)
   const [parsing, setParsing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -133,20 +135,20 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
   const [skippedMapping, setSkippedMapping] = useState(false)
 
   useEffect(() => {
-    if (!isOpen || role === null) return
+    if (!isOpen || role === null || defaultClientId) return
     supabase.from('clients').select('id, team_name').order('team_name')
       .then(({ data }) => {
         const all = (data as any[]) ?? []
         setClients(role === 'admin' ? all : all.filter((c: any) => assignedClientIds.has(c.id)))
       })
-  }, [isOpen, role, assignedClientIds])
+  }, [isOpen, role, assignedClientIds, defaultClientId])
 
   // Reset on open
   useEffect(() => {
     if (isOpen) {
-      setStep(1); setHeaders([]); setRows([]); setMapping({}); setClientId(''); setError(null); setSkippedMapping(false)
+      setStep(1); setHeaders([]); setRows([]); setMapping({}); setClientId(defaultClientId ?? ''); setError(null); setSkippedMapping(false)
     }
-  }, [isOpen])
+  }, [isOpen, defaultClientId])
 
   if (!isOpen) return null
 
@@ -190,7 +192,6 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
       reader.onload = async (e) => {
         try {
           const buf = e.target!.result as ArrayBuffer
-          // Try calendar format first (sports schedule wall-calendar PDFs)
           const cal = await parseCalendarSchedulePdf(buf)
           if (cal.isCalendar) {
             if (cal.rows.length <= 1) {
@@ -200,7 +201,6 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
             }
             processRows(cal.rows)
           } else {
-            // Fall back to generic table extraction
             const raw = await parsePdfToRows(buf)
             processRows(raw)
           }
@@ -214,8 +214,40 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
       return
     }
 
+    if (ext === 'docx' || ext === 'doc') {
+      setParsing(true)
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        try {
+          const buf = e.target!.result as ArrayBuffer
+          const result = await mammoth.convertToHtml({ arrayBuffer: buf })
+          const html = result.value
+          // Parse HTML tables → rows[][]
+          const parser = new DOMParser()
+          const doc = parser.parseFromString(html, 'text/html')
+          const tables = doc.querySelectorAll('table')
+          if (tables.length > 0) {
+            const tableRows = Array.from(tables[0].querySelectorAll('tr')).map((tr) =>
+              Array.from(tr.querySelectorAll('td, th')).map((cell) => cell.textContent?.trim() ?? '')
+            )
+            processRows(tableRows)
+          } else {
+            // No table — fall back to line-by-line text
+            const lines = doc.body.textContent?.split('\n').map((l) => [l.trim()]).filter((r) => r[0]) ?? []
+            processRows(lines)
+          }
+        } catch (err: any) {
+          setError('Could not read Word document: ' + err.message)
+        } finally {
+          setParsing(false)
+        }
+      }
+      reader.readAsArrayBuffer(file)
+      return
+    }
+
     const reader = new FileReader()
-    const isCsv = ext === 'csv'
+    const isCsv = ext === 'csv' || ext === 'txt'
     reader.onload = (e) => {
       try {
         let wb: XLSX.WorkBook
@@ -320,7 +352,7 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 shrink-0">
           <div>
             <h2 className="text-base font-semibold text-slate-800">Import from Schedule</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Upload a CSV, Excel, or PDF file to create multiple draft trips at once.</p>
+            <p className="text-xs text-slate-400 mt-0.5">Upload a schedule file — Excel, PDF, Word, or CSV — to create draft trips at once.</p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
         </div>
@@ -348,19 +380,21 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
           {/* Step 1: Upload + client select */}
           {step === 1 && (
             <div className="space-y-4">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600">Team *</label>
-                <select
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#1C1008] focus:outline-none"
-                  value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
-                >
-                  <option value="">Choose a team…</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>{c.team_name}</option>
-                  ))}
-                </select>
-              </div>
+              {!defaultClientId && (
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Team *</label>
+                  <select
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#1C1008] focus:outline-none"
+                    value={clientId}
+                    onChange={(e) => setClientId(e.target.value)}
+                  >
+                    <option value="">Choose a team…</option>
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>{c.team_name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
                 onDragLeave={() => setDragOver(false)}
@@ -371,20 +405,20 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
                 {parsing ? (
                   <>
                     <div className="text-3xl mb-3 animate-spin">⏳</div>
-                    <p className="text-sm font-medium text-slate-700">Reading PDF…</p>
+                    <p className="text-sm font-medium text-slate-700">Reading file…</p>
                     <p className="mt-1 text-xs text-slate-400">Extracting schedule data</p>
                   </>
                 ) : (
                   <>
                     <div className="text-3xl mb-3">📁</div>
                     <p className="text-sm font-medium text-slate-700">Drop a file here, or click to browse</p>
-                    <p className="mt-1 text-xs text-slate-400">Accepts .csv, .xlsx, .xls, .pdf</p>
+                    <p className="mt-1 text-xs text-slate-400">Excel, PDF, Word, CSV — any format</p>
                   </>
                 )}
                 <input
                   id="schedule-file-input"
                   type="file"
-                  accept=".csv,.xlsx,.xls,.pdf"
+                  accept=".csv,.xlsx,.xls,.pdf,.doc,.docx,.txt"
                   className="hidden"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
                 />

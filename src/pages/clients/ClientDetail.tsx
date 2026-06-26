@@ -17,6 +17,7 @@ import {
   TextField,
 } from '../../components/ui'
 import { useRole } from '../../lib/useRole'
+import ScheduleImportModal from '../trips/ScheduleImport'
 
 type ClientConcessionItem = {
   id: string
@@ -101,6 +102,19 @@ export default function ClientDetail() {
   const [savingItem, setSavingItem] = useState(false)
   const [itemError, setItemError] = useState<string | null>(null)
   const [exportingAllCities, setExportingAllCities] = useState(false)
+  const [showImport, setShowImport] = useState(false)
+
+  const loadTrips = () => {
+    supabase
+      .from('trips')
+      .select('id, opponent_label, city, arrival_date, departure_date, game_date, status')
+      .eq('client_id', id)
+      .order('arrival_date', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) setError(error.message)
+        else setTrips(data as TripRow[])
+      })
+  }
 
   useEffect(() => {
     supabase
@@ -113,15 +127,7 @@ export default function ClientDetail() {
         else setClient(data as Client)
       })
 
-    supabase
-      .from('trips')
-      .select('id, opponent_label, city, arrival_date, departure_date, game_date, status')
-      .eq('client_id', id)
-      .order('arrival_date', { ascending: false })
-      .then(({ data, error }) => {
-        if (error) setError(error.message)
-        else setTrips(data as TripRow[])
-      })
+    loadTrips()
 
     supabase
       .from('client_concession_items')
@@ -316,6 +322,11 @@ export default function ClientDetail() {
             >
               {exportingAllCities ? 'Exporting…' : '↓ Export All Cities'}
             </Button>
+            {canEditClient(id!) && (
+              <Button variant="secondary" onClick={() => setShowImport(true)}>
+                ↑ Import schedule
+              </Button>
+            )}
             {canEditClient(id!) && (
               <LinkButton to={`/trips/new?client=${id}`}>New Trip</LinkButton>
             )}
@@ -635,6 +646,16 @@ export default function ClientDetail() {
           </Card>
         </div>
       </div>
+
+      <ScheduleImportModal
+        isOpen={showImport}
+        onClose={() => setShowImport(false)}
+        defaultClientId={id}
+        onImported={() => {
+          setShowImport(false)
+          loadTrips()
+        }}
+      />
     </div>
   )
 }
