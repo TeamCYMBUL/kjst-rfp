@@ -4,6 +4,26 @@ import { useAuth } from '../../auth/AuthContext'
 import { useProfile } from '../../hooks/useProfile'
 import { ErrorNote, Loading } from '../../components/ui'
 
+const FN_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
+
+async function callInviteStaff(body: {
+  email: string
+  display_name: string
+  role: 'admin' | 'manager'
+  client_ids?: string[]
+}): Promise<{ ok: true } | { error: string }> {
+  const { data: { session } } = await supabase.auth.getSession()
+  const res = await fetch(`${FN_BASE}/invite-staff`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session?.access_token ?? ''}`,
+    },
+    body: JSON.stringify(body),
+  })
+  return res.json()
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type StaffMember = {
@@ -50,6 +70,13 @@ function RoleBadge({ role }: { role: 'admin' | 'manager' }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
+type InviteForm = {
+  email: string
+  display_name: string
+  role: 'admin' | 'manager'
+  client_ids: string[]
+}
+
 export default function TeamPage() {
   const { user } = useAuth()
   const { isAdmin, loading: profileLoading } = useProfile()
@@ -61,6 +88,13 @@ export default function TeamPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  // Invite modal
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [inviteForm, setInviteForm] = useState<InviteForm>({ email: '', display_name: '', role: 'manager', client_ids: [] })
+  const [inviting, setInviting] = useState(false)
+  const [inviteError, setInviteError] = useState<string | null>(null)
+  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null)
 
   const load = async () => {
     const [staffRes, clientsRes, assignRes] = await Promise.all([
@@ -120,6 +154,27 @@ export default function TeamPage() {
     setSaving(false)
   }
 
+  const submitInvite = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setInviting(true)
+    setInviteError(null)
+    const result = await callInviteStaff({
+      email: inviteForm.email.trim(),
+      display_name: inviteForm.display_name.trim(),
+      role: inviteForm.role,
+      client_ids: inviteForm.role === 'manager' ? inviteForm.client_ids : [],
+    })
+    setInviting(false)
+    if ('error' in result) {
+      setInviteError(result.error)
+    } else {
+      setInviteSuccess(`Invite sent to ${inviteForm.email}. They'll receive a link to set their password.`)
+      setInviteForm({ email: '', display_name: '', role: 'manager', client_ids: [] })
+      // Reload staff list to show the new member
+      load()
+    }
+  }
+
   if (profileLoading || loading) return <Loading />
   if (!isAdmin) {
     return (
@@ -152,18 +207,12 @@ export default function TeamPage() {
           </p>
         </div>
 
-        {/* Invite placeholder — not active yet */}
-        <div className="group relative">
-          <button
-            disabled
-            className="cursor-not-allowed rounded-lg border border-dashed border-slate-300 px-4 py-2 text-sm font-medium text-slate-400 dark:border-slate-600 dark:text-slate-500"
-          >
-            + Invite staff member
-          </button>
-          <div className="pointer-events-none absolute right-0 top-full mt-1.5 hidden w-56 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow-md group-hover:block dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400">
-            Staff invitations will be enabled when you're ready to onboard the KJST team.
-          </div>
-        </div>
+        <button
+          onClick={() => { setInviteOpen(true); setInviteError(null); setInviteSuccess(null) }}
+          className="rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-medium text-white hover:bg-[#2d1e0e] transition-colors"
+        >
+          + Invite staff member
+        </button>
       </div>
 
       {staff.length === 0 ? (
@@ -396,9 +445,124 @@ export default function TeamPage() {
           <li>· <strong>Admins</strong> see all clients, trips, and data across the platform.</li>
           <li>· <strong>Managers</strong> only see the clients you assign to them — nothing else is visible, even if they know a URL.</li>
           <li>· Assignments take effect instantly and are enforced at the database level.</li>
-          <li>· When you're ready to invite KJST staff, use the Invite button above.</li>
+          <li>· New staff receive an email invite with a link to set their password.</li>
         </ul>
       </div>
+
+      {/* ── Invite modal ── */}
+      {inviteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-xl dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-6 py-4">
+              <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">Invite staff member</h2>
+              <button onClick={() => setInviteOpen(false)} className="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
+            </div>
+
+            {inviteSuccess ? (
+              <div className="px-6 py-8 text-center">
+                <div className="text-4xl mb-3">✅</div>
+                <p className="text-sm text-slate-700 dark:text-slate-200">{inviteSuccess}</p>
+                <button
+                  onClick={() => { setInviteOpen(false); setInviteSuccess(null) }}
+                  className="mt-5 rounded-lg bg-[#1C1008] px-5 py-2 text-sm font-semibold text-white hover:bg-[#2d1e0e]"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={submitInvite} className="px-6 py-5 space-y-4">
+                {inviteError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">{inviteError}</div>
+                )}
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-400">Full name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Tammy Lopez"
+                    value={inviteForm.display_name}
+                    onChange={(e) => setInviteForm((f) => ({ ...f, display_name: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:border-[#1C1008] focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-400">Work email *</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="e.g. tammy@kjsportstravel.com"
+                    value={inviteForm.email}
+                    onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus:border-[#1C1008] focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-400">Role *</label>
+                  <div className="flex gap-3">
+                    {(['manager', 'admin'] as const).map((r) => (
+                      <label key={r} className={`flex flex-1 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${inviteForm.role === r ? 'border-[#1C1008] bg-[#1C1008]/5 text-[#1C1008] dark:border-amber-400 dark:text-amber-300' : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400'}`}>
+                        <input type="radio" className="sr-only" checked={inviteForm.role === r} onChange={() => setInviteForm((f) => ({ ...f, role: r, client_ids: [] }))} />
+                        <span>{r === 'admin' ? '⭐ Admin' : 'Manager'}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {inviteForm.role === 'admin' && (
+                    <p className="mt-1.5 text-xs text-amber-600">Admins have full access to all clients and data.</p>
+                  )}
+                </div>
+
+                {inviteForm.role === 'manager' && clients.length > 0 && (
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-400">Assign clients (optional — can be set later)</label>
+                    <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700">
+                      {clients.map((c) => {
+                        const checked = inviteForm.client_ids.includes(c.id)
+                        return (
+                          <label key={c.id} className={`flex cursor-pointer items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-800 ${checked ? 'text-[#1C1008] dark:text-amber-300 font-medium' : 'text-slate-700 dark:text-slate-300'}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => setInviteForm((f) => ({
+                                ...f,
+                                client_ids: e.target.checked
+                                  ? [...f.client_ids, c.id]
+                                  : f.client_ids.filter((id) => id !== c.id),
+                              }))}
+                              className="h-4 w-4 rounded border-slate-300 accent-[#1C1008]"
+                            />
+                            {c.team_name}
+                            {c.league && <span className="ml-1 text-xs text-slate-400">{c.league}</span>}
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="submit"
+                    disabled={inviting}
+                    className="flex-1 rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2d1e0e] disabled:opacity-50"
+                  >
+                    {inviting ? 'Sending invite…' : 'Send invite'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInviteOpen(false)}
+                    className="rounded-lg border border-slate-200 dark:border-slate-600 px-4 py-2 text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
