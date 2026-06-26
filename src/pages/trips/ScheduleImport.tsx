@@ -35,14 +35,24 @@ const FIELDS: MappedField[] = [
 
 function autoDetect(header: string): string | null {
   const h = header.toLowerCase()
-  if (h.includes('opponent')) return 'opponent'
+  // 'city' before 'opponent' — catches "OPPONENT (City)" headers where values are city names
   if (h.includes('city')) return 'city'
+  if (h.includes('opponent') || h.includes('team')) return 'opponent'
   if (h.includes('game')) return 'game_date'
-  if (h.includes('arrival') || h.includes('check-in')) return 'arrival_date'
-  if (h.includes('departure') || h.includes('checkout')) return 'departure_date'
-  if (h.includes('king') || h.includes('rooms')) return 'king_rooms'
+  if (h.includes('arrival') || h.includes('check-in') || h.includes('chk-in')) return 'arrival_date'
+  if (h.includes('departure') || h.includes('check-out') || h.includes('chk-out') || h.includes('checkout')) return 'departure_date'
+  if (h.includes('king') || (h.includes('room') && !h.includes('suite'))) return 'king_rooms'
   if (h.includes('suite')) return 'suites'
   return null
+}
+
+// Parse city value like "LOS ANGELES (DODGERS)" → { city: "Los Angeles", opponentLabel: "@ Los Angeles Dodgers" }
+function parseCityValue(raw: string): { city: string; opponentLabel: string } {
+  const m = raw.trim().match(/^([^(]+?)(?:\s*\(([^)]+)\))?$/)
+  const toTitle = (s: string) => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
+  const city = toTitle((m?.[1] ?? raw).trim())
+  const qualifier = m?.[2]?.trim() ?? ''
+  return { city, opponentLabel: qualifier ? `@ ${city} ${toTitle(qualifier)}` : `@ ${city}` }
 }
 
 async function parsePdfToRows(buffer: ArrayBuffer): Promise<string[][]> {
@@ -81,9 +91,12 @@ async function parsePdfToRows(buffer: ArrayBuffer): Promise<string[][]> {
   return allRows
 }
 
-function parseDate(val: string | number | null | undefined): string | null {
+function parseDate(val: string | number | null | undefined, fallbackYear?: number): string | null {
   if (val == null || val === '') return null
-  const s = String(val).trim()
+  const raw = String(val).trim()
+  if (raw.toLowerCase() === 'n/a') return null
+  // If comma-separated list (e.g. "3/25, 3/27, 3/28"), take the first date
+  const s = raw.includes(',') ? raw.split(',')[0].trim() : raw
   // Excel serial number
   if (/^\d+$/.test(s) && Number(s) > 40000) {
     return new Date(Math.round((Number(s) - 25569) * 86400 * 1000)).toISOString().slice(0, 10)
@@ -95,6 +108,12 @@ function parseDate(val: string | number | null | undefined): string | null {
   if (mdyMatch) {
     const [, m, d, y] = mdyMatch
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+  }
+  // M/D without year — infer from fallbackYear (e.g. arrival date's year)
+  const mdMatch = s.match(/^(\d{1,2})\/(\d{1,2})$/)
+  if (mdMatch && fallbackYear) {
+    const [, m, d] = mdMatch
+    return `${fallbackYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
   }
   return null
 }
@@ -133,8 +152,11 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
 
   const processRows = (raw: string[][]) => {
     if (raw.length < 2) { setError('File is empty or has no data rows.'); return }
-    const hdrs = raw[0].map((h) => String(h ?? ''))
-    const dataRows: RawRow[] = raw.slice(1)
+    // Skip leading title rows — if row 0 has fewer than 3 non-empty cells it's a title/header banner
+    const startIdx = raw[0].filter((c) => c != null && String(c).trim() !== '').length < 3 ? 1 : 0
+    if (raw.length <= startIdx + 1) { setError('File has no data rows.'); return }
+    const hdrs = raw[startIdx].map((h) => String(h ?? '').trim())
+    const dataRows: RawRow[] = raw.slice(startIdx + 1)
       .filter((r) => r.some((c) => c != null && c !== ''))
       .map((r) => {
         const obj: RawRow = {}
@@ -151,7 +173,8 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
     setMapping(detected)
     const hasOpponent = Object.values(detected).includes('opponent')
     const hasCity = Object.values(detected).includes('city')
-    const skip = hasOpponent && hasCity
+    // Skip mapping if we have city (opponent auto-generated from city if not separately mapped)
+    const skip = hasCity || (hasOpponent && hasCity)
     setSkippedMapping(skip)
     setStep(skip ? 3 : 2)
   }
@@ -228,10 +251,22 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
     return csvCol ? (row[csvCol] ?? '') : ''
   }
 
-  const validRows = rows.filter((r) => {
+  // Effective opponent: use mapped column, or auto-generate "@ City" from city column
+  const getEffectiveOpponent = (r: RawRow): string => {
     const opp = getVal(r, 'opponent').trim()
+    if (opp) return opp
+    const rawCity = getVal(r, 'city').trim()
+    return rawCity ? parseCityValue(rawCity).opponentLabel : ''
+  }
+
+  const validRows = rows.filter((r) => {
     const city = getVal(r, 'city').trim()
-    return opp !== '' && city !== ''
+    const opp = getVal(r, 'opponent').trim()
+    if (!city && !opp) return false
+    // Skip rows with N/A arrival (e.g. "no hotel needed" notes like Yankees series)
+    const arrival = getVal(r, 'arrival_date').trim()
+    if (arrival.toLowerCase() === 'n/a') return false
+    return true
   })
 
   const doImport = async () => {
@@ -239,13 +274,19 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
     if (!canEditClient(clientId)) { setError("You don't have permission to create trips for this team."); return }
     setImporting(true); setError(null)
     const inserts = validRows.map((r) => {
+      const rawCity = getVal(r, 'city').trim()
+      const { city, opponentLabel } = rawCity ? parseCityValue(rawCity) : { city: '', opponentLabel: '' }
+      const rawOpp = getVal(r, 'opponent').trim()
+      // Use arrival year as fallback for short game dates like "3/25"
+      const arrivalDate = parseDate(getVal(r, 'arrival_date'))
+      const fallbackYear = arrivalDate ? parseInt(arrivalDate.slice(0, 4)) : undefined
       const rec: any = {
         client_id: clientId,
         status: 'draft',
-        opponent_label: getVal(r, 'opponent').trim() || null,
-        city: getVal(r, 'city').trim() || null,
-        game_date: parseDate(getVal(r, 'game_date')),
-        arrival_date: parseDate(getVal(r, 'arrival_date')),
+        opponent_label: rawOpp || opponentLabel || null,
+        city: city || rawOpp || null,
+        game_date: parseDate(getVal(r, 'game_date'), fallbackYear),
+        arrival_date: arrivalDate,
         departure_date: parseDate(getVal(r, 'departure_date')),
         king_rooms_requested: getVal(r, 'king_rooms').trim() ? Number(getVal(r, 'king_rooms').trim()) : null,
         suites_requested: getVal(r, 'suites').trim() ? Number(getVal(r, 'suites').trim()) : null,
@@ -411,9 +452,10 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {rows.map((r, i) => {
-                        const opp = getVal(r, 'opponent').trim()
-                        const city = getVal(r, 'city').trim()
-                        const isSkipped = !opp || !city
+                        const opp = getEffectiveOpponent(r)
+                        const city = getVal(r, 'city').trim() || getVal(r, 'opponent').trim()
+                        const arrival = getVal(r, 'arrival_date').trim()
+                        const isSkipped = !opp || arrival.toLowerCase() === 'n/a'
                         return (
                           <tr key={i} className={isSkipped ? 'bg-red-50' : ''}>
                             <td className={`px-3 py-2 ${isSkipped ? 'text-red-500 italic' : 'text-slate-800'}`}>
