@@ -14,6 +14,7 @@ type Props = {
   onClose: () => void
   onImported: (count: number) => void
   defaultClientId?: string
+  inline?: boolean
 }
 
 type RawRow = Record<string, string>
@@ -122,7 +123,7 @@ function parseDate(val: string | number | null | undefined, fallbackYear?: numbe
   return null
 }
 
-export default function ScheduleImportModal({ isOpen, onClose, onImported, defaultClientId }: Props) {
+export default function ScheduleImportModal({ isOpen, onClose, onImported, defaultClientId, inline }: Props) {
   const { role, assignedClientIds, canEditClient } = useRole()
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
   const [headers, setHeaders] = useState<string[]>([])
@@ -347,13 +348,12 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
     onImported(inserts.length)
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl flex flex-col max-h-[90vh]">
+  const inner = (
+    <>
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 shrink-0">
+        <div className={`flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-6 py-4 shrink-0 ${inline ? 'hidden' : ''}`}>
           <div>
-            <h2 className="text-base font-semibold text-slate-800">Import from Schedule</h2>
+            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">Import from Schedule</h2>
             <p className="text-xs text-slate-400 mt-0.5">Upload a schedule file — Excel, PDF, Word, or CSV — to create draft trips at once.</p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
@@ -545,14 +545,25 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
           {step === 4 && (
             <div className="text-center py-8">
               <div className="text-4xl mb-3">✅</div>
-              <h3 className="text-base font-semibold text-slate-800">Import complete!</h3>
+              <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">Import complete!</h3>
               <p className="mt-1 text-sm text-slate-500">{validRows.length} draft trip{validRows.length !== 1 ? 's' : ''} created successfully.</p>
               <button onClick={onClose} className="mt-4 rounded-lg bg-[#1C1008] px-5 py-2 text-sm font-semibold text-white hover:bg-[#2d1e0e]">
-                Done
+                {inline ? 'View Trips' : 'Done'}
               </button>
             </div>
           )}
         </div>
+    </>
+  )
+
+  if (inline) {
+    return <div className="flex flex-col">{inner}</div>
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl flex flex-col max-h-[90vh]">
+        {inner}
       </div>
     </div>
   )

@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { formatDate } from '../../lib/format'
 import { Badge, Card, EmptyState, ErrorNote, LinkButton, Loading, PageHeader } from '../../components/ui'
-import ScheduleImportModal from './ScheduleImport'
 import { useRole } from '../../lib/useRole'
 
 type Row = {
@@ -24,9 +23,6 @@ export default function TripsList() {
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
-  const [showImport, setShowImport] = useState(false)
-  const [importBanner, setImportBanner] = useState<string | null>(null)
-
   const load = () => {
     supabase
       .from('trips')
@@ -64,35 +60,8 @@ export default function TripsList() {
         title="Trips"
         subtitle="Road trips an RFP is being run for."
         action={
-          !isViewer ? (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowImport(true)}
-                className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
-              >
-                ↑ Import Schedule
-              </button>
-              <LinkButton to="/trips/new">Add Trip</LinkButton>
-            </div>
-          ) : undefined
+          !isViewer ? <LinkButton to="/trips/new">Add Trip</LinkButton> : undefined
         }
-      />
-
-      {importBanner && (
-        <div className="mb-4 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-300">
-          ✅ {importBanner}
-        </div>
-      )}
-
-      <ScheduleImportModal
-        isOpen={showImport}
-        onClose={() => setShowImport(false)}
-        onImported={(count) => {
-          setShowImport(false)
-          load()
-          setImportBanner(`${count} trip${count !== 1 ? 's' : ''} created as drafts`)
-          setTimeout(() => setImportBanner(null), 3000)
-        }}
       />
 
       {rows.length === 0 ? (

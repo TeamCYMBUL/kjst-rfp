@@ -102,7 +102,7 @@ export default function ClientDetail() {
   const [savingItem, setSavingItem] = useState(false)
   const [itemError, setItemError] = useState<string | null>(null)
   const [exportingAllCities, setExportingAllCities] = useState(false)
-  const [showImport, setShowImport] = useState(false)
+  const [activeTab, setActiveTab] = useState<'trips' | 'import' | 'details'>('trips')
 
   const loadTrips = () => {
     supabase
@@ -323,17 +323,31 @@ export default function ClientDetail() {
               {exportingAllCities ? 'Exporting…' : '↓ Export All Cities'}
             </Button>
             {canEditClient(id!) && (
-              <Button variant="secondary" onClick={() => setShowImport(true)}>
-                ↑ Import schedule
-              </Button>
-            )}
-            {canEditClient(id!) && (
               <LinkButton to={`/trips/new?client=${id}`}>New Trip</LinkButton>
             )}
           </div>
         }
       />
 
+      {/* Tab strip */}
+      <div className="flex border-b border-slate-200 dark:border-slate-700 mb-6 -mt-2">
+        {(['trips', 'import', 'details'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === tab
+                ? 'border-[#1C1008] text-[#1C1008] dark:border-slate-100 dark:text-slate-100'
+                : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+            }`}
+          >
+            {tab === 'trips' ? 'Trips' : tab === 'import' ? 'Import Schedule' : 'Details'}
+          </button>
+        ))}
+      </div>
+
+      {/* Trips tab */}
+      {activeTab === 'trips' && (
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card className="p-6">
@@ -483,6 +497,10 @@ export default function ClientDetail() {
             </Card>
           )}
 
+        </div>
+
+        {/* Right sidebar — season defaults */}
+        <div className="space-y-6">
           <Card className="p-6">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Season defaults
@@ -505,157 +523,175 @@ export default function ClientDetail() {
               <Field label="Postseason rooms" value={t.postseason_rooms_text} />
             </dl>
           </Card>
-          {/* Custom Concession Items */}
-          <Card className="p-6">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                  Custom Concession Items
-                </h2>
-                <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
-                  Items added here appear at the end of every RFP sent for this client.
-                </p>
-              </div>
-              {!addingItem && (
-                <button
-                  onClick={() => setAddingItem(true)}
-                  className="rounded-lg border border-dashed border-slate-300 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:border-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
-                >
-                  + Add item
-                </button>
-              )}
-            </div>
-
-            {customItems === null ? (
-              <Loading />
-            ) : customItems.length === 0 && !addingItem ? (
-              <p className="text-sm text-slate-400 dark:text-slate-500 italic">No custom items yet.</p>
-            ) : (
-              <div className="space-y-2 mb-4">
-                {customItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-start justify-between gap-3 rounded-lg bg-slate-50 dark:bg-slate-700/50 px-4 py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{item.label}</p>
-                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                        {SECTION_OPTIONS.find((s) => s.value === item.section)?.label ?? item.section}
-                        {' · '}
-                        {ANSWER_TYPE_OPTIONS.find((a) => a.value === item.answer_type)?.label ?? item.answer_type}
-                        {item.requested_value ? ` · Requested: ${item.requested_value}` : ''}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => deleteCustomItem(item.id)}
-                      className="shrink-0 text-xs text-slate-400 hover:text-red-500 transition-colors"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {addingItem && (
-              <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Section</label>
-                    <select
-                      className={selectCls}
-                      value={newItem.section}
-                      onChange={(e) => setNewItem((n) => ({ ...n, section: e.target.value }))}
-                    >
-                      {SECTION_OPTIONS.map((s) => (
-                        <option key={s.value} value={s.value}>{s.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Answer type</label>
-                    <select
-                      className={selectCls}
-                      value={newItem.answer_type}
-                      onChange={(e) => setNewItem((n) => ({ ...n, answer_type: e.target.value }))}
-                    >
-                      {ANSWER_TYPE_OPTIONS.map((a) => (
-                        <option key={a.value} value={a.value}>{a.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <TextField
-                  label="Label (concession item text)"
-                  placeholder="e.g. Complimentary Wi-Fi in all guest rooms"
-                  value={newItem.label}
-                  onChange={(e) => setNewItem((n) => ({ ...n, label: e.target.value }))}
-                />
-                <TextField
-                  label="Requested value (optional)"
-                  placeholder="e.g. Yes or 10%"
-                  value={newItem.requested_value}
-                  onChange={(e) => setNewItem((n) => ({ ...n, requested_value: e.target.value }))}
-                />
-                <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300 accent-[#1C1008]"
-                    checked={newItem.allow_comment}
-                    onChange={(e) => setNewItem((n) => ({ ...n, allow_comment: e.target.checked }))}
-                  />
-                  Allow hotel to add a comment or counteroffer
-                </label>
-                {itemError && <p className="text-xs text-red-500">{itemError}</p>}
-                <div className="flex gap-2 pt-1">
-                  <Button onClick={saveCustomItem} disabled={savingItem}>
-                    {savingItem ? 'Saving…' : 'Save item'}
-                  </Button>
-                  <Button variant="secondary" onClick={() => { setAddingItem(false); setItemError(null) }}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-          </Card>
-        </div>
-
-        <div className="space-y-6">
-          <Card className="p-6">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Details
-            </h2>
-            <dl className="space-y-4">
-              <Field label="Legal entity" value={client.legal_entity} />
-              <Field label="Agreement status" value={t.agreement_status} />
-              <Field label="Contact" value={client.primary_contact_name} />
-              <Field label="Title" value={client.primary_contact_title} />
-              <Field label="Email" value={client.primary_contact_email} />
-              <Field label="Phone" value={client.primary_contact_phone} />
-              <Field label="Address" value={client.primary_contact_address} />
-            </dl>
-          </Card>
-
-          <Card className="p-6">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Danger zone
-            </h2>
-            <Button variant="danger" onClick={remove} disabled={deleting}>
-              {deleting ? 'Deleting…' : 'Delete client'}
-            </Button>
-          </Card>
         </div>
       </div>
+      )}
 
-      <ScheduleImportModal
-        isOpen={showImport}
-        onClose={() => setShowImport(false)}
-        defaultClientId={id}
-        onImported={() => {
-          setShowImport(false)
-          loadTrips()
-        }}
-      />
+      {/* Import Schedule tab */}
+      {activeTab === 'import' && canEditClient(id!) && (
+        <div className="max-w-2xl">
+          <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+            Upload a schedule file — Excel, PDF, Word, or CSV — to create draft trips at once.
+          </p>
+          <ScheduleImportModal
+            inline
+            isOpen={activeTab === 'import'}
+            onClose={() => setActiveTab('trips')}
+            defaultClientId={id}
+            onImported={() => {
+              loadTrips()
+              setActiveTab('trips')
+            }}
+          />
+        </div>
+      )}
+
+      {/* Details tab */}
+      {activeTab === 'details' && (
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-2">
+            {/* Custom Concession Items */}
+            <Card className="p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Custom Concession Items
+                  </h2>
+                  <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                    Items added here appear at the end of every RFP sent for this client.
+                  </p>
+                </div>
+                {!addingItem && (
+                  <button
+                    onClick={() => setAddingItem(true)}
+                    className="rounded-lg border border-dashed border-slate-300 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:border-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                  >
+                    + Add item
+                  </button>
+                )}
+              </div>
+
+              {customItems === null ? (
+                <Loading />
+              ) : customItems.length === 0 && !addingItem ? (
+                <p className="text-sm text-slate-400 dark:text-slate-500 italic">No custom items yet.</p>
+              ) : (
+                <div className="space-y-2 mb-4">
+                  {customItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-start justify-between gap-3 rounded-lg bg-slate-50 dark:bg-slate-700/50 px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{item.label}</p>
+                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                          {SECTION_OPTIONS.find((s) => s.value === item.section)?.label ?? item.section}
+                          {' · '}
+                          {ANSWER_TYPE_OPTIONS.find((a) => a.value === item.answer_type)?.label ?? item.answer_type}
+                          {item.requested_value ? ` · Requested: ${item.requested_value}` : ''}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => deleteCustomItem(item.id)}
+                        className="shrink-0 text-xs text-slate-400 hover:text-red-500 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {addingItem && (
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Section</label>
+                      <select
+                        className={selectCls}
+                        value={newItem.section}
+                        onChange={(e) => setNewItem((n) => ({ ...n, section: e.target.value }))}
+                      >
+                        {SECTION_OPTIONS.map((s) => (
+                          <option key={s.value} value={s.value}>{s.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Answer type</label>
+                      <select
+                        className={selectCls}
+                        value={newItem.answer_type}
+                        onChange={(e) => setNewItem((n) => ({ ...n, answer_type: e.target.value }))}
+                      >
+                        {ANSWER_TYPE_OPTIONS.map((a) => (
+                          <option key={a.value} value={a.value}>{a.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <TextField
+                    label="Label"
+                    value={newItem.label}
+                    onChange={(e) => setNewItem((n) => ({ ...n, label: e.target.value }))}
+                    placeholder="e.g. Complimentary breakfast for staff"
+                  />
+                  <TextField
+                    label="Requested value (optional)"
+                    value={newItem.requested_value ?? ''}
+                    onChange={(e) => setNewItem((n) => ({ ...n, requested_value: e.target.value }))}
+                    placeholder="e.g. Yes or 10%"
+                  />
+                  <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-slate-300 accent-[#1C1008]"
+                      checked={newItem.allow_comment}
+                      onChange={(e) => setNewItem((n) => ({ ...n, allow_comment: e.target.checked }))}
+                    />
+                    Allow hotel to add a comment or counteroffer
+                  </label>
+                  {itemError && <p className="text-xs text-red-500">{itemError}</p>}
+                  <div className="flex gap-2 pt-1">
+                    <Button onClick={saveCustomItem} disabled={savingItem}>
+                      {savingItem ? 'Saving…' : 'Save item'}
+                    </Button>
+                    <Button variant="secondary" onClick={() => { setAddingItem(false); setItemError(null) }}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </Card>
+          </div>
+
+          <div className="space-y-6">
+            <Card className="p-6">
+              <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Details
+              </h2>
+              <dl className="space-y-4">
+                <Field label="Legal entity" value={client.legal_entity} />
+                <Field label="Agreement status" value={t.agreement_status} />
+                <Field label="Contact" value={client.primary_contact_name} />
+                <Field label="Title" value={client.primary_contact_title} />
+                <Field label="Email" value={client.primary_contact_email} />
+                <Field label="Phone" value={client.primary_contact_phone} />
+                <Field label="Address" value={client.primary_contact_address} />
+              </dl>
+            </Card>
+
+            <Card className="p-6">
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Danger zone
+              </h2>
+              <Button variant="danger" onClick={remove} disabled={deleting}>
+                {deleting ? 'Deleting…' : 'Delete client'}
+              </Button>
+            </Card>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
