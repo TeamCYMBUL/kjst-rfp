@@ -273,6 +273,17 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
     if (!clientId) { setError('Please select a client.'); return }
     if (!canEditClient(clientId)) { setError("You don't have permission to create trips for this team."); return }
     setImporting(true); setError(null)
+
+    // Fetch client default_terms to fill in room counts when the file has no rooms columns
+    const { data: clientData } = await supabase
+      .from('clients')
+      .select('default_terms')
+      .eq('id', clientId)
+      .single()
+    const defaultTerms = (clientData?.default_terms as any) ?? {}
+    const defaultKings = typeof defaultTerms.king_rooms === 'number' ? defaultTerms.king_rooms : null
+    const defaultSuites = typeof defaultTerms.suites === 'number' ? defaultTerms.suites : null
+
     const inserts = validRows.map((r) => {
       const rawCity = getVal(r, 'city').trim()
       const { city, opponentLabel } = rawCity ? parseCityValue(rawCity) : { city: '', opponentLabel: '' }
@@ -280,6 +291,8 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
       // Use arrival year as fallback for short game dates like "3/25"
       const arrivalDate = parseDate(getVal(r, 'arrival_date'))
       const fallbackYear = arrivalDate ? parseInt(arrivalDate.slice(0, 4)) : undefined
+      const rowKings = getVal(r, 'king_rooms').trim() ? Number(getVal(r, 'king_rooms').trim()) : null
+      const rowSuites = getVal(r, 'suites').trim() ? Number(getVal(r, 'suites').trim()) : null
       const rec: any = {
         client_id: clientId,
         status: 'draft',
@@ -288,8 +301,8 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported }: Pro
         game_date: parseDate(getVal(r, 'game_date'), fallbackYear),
         arrival_date: arrivalDate,
         departure_date: parseDate(getVal(r, 'departure_date')),
-        king_rooms_requested: getVal(r, 'king_rooms').trim() ? Number(getVal(r, 'king_rooms').trim()) : null,
-        suites_requested: getVal(r, 'suites').trim() ? Number(getVal(r, 'suites').trim()) : null,
+        king_rooms_requested: rowKings ?? defaultKings,
+        suites_requested: rowSuites ?? defaultSuites,
       }
       return rec
     })
