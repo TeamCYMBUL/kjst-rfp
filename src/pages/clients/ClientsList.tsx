@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { formatDate } from '../../lib/format'
 import { Badge, ErrorNote, Loading } from '../../components/ui'
 import { useRole } from '../../lib/useRole'
+import ScheduleImportModal from '../trips/ScheduleImport'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -109,9 +110,10 @@ export default function ClientsList() {
   const [search, setSearch] = useState('')
   const [leagueFilter, setLeagueFilter] = useState<string>('all')
   const [error, setError] = useState<string | null>(null)
+  const [showImport, setShowImport] = useState(false)
   const { role, canEditClient } = useRole()
 
-  useEffect(() => {
+  const loadClients = (keepSelected?: string) => {
     supabase
       .from('clients')
       .select(
@@ -124,10 +126,16 @@ export default function ClientsList() {
         } else {
           const rows = (data ?? []).map((r: any) => ({ ...r, profiles: Array.isArray(r.profiles) ? (r.profiles[0] ?? null) : r.profiles })) as Client[]
           setClients(rows)
-          if (rows.length > 0) setSelected(rows[0])
+          if (keepSelected) {
+            setSelected(rows.find((r) => r.id === keepSelected) ?? rows[0] ?? null)
+          } else if (rows.length > 0) {
+            setSelected(rows[0])
+          }
         }
       })
-  }, [])
+  }
+
+  useEffect(() => { loadClients() }, [])
 
   if (error) return <ErrorNote message={error} />
   if (!clients) return <Loading />
@@ -301,9 +309,15 @@ export default function ClientsList() {
                   </div>
                   {canEditClient(selected.id) && (
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowImport(true)}
+                        className="rounded-lg border border-[#1C1008]/20 bg-[#1C1008]/5 px-3 py-1.5 text-xs font-semibold text-[#1C1008] transition-colors hover:bg-[#1C1008]/10"
+                      >
+                        ↑ Import Schedule
+                      </button>
                       <Link
                         to={`/trips/new?client=${selected.id}`}
-                        className="rounded-lg border border-[#1C1008]/20 bg-[#1C1008]/5 px-3 py-1.5 text-xs font-semibold text-[#1C1008] transition-colors hover:bg-[#1C1008]/10"
+                        className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700"
                       >
                         + New trip
                       </Link>
@@ -461,6 +475,18 @@ export default function ClientsList() {
             </div>
           )}
         </div>
+      )}
+
+      {selected && (
+        <ScheduleImportModal
+          isOpen={showImport}
+          onClose={() => setShowImport(false)}
+          defaultClientId={selected.id}
+          onImported={() => {
+            setShowImport(false)
+            loadClients(selected.id)
+          }}
+        />
       )}
     </div>
   )
