@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom'
 import ProtectedRoute from './auth/ProtectedRoute'
 import DashboardLayout from './components/DashboardLayout'
+import ErrorBoundary from './components/ErrorBoundary'
 import Login from './pages/Login'
 import ClientsList from './pages/clients/ClientsList'
 import ClientForm from './pages/clients/ClientForm'
@@ -20,6 +21,7 @@ import GettingStarted from './pages/GettingStarted'
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <Routes>
       {/* Public hotel-facing form — no auth required */}
       <Route path="/rfp/:token" element={<RfpForm />} />
@@ -50,5 +52,6 @@ export default function App() {
         </Route>
       </Route>
     </Routes>
+    </ErrorBoundary>
   )
 }
