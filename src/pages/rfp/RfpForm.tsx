@@ -233,7 +233,9 @@ function ConcessionRow({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
         {/* Label + requested value */}
         <div className="flex-1">
-          <p className="text-sm leading-relaxed text-slate-800">{item.label}</p>
+          <p className="text-sm leading-relaxed text-slate-800">
+            {item.label}<span className="ml-0.5 text-red-500">*</span>
+          </p>
           {hasRequestedValue && (
             <p className="mt-0.5 text-xs text-slate-400">
               Requested: <span className="font-medium text-slate-500">{item.requested_value}</span>
@@ -250,15 +252,33 @@ function ConcessionRow({
           {isYesNo ? (
             <YesNoToggle value={answer.answer_yes_no} onChange={handleYesNo} disabled={disabled} />
           ) : showCommissionWarning ? (
-            <div className="flex flex-col gap-1.5">
-              {(['10', '7'] as const).map((pct) => (
-                <label key={pct} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${answer.answer_value === pct ? 'border-blue-500 bg-blue-50 font-medium text-blue-700' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'} ${disabled ? 'pointer-events-none opacity-50' : ''}`}>
-                  <input type="radio" name={`commission-${item.id}`} value={pct} checked={answer.answer_value === pct} onChange={() => onChange({ answer_value: pct })} disabled={disabled} className="sr-only" />
-                  {pct}% commission
-                </label>
-              ))}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center">
+                <input
+                  type="number" min="0" max="100" step="0.1"
+                  className={`${inputCls} rounded-r-none`}
+                  placeholder="e.g. 10"
+                  value={answer.answer_value}
+                  onChange={(e) => onChange({ answer_value: e.target.value })}
+                  disabled={disabled}
+                />
+                <span className="rounded-r-lg border border-l-0 border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">%</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {['10', '7', '5', '0'].map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onChange({ answer_value: pct })}
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors ${answer.answer_value === pct ? 'bg-blue-600 text-white' : 'border border-slate-300 text-slate-600 hover:border-blue-400 hover:text-blue-600'} disabled:opacity-50`}
+                  >
+                    {pct}%
+                  </button>
+                ))}
+              </div>
               {warnZeroCommission && (
-                <p className="mt-0.5 text-xs text-amber-600">Please select a commission rate.</p>
+                <p className="text-xs text-amber-600">Please enter a commission rate.</p>
               )}
             </div>
           ) : (
