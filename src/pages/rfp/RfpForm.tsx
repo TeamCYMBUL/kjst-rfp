@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { getRfp, respondRfp } from '../../lib/rfpApi'
+import { useParams, useSearchParams } from 'react-router-dom'
+import { getRfp, respondRfp, declineRfp } from '../../lib/rfpApi'
 import { formatDate } from '../../lib/format'
 import type {
   AnswerPayload,
@@ -203,12 +203,14 @@ function ConcessionRow({
   onChange,
   disabled,
   showCommissionWarning,
+  hasError,
 }: {
   item: ConcessionItem
   answer: AnswerState
   onChange: (update: Partial<AnswerState>) => void
   disabled?: boolean
   showCommissionWarning?: boolean
+  hasError?: boolean
 }) {
   const isYesNo = item.answer_type === 'yes_no'
   const showComment = isYesNo
@@ -241,6 +243,10 @@ function ConcessionRow({
 
         {/* Answer control */}
         <div className="flex-shrink-0 sm:w-48">
+          <div
+            id={`concession-item-${item.id}`}
+            className={hasError ? 'rounded-lg ring-2 ring-red-400 p-1' : ''}
+          >
           {isYesNo ? (
             <YesNoToggle value={answer.answer_yes_no} onChange={handleYesNo} disabled={disabled} />
           ) : showCommissionWarning ? (
@@ -257,6 +263,10 @@ function ConcessionRow({
             </div>
           ) : (
             <ValueInput item={item} value={answer.answer_value} onChange={(v) => onChange({ answer_value: v })} disabled={disabled} />
+          )}
+          </div>
+          {hasError && (
+            <p className="mt-1 text-xs font-medium text-red-500">Required</p>
           )}
         </div>
       </div>
@@ -731,6 +741,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
 
 export default function RfpForm() {
   const { token } = useParams<{ token: string }>()
+  const [searchParams] = useSearchParams()
   const [data, setData] = useState<RfpData | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -738,6 +749,15 @@ export default function RfpForm() {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Set<string>>(new Set())
+
+  // Decline flow — auto-open if email link included ?decline=1
+  const [declined, setDeclined] = useState(false)
+  const [showDeclinePanel, setShowDeclinePanel] = useState(searchParams.get('decline') === '1')
+  const [declineReason, setDeclineReason] = useState('')
+  const [declineNotes, setDeclineNotes] = useState('')
+  const [declining, setDeclining] = useState(false)
+  const [declineError, setDeclineError] = useState<string | null>(null)
 
   // Night scenarios state — populated from loaded trip data
   const [nightScenarios, setNightScenarios] = useState<number[]>([1])
@@ -791,6 +811,7 @@ export default function RfpForm() {
       .then((d) => {
         setData(d)
         if (d.invitation.status === 'submitted') setSubmitted(true)
+        if (d.invitation.status === 'declined') setDeclined(true)
 
         // Populate night scenarios from the trip
         setNightScenarios(d.invitation.trips.night_scenarios ?? [1])
@@ -932,6 +953,21 @@ export default function RfpForm() {
     [token, meetingSpaceDetails, additionalSpaces, scenarioAvailability],
   )
 
+  // --- Decline ---
+  const handleDecline = async () => {
+    if (!token || !declineReason) return
+    setDeclining(true)
+    setDeclineError(null)
+    try {
+      await declineRfp({ token, decline_reason: declineReason, decline_notes: declineNotes || undefined })
+      setDeclined(true)
+    } catch (e: unknown) {
+      setDeclineError((e as Error).message)
+    } finally {
+      setDeclining(false)
+    }
+  }
+
   // --- Autosave: debounce 1.5s after any field change ---
   const scheduleAutosave = useCallback(() => {
     if (submitted) return
@@ -957,15 +993,23 @@ export default function RfpForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setValidationError(null)
+    setFieldErrors(new Set())
 
     if (!resp.completed_by_name.trim()) {
       setValidationError('Please enter the name of the person completing this form.')
+      document.getElementById('rfp-completed-by')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    if (!resp.completed_date) {
+      setValidationError('Please enter the date for the person completing this form.')
+      document.getElementById('rfp-date')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
     const scenarios = nightScenarios
     const isMultiScenario = scenarios.length > 1
     if (!isMultiScenario && !resp.best_king_rate.trim()) {
       setValidationError('Best Available King Rate is required before submitting.')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
     if (isMultiScenario) {
@@ -973,6 +1017,48 @@ export default function RfpForm() {
       const missingRates = availableScenarios.filter((n) => !resp.scenario_rates[String(n)]?.rate?.trim())
       if (missingRates.length > 0) {
         setValidationError(`Please enter king rates for all available scenarios (missing: ${missingRates.map((n) => `${n} night${n > 1 ? 's' : ''}`).join(', ')}).`)
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+        return
+      }
+    }
+
+    // Required: VS. Current Selling Rate
+    if (!isMultiScenario && !resp.current_selling_rate.trim()) {
+      setValidationError('VS. Current Selling Rate is required before submitting. Please fill it in the Rates section at the top.')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+
+    // Required: Occupancy Tax
+    if (!resp.occupancy_tax.trim()) {
+      setValidationError('Occupancy Tax is required before submitting. Please fill it in the Rates section at the top.')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+
+    // Required: Suite Rate (always)
+    if (!isMultiScenario && !resp.best_suite_rate.trim()) {
+      setValidationError('Best Available Suite Rate is required before submitting. Please fill it in the Rates section at the top.')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+
+    // Required: Visit 2 rates when a second stay exists
+    const hasStay2Val = Boolean(data?.invitation.trips.stay2_arrival_date)
+    if (hasStay2Val) {
+      if (!resp.stay2_king_rate.trim()) {
+        setValidationError('King Rate for Visit 2 is required before submitting. Please fill it in the Rates section at the top.')
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+        return
+      }
+      if (!resp.stay2_selling_rate.trim()) {
+        setValidationError('VS. Current Selling Rate for Visit 2 is required before submitting. Please fill it in the Rates section at the top.')
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+        return
+      }
+      if (!resp.stay2_suite_rate.trim()) {
+        setValidationError('Suite Rate for Visit 2 is required before submitting. Please fill it in the Rates section at the top.')
+        window.scrollTo({ top: 0, behavior: 'smooth' })
         return
       }
     }
@@ -991,7 +1077,38 @@ export default function RfpForm() {
       }
     }
 
-    // Hard block: every question must be answered before submitting
+    // Meeting space detail fields required when hotel answered Yes
+    const msYesNoItems = (data?.items ?? []).filter(
+      (item) => item.answer_type === 'yes_no' && item.label.toLowerCase().includes('complimentary meeting space'),
+    )
+    const msErrors: string[] = []
+    for (const item of msYesNoItems) {
+      if (answers[item.id]?.answer_yes_no === true) {
+        const detail = meetingSpaceDetails[item.id]
+        const label = item.label.replace(/\[.*?\]/g, '…').slice(0, 50)
+        if (!detail?.name?.trim()) msErrors.push(`${label} — Name of space`)
+        if (!detail?.space_type) msErrors.push(`${label} — Type of space`)
+        if (!detail?.dimensions?.trim()) msErrors.push(`${label} — Dimensions`)
+        if (!detail?.wifi) msErrors.push(`${label} — Wi-Fi`)
+      }
+    }
+    for (let idx = 0; idx < additionalSpaces.length; idx++) {
+      const space = additionalSpaces[idx]
+      const prefix = `Additional Space ${idx + 1}`
+      if (!space.name?.trim()) msErrors.push(`${prefix} — Name`)
+      if (!space.space_type) msErrors.push(`${prefix} — Type`)
+      if (!space.dimensions?.trim()) msErrors.push(`${prefix} — Dimensions`)
+      if (!space.wifi) msErrors.push(`${prefix} — Wi-Fi`)
+    }
+    if (msErrors.length > 0) {
+      setValidationError(
+        `Please complete the required meeting space fields:\n${msErrors.map((e) => `• ${e}`).join('\n')}`,
+      )
+      document.getElementById('rfp-validation-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+
+    // Hard block: every concession question must be answered before submitting
     const unansweredYesNo = (data?.items ?? []).filter(
       (item) => item.answer_type === 'yes_no' && answers[item.id]?.answer_yes_no === null,
     )
@@ -1000,6 +1117,8 @@ export default function RfpForm() {
     )
     const allMissing = [...unansweredYesNo, ...unansweredValue]
     if (allMissing.length > 0) {
+      const missingIds = new Set(allMissing.map((i) => i.id))
+      setFieldErrors(missingIds)
       const preview = allMissing
         .slice(0, 4)
         .map((i) => `• ${i.label.replace(/\[.*?\]/g, '…').slice(0, 70).trim()}`)
@@ -1007,7 +1126,9 @@ export default function RfpForm() {
       setValidationError(
         `Please answer all questions before submitting — ${allMissing.length} item${allMissing.length > 1 ? 's' : ''} still need${allMissing.length === 1 ? 's' : ''} a response:\n${preview.join('\n')}${extra}`,
       )
-      document.getElementById('rfp-validation-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      // Scroll to first unanswered item
+      const firstMissingEl = document.getElementById(`concession-item-${allMissing[0].id}`)
+      firstMissingEl?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
 
@@ -1031,6 +1152,17 @@ export default function RfpForm() {
 
   const setAnswer = (itemId: string, update: Partial<AnswerState>) => {
     setAnswers((a) => ({ ...a, [itemId]: { ...a[itemId], ...update } }))
+    if (
+      ('answer_yes_no' in update && update.answer_yes_no !== null) ||
+      ('answer_value' in update && update.answer_value?.trim())
+    ) {
+      setFieldErrors((prev) => {
+        if (!prev.has(itemId)) return prev
+        const next = new Set(prev)
+        next.delete(itemId)
+        return next
+      })
+    }
   }
 
   // ── Render states ──────────────────────────────────────────────────────────
@@ -1069,6 +1201,27 @@ export default function RfpForm() {
           </p>
           <p className="mt-3 text-xs text-slate-400">
             KJ Sports Travel will follow up with any questions. You can close this window.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (declined) {
+    const trip = data.invitation.trips
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+        <div className="max-w-md rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm">
+          <div className="mb-3 text-3xl">📋</div>
+          <h1 className="text-xl font-bold text-slate-900">Response Recorded</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Thank you for letting us know. We've noted that{' '}
+            <strong>{data.invitation.hotel_name}</strong> is unable to bid on the{' '}
+            <strong>{trip.clients.team_name}</strong> trip to{' '}
+            <strong>{trip.city || trip.opponent_label}</strong>.
+          </p>
+          <p className="mt-3 text-xs text-slate-400">
+            KJ Sports Travel appreciates the response. You can close this window.
           </p>
         </div>
       </div>
@@ -1127,6 +1280,7 @@ export default function RfpForm() {
         onChange={(update) => setAnswer(item.id, update)}
         disabled={isReadOnly}
         showCommissionWarning={isCommissionItem(item)}
+        hasError={fieldErrors.has(item.id)}
       />
     ))
 
@@ -1143,6 +1297,85 @@ export default function RfpForm() {
           setScenarioAvailability={setScenarioAvailability}
           scheduleAutosave={scheduleAutosave}
         />
+
+        {/* ── Can't bid panel ── */}
+        {!isReadOnly && (
+          <div className="mb-6 rounded-xl border border-slate-200 bg-white overflow-hidden">
+            {!showDeclinePanel ? (
+              <button
+                type="button"
+                onClick={() => setShowDeclinePanel(true)}
+                className="w-full px-6 py-4 text-left text-sm text-slate-500 hover:bg-slate-50 transition-colors rounded-xl"
+              >
+                Unable to bid on this RFP?{' '}
+                <span className="font-medium text-[#1C1008] hover:underline">Let us know →</span>
+              </button>
+            ) : (
+              <div className="p-6">
+                <h3 className="text-sm font-semibold text-slate-800 mb-1">Unable to Submit a Bid</h3>
+                <p className="mb-4 text-xs text-slate-500">
+                  Please let us know why your property cannot participate. This helps KJ Sports Travel plan accordingly.
+                </p>
+                <div className="mb-4">
+                  <FieldLabel htmlFor="decline-reason" required>Reason</FieldLabel>
+                  <select
+                    id="decline-reason"
+                    className={inputCls}
+                    value={declineReason}
+                    onChange={(e) => setDeclineReason(e.target.value)}
+                  >
+                    <option value="">Select a reason…</option>
+                    <option value="sold_out">Sold out / no availability for these dates</option>
+                    <option value="insufficient_rooms">Insufficient room block available</option>
+                    <option value="rate_conflict">Rate restrictions in effect (e.g. city-wide event)</option>
+                    <option value="no_suites">Unable to accommodate suite requirements</option>
+                    <option value="not_competing">Property has chosen not to compete at this time</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div className="mb-4">
+                  <FieldLabel htmlFor="decline-notes">
+                    Additional notes{' '}
+                    <span className="font-normal text-slate-400">(optional)</span>
+                  </FieldLabel>
+                  <textarea
+                    id="decline-notes"
+                    className={`${inputCls} resize-none`}
+                    rows={2}
+                    placeholder="Any context or clarification…"
+                    value={declineNotes}
+                    onChange={(e) => setDeclineNotes(e.target.value)}
+                  />
+                </div>
+                {declineError && (
+                  <p className="mb-3 text-sm text-red-600">{declineError}</p>
+                )}
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleDecline}
+                    disabled={!declineReason || declining}
+                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                  >
+                    {declining ? 'Submitting…' : 'Confirm — we cannot bid'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDeclinePanel(false)
+                      setDeclineReason('')
+                      setDeclineNotes('')
+                      setDeclineError(null)
+                    }}
+                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Save status indicator */}
         {!isReadOnly && saveStatus !== 'idle' && (
@@ -1205,20 +1438,29 @@ export default function RfpForm() {
               const ans = answers[item.id] ?? { answer_yes_no: null, answer_value: '', comment: '', commentOpen: false }
               const detail = meetingSpaceDetails[item.id] ?? emptySpace()
               const answeredYes = ans.answer_yes_no === true
+              const msHasError = fieldErrors.has(item.id)
               return (
                 <div key={item.id} className="border-b border-slate-100 py-4 last:border-0">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
                     <p className="flex-1 text-sm leading-relaxed text-slate-800">{item.label}</p>
                     <div className="flex-shrink-0 sm:w-48">
+                      <div
+                        id={`concession-item-${item.id}`}
+                        className={msHasError ? 'rounded-lg ring-2 ring-red-400 p-1' : ''}
+                      >
                       <YesNoToggle
                         value={ans.answer_yes_no}
                         onChange={(v) => {
-                          setAnswers((prev) => ({ ...prev, [item.id]: { ...ans, answer_yes_no: v } }))
+                          setAnswer(item.id, { answer_yes_no: v })
                           // Clear details if switching to No
                           if (!v) setMeetingSpaceDetails((prev) => { const next = { ...prev }; delete next[item.id]; return next })
                         }}
                         disabled={isReadOnly}
                       />
+                      </div>
+                      {msHasError && (
+                        <p className="mt-1 text-xs font-medium text-red-500">Required</p>
+                      )}
                     </div>
                   </div>
                   {/* Inline detail form — only when Yes */}
@@ -1499,7 +1741,7 @@ export default function RfpForm() {
                   disabled={isReadOnly} placeholder="Full name" aria-required="true" />
               </div>
               <div>
-                <FieldLabel htmlFor="rfp-date">Date</FieldLabel>
+                <FieldLabel required htmlFor="rfp-date">Date</FieldLabel>
                 <input id="rfp-date" type="date" className={inputCls}
                   value={resp.completed_date} onChange={setRespField('completed_date')}
                   disabled={isReadOnly} />

@@ -278,7 +278,7 @@ function InviteForm({
   }
 
   return (
-    <div className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 p-4 overflow-y-auto max-h-[50vh]">
+    <div className="shrink-0 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 p-4">
       <p className="mb-1 text-sm font-semibold text-slate-700 dark:text-slate-300">Add hotel to RFP</p>
       <p className="mb-3 text-xs text-slate-400 dark:text-slate-500">Hotels receive a secure link and can't see each other's bids.</p>
       {error && <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
