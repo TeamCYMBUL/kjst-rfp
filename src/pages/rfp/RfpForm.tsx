@@ -213,13 +213,15 @@ function ConcessionRow({
   hasError?: boolean
 }) {
   const isYesNo = item.answer_type === 'yes_no'
+  // Comment-enabled yes/no items show the box automatically on "No" and can also
+  // open it manually (e.g. to note a condition or counteroffer while answering Yes).
   const showComment = isYesNo
-    ? answer.answer_yes_no === false && item.allow_comment === true
+    ? item.allow_comment === true && (answer.answer_yes_no === false || answer.commentOpen)
     : answer.commentOpen
 
   const handleYesNo = (v: boolean) => {
-    // When toggling to No, auto-open the comment box (only if allow_comment is true).
-    onChange({ answer_yes_no: v, commentOpen: !v && item.allow_comment === true })
+    // Toggling to No auto-opens the comment box; Yes keeps any note already open.
+    onChange({ answer_yes_no: v, commentOpen: (answer.commentOpen || !v) && item.allow_comment === true })
   }
 
   const hasRequestedValue =
@@ -305,8 +307,8 @@ function ConcessionRow({
         </div>
       )}
 
-      {/* Toggle comment for non-yes_no items */}
-      {!isYesNo && !answer.commentOpen && !disabled && (
+      {/* Toggle comment — non-yes/no items, or comment-enabled yes/no items */}
+      {(!isYesNo || item.allow_comment === true) && !showComment && !disabled && (
         <button
           type="button"
           className="mt-1.5 text-xs text-[#1C1008]/60 hover:underline"
