@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { formatDate } from '../../lib/format'
+import { formatDate, formatMeetingSpaceNotes } from '../../lib/format'
 import { exportComparisonXlsx } from '../../lib/excelExport'
 import type { ConcessionItem } from '../../lib/rfpApi'
 import type { Trip, Client } from '../../lib/types'
@@ -236,7 +236,7 @@ function RateRow({
         return (
           <td
             key={inv.id}
-            className={`min-w-[200px] px-4 py-2.5 text-sm ${
+            className={`min-w-[200px] whitespace-pre-line px-4 py-2.5 text-sm ${
               isDimmed
                 ? 'opacity-40 bg-slate-50'
                 : isAwarded
@@ -1087,7 +1087,7 @@ export default function TripGrid() {
               <RateRow
                 label="Meeting Space Notes"
                 invitations={invitations}
-                getValue={(r) => r?.meeting_space_notes ?? null}
+                getValue={(r) => formatMeetingSpaceNotes(r?.meeting_space_notes) || null}
                 lowestRateId={lowestRateId}
               />
               <RateRow

@@ -25,6 +25,50 @@ export function nightsBetween(
   return diff >= 0 ? diff : null
 }
 
+// Render the meeting-space details JSON (stored in rfp_responses.meeting_space_notes)
+// as readable text instead of a raw JSON blob. Falls back to the raw string if it
+// isn't the expected JSON shape.
+const MEETING_SPACE_TYPE_LABELS: Record<string, string> = {
+  function_room: 'Function Room / Ballroom',
+  restaurant: 'Restaurant / F&B outlet',
+  suite_converted: 'Suite (furniture removed)',
+  other: 'Other',
+}
+
+export function formatMeetingSpaceNotes(raw: string | null | undefined): string {
+  if (!raw) return ''
+  let parsed: any
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return raw // plain text note — show as-is
+  }
+  if (!parsed || typeof parsed !== 'object') return raw
+
+  const spaces: any[] = []
+  if (parsed.__details && typeof parsed.__details === 'object') {
+    spaces.push(...Object.values(parsed.__details))
+  }
+  if (Array.isArray(parsed.__additional)) {
+    spaces.push(...parsed.__additional)
+  }
+
+  const fmtSpace = (s: any): string | null => {
+    if (!s || typeof s !== 'object') return null
+    const parts: string[] = []
+    if (s.name) parts.push(String(s.name))
+    if (s.space_type) parts.push(MEETING_SPACE_TYPE_LABELS[s.space_type] ?? String(s.space_type))
+    if (s.dimensions) parts.push(`Size: ${s.dimensions}`)
+    if (s.fb_minimum) parts.push(`F&B min: ${s.fb_minimum}`)
+    if (s.wifi) parts.push(`Wi-Fi: ${s.wifi}`)
+    if (s.additional_info) parts.push(String(s.additional_info))
+    return parts.length ? parts.join(' · ') : null
+  }
+
+  const lines = spaces.map(fmtSpace).filter(Boolean) as string[]
+  return lines.join('\n')
+}
+
 // URL-safe random token for a hotel's /rfp/{token} link.
 export function generateToken(): string {
   const bytes = new Uint8Array(24)

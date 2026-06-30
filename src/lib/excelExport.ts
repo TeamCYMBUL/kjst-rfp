@@ -6,6 +6,7 @@
 
 import * as XLSX from 'xlsx'
 import type { ConcessionItem } from './rfpApi'
+import { formatMeetingSpaceNotes } from './format'
 
 // ── Revenue helpers ───────────────────────────────────────────────────────────
 
@@ -174,7 +175,7 @@ export function exportComparisonXlsx(
 
   // ── Additional info ───────────────────────────────────────────────────────
   rows.push(['ADDITIONAL INFORMATION'])
-  rows.push(row('MEETING SPACE NOTES', hotels.map((h) => fmt(h.meeting_space_notes))))
+  rows.push(row('MEETING SPACE NOTES', hotels.map((h) => fmt(formatMeetingSpaceNotes(h.meeting_space_notes) || null))))
   rows.push(row('GENERAL COMMENTS', hotels.map((h) => fmt(h.general_comments))))
   rows.push(row('STAFF NOTES (Team Export)', hotels.map((h) => fmt(h.staff_notes))))
   rows.push([])
@@ -665,7 +666,7 @@ export function exportSingleHotelXlsx(
 
   // Notes
   rows.push(['ADDITIONAL NOTES'])
-  rows.push(row2('Meeting space', hotel.meeting_space_notes))
+  rows.push(row2('Meeting space', formatMeetingSpaceNotes(hotel.meeting_space_notes) || null))
   rows.push(row2('General comments', hotel.general_comments))
   rows.push(row2('Staff notes', hotel.staff_notes))
 

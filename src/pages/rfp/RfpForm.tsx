@@ -1270,7 +1270,7 @@ export default function RfpForm() {
     item.answer_type === 'percent' &&
     (item.label.toLowerCase().includes('commission') || item.label.toLowerCase().includes('commissionable'))
   const isRebateItem = (item: ConcessionItem) =>
-    item.answer_type === 'currency' && item.label.toLowerCase().includes('rebate')
+    item.label.toLowerCase().includes('rebate')
   const isMeetingSpaceYesNoItem = (item: ConcessionItem) =>
     item.answer_type === 'yes_no' &&
     item.label.toLowerCase().includes('complimentary meeting space')
