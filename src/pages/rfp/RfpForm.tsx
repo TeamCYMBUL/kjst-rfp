@@ -362,23 +362,24 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
     return list.length ? list.map((d) => formatDate(d)).join(', ') : null
   }
 
+  // Nights from a date range, so both visits compute consistently
+  const nightsFor = (arr: string | null, dep: string | null): number | null =>
+    arr && dep ? Math.round((new Date(dep).getTime() - new Date(arr).getTime()) / 86400000) : null
+
   // Build dates rows. `game` is already-formatted text (may list several dates).
   const dateRows: Array<{ opponent: string; arr: string | null; dep: string | null; nts: number | null; game: string | null; time: string | null }> = []
   dateRows.push({
     opponent: trip.opponent_label || '—',
     arr: trip.arrival_date,
     dep: trip.departure_date,
-    nts: trip.nights,
+    nts: nightsFor(trip.arrival_date, trip.departure_date) ?? trip.nights,
     game: gameDatesText(trip.game_dates, trip.game_date),
     time: trip.game_time,
   })
   if (hasStay2) {
     const arr = trip.stay2_arrival_date
     const dep = trip.stay2_departure_date
-    let nts: number | null = null
-    if (arr && dep) {
-      nts = Math.round((new Date(dep).getTime() - new Date(arr).getTime()) / 86400000)
-    }
+    const nts = nightsFor(arr, dep)
     dateRows.push({
       opponent: trip.opponent_label ? `${trip.opponent_label} (Visit 2)` : 'Visit 2',
       arr, dep, nts,
@@ -1467,9 +1468,6 @@ export default function RfpForm() {
           {/* ── Section 4: Meeting Space ─── */}
           <div className="rounded-xl border border-slate-200 bg-white p-6">
             <SectionHeading>Meeting Space</SectionHeading>
-            <p className="mb-4 text-sm text-slate-500">
-              Teams use meeting space for massage tables, recovery equipment, and trainer setups. Answer Yes or No for each room — if Yes, fill in the space details.
-            </p>
             {data.invitation.trips.clients.default_terms?.default_meeting_spaces && (
               <p className="mb-4 rounded-lg bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
                 This team requires <strong>{data.invitation.trips.clients.default_terms.default_meeting_spaces} meeting spaces</strong>.

@@ -403,6 +403,9 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
           city: v1.city || null,
           arrival_date: v1.arrival,
           departure_date: v1.departure,
+          nights: v1.arrival && v1.departure
+            ? Math.round((new Date(v1.departure).getTime() - new Date(v1.arrival).getTime()) / 86400000)
+            : null,
           game_dates: v1.gameDates,
           game_date: v1.gameDates[0] ?? null,
           king_rooms_requested: v1.kings,
