@@ -34,6 +34,7 @@ type StaffProfile = { id: string; full_name: string | null; email: string | null
 const blankTerms: DefaultTerms = {
   agreement_status: '',
   default_king_rooms: null,
+  default_double_rooms: null,
   default_suites: null,
   default_total_rooms: null,
   in_season_tournament_window: '',
@@ -161,6 +162,7 @@ export default function ClientForm() {
       default_terms: {
         agreement_status: clean(terms.agreement_status ?? '') ?? undefined,
         default_king_rooms: numOrNull(String(terms.default_king_rooms ?? '')),
+        default_double_rooms: numOrNull(String(terms.default_double_rooms ?? '')),
         default_suites: numOrNull(String(terms.default_suites ?? '')),
         default_total_rooms: numOrNull(String(terms.default_total_rooms ?? '')),
         in_season_tournament_window: clean(terms.in_season_tournament_window ?? '') ?? undefined,
@@ -381,6 +383,13 @@ export default function ClientForm() {
                 onChange={setTerm('default_king_rooms')}
               />
               <TextField
+                label="Default double rooms"
+                type="number"
+                hint="Double-bedded rooms needed per stay"
+                value={terms.default_double_rooms ?? ''}
+                onChange={setTerm('default_double_rooms')}
+              />
+              <TextField
                 label="Default suites"
                 type="number"
                 hint="Suites needed per stay (coaches, star players, etc.)"
@@ -390,11 +399,10 @@ export default function ClientForm() {
               <TextField
                 label="Default total rooms"
                 type="number"
-                hint="Kings + suites combined"
+                hint="Kings + doubles + suites combined"
                 value={terms.default_total_rooms ?? ''}
                 onChange={setTerm('default_total_rooms')}
               />
-              <div className="sm:col-span-1" />
               <TextField
                 label="In-season tournament window"
                 hint="e.g. Nov 12 – Dec 14, 2025"

@@ -332,8 +332,11 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
       .eq('id', clientId)
       .single()
     const defaultTerms = (clientData?.default_terms as any) ?? {}
-    const defaultKings = typeof defaultTerms.king_rooms === 'number' ? defaultTerms.king_rooms : null
-    const defaultSuites = typeof defaultTerms.suites === 'number' ? defaultTerms.suites : null
+    const numTerm = (k: string) => (typeof defaultTerms[k] === 'number' ? defaultTerms[k] : null)
+    const defaultKings = numTerm('default_king_rooms')
+    const defaultDoubles = numTerm('default_double_rooms')
+    const defaultSuites = numTerm('default_suites')
+    const defaultTotal = numTerm('default_total_rooms')
 
     // Normalize each valid row into a single "visit"
     type Visit = {
@@ -344,7 +347,9 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
       departure: string | null
       gameDates: string[]
       kings: number | null
+      doubles: number | null
       suites: number | null
+      total: number | null
     }
     const visits: Visit[] = validRows.map((r) => {
       const rawCity = getVal(r, 'city').trim()
@@ -364,7 +369,9 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
         departure: parseDate(getVal(r, 'departure_date')),
         gameDates: parseGameDates(getVal(r, 'game_date'), fallbackYear),
         kings: rowKings ?? defaultKings,
+        doubles: defaultDoubles,
         suites: rowSuites ?? defaultSuites,
+        total: defaultTotal,
       }
     })
 
@@ -399,7 +406,9 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
           game_dates: v1.gameDates,
           game_date: v1.gameDates[0] ?? null,
           king_rooms_requested: v1.kings,
+          double_rooms_requested: v1.doubles,
           suites_requested: v1.suites,
+          total_rooms_requested: v1.total,
           stay2_arrival_date: v2 ? v2.arrival : null,
           stay2_departure_date: v2 ? v2.departure : null,
           stay2_game_dates: v2 ? v2.gameDates : [],
