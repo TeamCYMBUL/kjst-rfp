@@ -152,6 +152,8 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
   const [dragOver, setDragOver] = useState(false)
   const [skippedMapping, setSkippedMapping] = useState(false)
   const [createdCount, setCreatedCount] = useState(0)
+  // Response deadline applied to every trip created in this import
+  const [deadline, setDeadline] = useState('')
 
   useEffect(() => {
     if (!isOpen || role === null || defaultClientId) return
@@ -165,7 +167,7 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
   // Reset on open
   useEffect(() => {
     if (isOpen) {
-      setStep(1); setHeaders([]); setRows([]); setMapping({}); setClientId(defaultClientId ?? ''); setError(null); setSkippedMapping(false)
+      setStep(1); setHeaders([]); setRows([]); setMapping({}); setClientId(defaultClientId ?? ''); setError(null); setSkippedMapping(false); setDeadline('')
     }
   }, [isOpen, defaultClientId])
 
@@ -399,6 +401,7 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
         const rec: any = {
           client_id: clientId,
           status: 'draft',
+          response_deadline: deadline || null,
           opponent_label: v1.opponentLabel || null,
           city: v1.city || null,
           arrival_date: v1.arrival,
@@ -477,6 +480,16 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
                   </select>
                 </div>
               )}
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">Response deadline</label>
+                <input
+                  type="date"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#1C1008] focus:outline-none"
+                  value={deadline}
+                  onChange={(e) => setDeadline(e.target.value)}
+                />
+                <p className="mt-1 text-xs text-slate-400">Applied to every trip in this import. You can change it per trip later. Leave blank for no deadline.</p>
+              </div>
               <div
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
                 onDragLeave={() => setDragOver(false)}
