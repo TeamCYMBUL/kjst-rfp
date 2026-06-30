@@ -5,6 +5,7 @@ import { formatDate } from '../../lib/format'
 import { Badge, ErrorNote, Loading } from '../../components/ui'
 import { useRole } from '../../lib/useRole'
 import ScheduleImportModal from '../trips/ScheduleImport'
+import { exportAllCitiesForClient } from '../../lib/exportAllCities'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -107,6 +108,7 @@ const LEAGUES = ['NBA', 'NFL', 'MLB', 'NHL', 'WNBA', 'MLS']
 export default function ClientsList() {
   const [clients, setClients] = useState<Client[] | null>(null)
   const [selected, setSelected] = useState<Client | null>(null)
+  const [exportingCities, setExportingCities] = useState(false)
   const [search, setSearch] = useState('')
   const [leagueFilter, setLeagueFilter] = useState<string>('all')
   const [error, setError] = useState<string | null>(null)
@@ -307,28 +309,45 @@ export default function ClientsList() {
                       </div>
                     </div>
                   </div>
-                  {canEditClient(selected.id) && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setShowImport(true)}
-                        className="rounded-lg border border-[#1C1008]/20 bg-[#1C1008]/5 px-3 py-1.5 text-xs font-semibold text-[#1C1008] transition-colors hover:bg-[#1C1008]/10"
-                      >
-                        ↑ Import Schedule
-                      </button>
-                      <Link
-                        to={`/trips/new?client=${selected.id}`}
-                        className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700"
-                      >
-                        + New trip
-                      </Link>
-                      <Link
-                        to={`/clients/${selected.id}/edit`}
-                        className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700"
-                      >
-                        Edit
-                      </Link>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={async () => {
+                        if (!selected) return
+                        setExportingCities(true)
+                        try {
+                          await exportAllCitiesForClient(selected.id, selected.team_name)
+                        } finally {
+                          setExportingCities(false)
+                        }
+                      }}
+                      disabled={exportingCities || selTrips.length === 0}
+                      className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
+                    >
+                      {exportingCities ? 'Exporting…' : '↓ Export All Cities'}
+                    </button>
+                    {canEditClient(selected.id) && (
+                      <>
+                        <button
+                          onClick={() => setShowImport(true)}
+                          className="rounded-lg border border-[#1C1008]/20 bg-[#1C1008]/5 px-3 py-1.5 text-xs font-semibold text-[#1C1008] transition-colors hover:bg-[#1C1008]/10"
+                        >
+                          ↑ Import Schedule
+                        </button>
+                        <Link
+                          to={`/trips/new?client=${selected.id}`}
+                          className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700"
+                        >
+                          + New trip
+                        </Link>
+                        <Link
+                          to={`/clients/${selected.id}/edit`}
+                          className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700"
+                        >
+                          Edit
+                        </Link>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {/* Stats */}
