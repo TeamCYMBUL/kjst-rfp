@@ -299,6 +299,7 @@ export default function TemplateEditor() {
     const { data, error } = await supabase
       .from('concession_items')
       .select('id, sort_order, section, label, answer_type, requested_value, allow_comment')
+      .is('client_id', null)
       .eq('archived', false)
       .order('sort_order')
     if (error) setError(error.message)

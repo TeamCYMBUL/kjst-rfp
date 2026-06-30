@@ -130,7 +130,7 @@ export default function ClientDetail() {
     loadTrips()
 
     supabase
-      .from('client_concession_items')
+      .from('concession_items')
       .select('id, sort_order, section, label, answer_type, requested_value, allow_comment')
       .eq('client_id', id)
       .eq('archived', false)
@@ -183,8 +183,9 @@ export default function ClientDetail() {
       ? Math.max(...customItems.map((i) => i.sort_order)) + 10
       : 10
     const { data, error: err } = await supabase
-      .from('client_concession_items')
+      .from('concession_items')
       .insert({
+        organization_id: client!.organization_id,
         client_id: id,
         sort_order: maxSort,
         section: newItem.section,
@@ -203,7 +204,7 @@ export default function ClientDetail() {
   }
 
   const deleteCustomItem = async (itemId: string) => {
-    await supabase.from('client_concession_items').update({ archived: true }).eq('id', itemId)
+    await supabase.from('concession_items').update({ archived: true }).eq('id', itemId)
     setCustomItems((prev) => (prev ?? []).filter((i) => i.id !== itemId))
   }
 
@@ -211,21 +212,15 @@ export default function ClientDetail() {
     if (!client || !trips || trips.length === 0) return
     setExportingAllCities(true)
     try {
-      // Fetch org concession items (for finding comp suites, suite upgrades, playoff items)
-      const { data: orgItems } = await supabase
+      // Fetch master + client-specific items in one query
+      const { data: allItemsData } = await supabase
         .from('concession_items')
         .select('id, label, section, answer_type, requested_value, allow_comment, sort_order')
-        .order('sort_order')
-
-      // Fetch all client_concession_items for this client
-      const { data: clientItems } = await supabase
-        .from('client_concession_items')
-        .select('id, label, section, answer_type, requested_value, allow_comment, sort_order')
-        .eq('client_id', id)
+        .or(`client_id.is.null,client_id.eq.${id}`)
         .eq('archived', false)
         .order('sort_order')
 
-      const allItems = [...(orgItems ?? []), ...(clientItems ?? [])]
+      const allItems = allItemsData ?? []
 
       // For each trip, fetch invitations + responses + answers
       const cityData: ConsolidatedCity[] = []
