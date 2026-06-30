@@ -123,6 +123,21 @@ function parseDate(val: string | number | null | undefined, fallbackYear?: numbe
   return null
 }
 
+// Parse a cell that may list several game dates (e.g. "9/13, 9/14, 9/15, 9/16")
+// into an array of ISO dates. Used for multi-game series.
+function parseGameDates(val: string | number | null | undefined, fallbackYear?: number): string[] {
+  if (val == null || String(val).trim() === '') return []
+  const raw = String(val).trim()
+  if (raw.toLowerCase() === 'n/a') return []
+  const parts = raw.split(',').map((s) => s.trim()).filter(Boolean)
+  const out: string[] = []
+  for (const part of parts) {
+    const d = parseDate(part, fallbackYear)
+    if (d) out.push(d)
+  }
+  return Array.from(new Set(out)).sort()
+}
+
 export default function ScheduleImportModal({ isOpen, onClose, onImported, defaultClientId, inline }: Props) {
   const { role, assignedClientIds, canEditClient } = useRole()
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
@@ -136,6 +151,7 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
   const [error, setError] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [skippedMapping, setSkippedMapping] = useState(false)
+  const [createdCount, setCreatedCount] = useState(0)
 
   useEffect(() => {
     if (!isOpen || role === null || defaultClientId) return
@@ -319,31 +335,82 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
     const defaultKings = typeof defaultTerms.king_rooms === 'number' ? defaultTerms.king_rooms : null
     const defaultSuites = typeof defaultTerms.suites === 'number' ? defaultTerms.suites : null
 
-    const inserts = validRows.map((r) => {
+    // Normalize each valid row into a single "visit"
+    type Visit = {
+      cityKey: string
+      city: string
+      opponentLabel: string
+      arrival: string | null
+      departure: string | null
+      gameDates: string[]
+      kings: number | null
+      suites: number | null
+    }
+    const visits: Visit[] = validRows.map((r) => {
       const rawCity = getVal(r, 'city').trim()
       const { city, opponentLabel } = rawCity ? parseCityValue(rawCity) : { city: '', opponentLabel: '' }
       const rawOpp = getVal(r, 'opponent').trim()
       // Use arrival year as fallback for short game dates like "3/25"
-      const arrivalDate = parseDate(getVal(r, 'arrival_date'))
-      const fallbackYear = arrivalDate ? parseInt(arrivalDate.slice(0, 4)) : undefined
+      const arrival = parseDate(getVal(r, 'arrival_date'))
+      const fallbackYear = arrival ? parseInt(arrival.slice(0, 4)) : undefined
       const rowKings = getVal(r, 'king_rooms').trim() ? Number(getVal(r, 'king_rooms').trim()) : null
       const rowSuites = getVal(r, 'suites').trim() ? Number(getVal(r, 'suites').trim()) : null
-      const rec: any = {
-        client_id: clientId,
-        status: 'draft',
-        opponent_label: rawOpp || opponentLabel || null,
-        city: city || rawOpp || null,
-        game_date: parseDate(getVal(r, 'game_date'), fallbackYear),
-        arrival_date: arrivalDate,
-        departure_date: parseDate(getVal(r, 'departure_date')),
-        king_rooms_requested: rowKings ?? defaultKings,
-        suites_requested: rowSuites ?? defaultSuites,
+      const cityName = city || rawOpp || ''
+      return {
+        cityKey: cityName.toLowerCase(),
+        city: cityName,
+        opponentLabel: rawOpp || opponentLabel || '',
+        arrival,
+        departure: parseDate(getVal(r, 'departure_date')),
+        gameDates: parseGameDates(getVal(r, 'game_date'), fallbackYear),
+        kings: rowKings ?? defaultKings,
+        suites: rowSuites ?? defaultSuites,
       }
-      return rec
     })
+
+    // Group repeat visits to the same city into a single trip with Visit 1 + Visit 2,
+    // so a hotel that hosts two stays (e.g. Washington in Sept and March) fills out
+    // one RFP instead of two. The schema supports two stays, so 3+ visits to the same
+    // city are paired up across multiple trips.
+    const groups = new Map<string, Visit[]>()
+    for (const v of visits) {
+      const arr = groups.get(v.cityKey) ?? []
+      arr.push(v)
+      groups.set(v.cityKey, arr)
+    }
+
+    const inserts: any[] = []
+    for (const group of groups.values()) {
+      // Chronological order so the earlier stay becomes Visit 1
+      group.sort((a, b) => (a.arrival ?? '').localeCompare(b.arrival ?? ''))
+      for (let i = 0; i < group.length; i += 2) {
+        const v1 = group[i]
+        const v2 = group[i + 1]
+        const rec: any = {
+          client_id: clientId,
+          status: 'draft',
+          opponent_label: v1.opponentLabel || null,
+          city: v1.city || null,
+          arrival_date: v1.arrival,
+          departure_date: v1.departure,
+          game_dates: v1.gameDates,
+          game_date: v1.gameDates[0] ?? null,
+          king_rooms_requested: v1.kings,
+          suites_requested: v1.suites,
+        }
+        if (v2) {
+          rec.stay2_arrival_date = v2.arrival
+          rec.stay2_departure_date = v2.departure
+          rec.stay2_game_dates = v2.gameDates
+          rec.stay2_game_date = v2.gameDates[0] ?? null
+        }
+        inserts.push(rec)
+      }
+    }
     const { error: insertError } = await supabase.from('trips').insert(inserts)
     setImporting(false)
     if (insertError) { setError(insertError.message); return }
+    setCreatedCount(inserts.length)
     setStep(4)
     onImported(inserts.length)
   }
@@ -487,6 +554,9 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
                   <strong className="text-slate-700">{validRows.length}</strong> of {rows.length} rows are valid and will be imported.
                   {rows.length - validRows.length > 0 && <span className="ml-1 text-amber-600">{rows.length - validRows.length} will be skipped (missing opponent or city).</span>}
                 </p>
+                <p className="mb-2 text-xs text-slate-500">
+                  Repeat visits to the same city are combined into one RFP with two visits (Visit 1 + Visit 2), and a comma-separated game-date cell (e.g. <span className="font-mono">9/13, 9/14, 9/15</span>) captures the full series.
+                </p>
                 <div className="overflow-x-auto rounded-lg border border-slate-200">
                   <table className="w-full text-xs">
                     <thead>
@@ -546,7 +616,7 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
             <div className="text-center py-8">
               <div className="text-4xl mb-3">✅</div>
               <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">Import complete!</h3>
-              <p className="mt-1 text-sm text-slate-500">{validRows.length} draft trip{validRows.length !== 1 ? 's' : ''} created successfully.</p>
+              <p className="mt-1 text-sm text-slate-500">{createdCount} draft trip{createdCount !== 1 ? 's' : ''} created successfully.</p>
               <button onClick={onClose} className="mt-4 rounded-lg bg-[#1C1008] px-5 py-2 text-sm font-semibold text-white hover:bg-[#2d1e0e]">
                 {inline ? 'View Trips' : 'Done'}
               </button>

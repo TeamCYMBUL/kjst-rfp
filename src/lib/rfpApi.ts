@@ -13,11 +13,13 @@ export type RfpTrip = {
   departure_date: string | null
   nights: number | null
   game_date: string | null
+  game_dates: string[] | null
   game_time: string | null
   // Second stay (separate visit, different dates)
   stay2_arrival_date: string | null
   stay2_departure_date: string | null
   stay2_game_date: string | null
+  stay2_game_dates: string[] | null
   stay2_game_time: string | null
   king_rooms_requested: number | null
   double_rooms_requested: number | null

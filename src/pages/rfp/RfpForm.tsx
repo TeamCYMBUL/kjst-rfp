@@ -356,14 +356,20 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
   const tdLabel = 'border border-slate-300 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 w-32'
   const rateInput = `w-full border-0 bg-transparent px-2 py-1 text-sm text-slate-800 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-[#1C1008] disabled:text-slate-400 min-w-0`
 
-  // Build dates rows
+  // Join a list of game dates (falls back to the single game_date column)
+  const gameDatesText = (dates: string[] | null | undefined, single: string | null): string | null => {
+    const list = dates && dates.length ? dates : single ? [single] : []
+    return list.length ? list.map((d) => formatDate(d)).join(', ') : null
+  }
+
+  // Build dates rows. `game` is already-formatted text (may list several dates).
   const dateRows: Array<{ opponent: string; arr: string | null; dep: string | null; nts: number | null; game: string | null; time: string | null }> = []
   dateRows.push({
     opponent: trip.opponent_label || '—',
     arr: trip.arrival_date,
     dep: trip.departure_date,
     nts: trip.nights,
-    game: trip.game_date,
+    game: gameDatesText(trip.game_dates, trip.game_date),
     time: trip.game_time,
   })
   if (hasStay2) {
@@ -376,7 +382,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
     dateRows.push({
       opponent: trip.opponent_label ? `${trip.opponent_label} (Visit 2)` : 'Visit 2',
       arr, dep, nts,
-      game: trip.stay2_game_date,
+      game: gameDatesText(trip.stay2_game_dates, trip.stay2_game_date),
       time: trip.stay2_game_time,
     })
   }
@@ -504,7 +510,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
                   <td className={td}>{formatDate(row.arr)}</td>
                   <td className={td}>{formatDate(row.dep)}</td>
                   <td className={`${td} text-center`}>{row.nts ?? '—'}</td>
-                  <td className={td}>{formatDate(row.game)}</td>
+                  <td className={td}>{row.game || '—'}</td>
                   <td className={td}>{row.time || '—'}</td>
                 </tr>
               ))}

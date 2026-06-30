@@ -52,6 +52,7 @@ export type GridTrip = {
   arrival_date: string | null
   departure_date: string | null
   game_date: string | null
+  game_dates?: string[] | null
   king_rooms_requested: number | null
   suites_requested: number | null
   total_rooms_requested: number | null
@@ -60,6 +61,12 @@ export type GridTrip = {
 
 function fmt(v: string | null | undefined) {
   return v ?? '—'
+}
+
+// Join a list of game dates into one cell value, falling back to the single date.
+function joinGameDates(dates: string[] | null | undefined, single: string | null): string | null {
+  const list = dates && dates.length ? dates : single ? [single] : []
+  return list.length ? list.join(', ') : null
 }
 
 function yesNo(v: boolean | null) {
@@ -100,7 +107,7 @@ export function exportComparisonXlsx(
   rows.push(row('OPPONENT', hotels.map(() => fmt(trip.opponent_label))))
   rows.push(row('ARR DATE', hotels.map(() => fmt(trip.arrival_date))))
   rows.push(row('DEP DATE', hotels.map(() => fmt(trip.departure_date))))
-  rows.push(row('GAME DATE', hotels.map(() => fmt(trip.game_date))))
+  rows.push(row('GAME DATE', hotels.map(() => fmt(joinGameDates(trip.game_dates, trip.game_date)))))
   rows.push([]) // blank spacer
 
   // ── Hotel meta ───────────────────────────────────────────────────────────
@@ -463,6 +470,7 @@ export type ConsolidatedCity = {
     arrival_date: string | null
     departure_date: string | null
     game_date: string | null
+    game_dates?: string[] | null
   }
   hotels: ConsolidatedHotel[]
   items: ConcessionItem[]
@@ -611,7 +619,7 @@ export function exportSingleHotelXlsx(
   rows.push(row2('City', trip.city))
   rows.push(row2('Arrival', trip.arrival_date))
   rows.push(row2('Departure', trip.departure_date))
-  rows.push(row2('Game date', trip.game_date))
+  rows.push(row2('Game date', joinGameDates(trip.game_dates, trip.game_date)))
   rows.push(row2('Kings requested', trip.king_rooms_requested))
   rows.push(row2('Suites requested', trip.suites_requested))
   rows.push(row2('Total rooms', trip.total_rooms_requested))

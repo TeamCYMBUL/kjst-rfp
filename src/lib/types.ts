@@ -55,11 +55,15 @@ export type Trip = {
   departure_date: string | null
   nights: number | null
   game_date: string | null
+  // Full list of game dates for visit 1 (e.g. a 4-game series). game_date stays
+  // populated with the first entry for backward compatibility.
+  game_dates: string[]
   game_time: string | null
   // Second stay (same city, different dates — one RFP covers both)
   stay2_arrival_date: string | null
   stay2_departure_date: string | null
   stay2_game_date: string | null
+  stay2_game_dates: string[]
   stay2_game_time: string | null
   king_rooms_requested: number | null
   double_rooms_requested: number | null

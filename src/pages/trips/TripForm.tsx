@@ -22,10 +22,12 @@ const blank = {
   arrival_date: '',
   departure_date: '',
   game_date: '',
+  game_dates: [] as string[],
   game_time: '',
   stay2_arrival_date: '',
   stay2_departure_date: '',
   stay2_game_date: '',
+  stay2_game_dates: [] as string[],
   stay2_game_time: '',
   king_rooms_requested: '',
   double_rooms_requested: '',
@@ -45,6 +47,68 @@ function numOrNull(v: string): number | null {
   if (v.trim() === '') return null
   const n = Number(v)
   return Number.isFinite(n) ? n : null
+}
+
+// Editor for a list of game dates (e.g. a multi-game series like Sept 13–16).
+// Always shows at least one row; passes the raw list up (blanks are stripped on save).
+function MultiDateField({
+  label,
+  hint,
+  dates,
+  onChange,
+}: {
+  label: string
+  hint?: string
+  dates: string[]
+  onChange: (next: string[]) => void
+}) {
+  const rows = dates.length ? dates : ['']
+  const setAt = (i: number, v: string) => {
+    const next = rows.slice()
+    next[i] = v
+    onChange(next)
+  }
+  const addRow = () => onChange([...rows, ''])
+  const removeAt = (i: number) => {
+    const next = rows.slice()
+    next.splice(i, 1)
+    onChange(next.length ? next : [''])
+  }
+  return (
+    <div className="block">
+      <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
+      <div className="space-y-2">
+        {rows.map((d, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <input
+              type="date"
+              value={d}
+              onChange={(e) => setAt(i, e.target.value)}
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:border-[#1C1008] focus:ring-1 focus:ring-[#1C1008] focus:outline-none"
+            />
+            {rows.length > 1 && (
+              <button
+                type="button"
+                onClick={() => removeAt(i)}
+                aria-label="Remove game date"
+                className="shrink-0 px-1 text-lg leading-none text-slate-400 hover:text-red-500"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={addRow}
+        className="mt-2 text-xs font-medium text-[#1C1008] hover:underline dark:text-amber-400"
+      >
+        + Add another game date
+      </button>
+      {hint && <span className="mt-1 block text-xs text-slate-400 dark:text-slate-500">{hint}</span>}
+    </div>
+  )
 }
 
 export default function TripForm() {
@@ -109,10 +173,16 @@ export default function TripForm() {
             arrival_date: t.arrival_date ?? '',
             departure_date: t.departure_date ?? '',
             game_date: t.game_date ?? '',
+            game_dates: ((t as any).game_dates as string[] | null)?.length
+              ? ((t as any).game_dates as string[])
+              : (t.game_date ? [t.game_date] : []),
             game_time: t.game_time ?? '',
             stay2_arrival_date: t.stay2_arrival_date ?? '',
             stay2_departure_date: t.stay2_departure_date ?? '',
             stay2_game_date: t.stay2_game_date ?? '',
+            stay2_game_dates: ((t as any).stay2_game_dates as string[] | null)?.length
+              ? ((t as any).stay2_game_dates as string[])
+              : (t.stay2_game_date ? [t.stay2_game_date] : []),
             stay2_game_time: t.stay2_game_time ?? '',
             king_rooms_requested: t.king_rooms_requested?.toString() ?? '',
             double_rooms_requested: (t.double_rooms_requested as number | null | undefined)?.toString() ?? '',
@@ -186,6 +256,11 @@ export default function TripForm() {
     setError(null)
 
     const clean = (v: string) => (v.trim() === '' ? null : v.trim())
+    // Dedupe, drop blanks, and sort the game-date lists
+    const cleanDates = (arr: string[]) =>
+      Array.from(new Set(arr.map((d) => d.trim()).filter(Boolean))).sort()
+    const gameDatesClean = cleanDates(fields.game_dates)
+    const stay2GameDatesClean = cleanDates(fields.stay2_game_dates)
     const payload = {
       client_id: fields.client_id,
       city: clean(fields.city),
@@ -193,11 +268,14 @@ export default function TripForm() {
       arrival_date: clean(fields.arrival_date),
       departure_date: clean(fields.departure_date),
       nights,
-      game_date: clean(fields.game_date),
+      game_dates: gameDatesClean,
+      // Keep the single game_date populated with the first date for backward compatibility
+      game_date: gameDatesClean[0] ?? clean(fields.game_date),
       game_time: clean(fields.game_time),
       stay2_arrival_date: clean(fields.stay2_arrival_date),
       stay2_departure_date: clean(fields.stay2_departure_date),
-      stay2_game_date: clean(fields.stay2_game_date),
+      stay2_game_dates: stay2GameDatesClean,
+      stay2_game_date: stay2GameDatesClean[0] ?? clean(fields.stay2_game_date),
       stay2_game_time: clean(fields.stay2_game_time),
       king_rooms_requested: numOrNull(fields.king_rooms_requested),
       double_rooms_requested: numOrNull(fields.double_rooms_requested),
@@ -314,11 +392,11 @@ export default function TripForm() {
               onChange={set('departure_date')}
               hint={nights != null ? `${nights} night${nights === 1 ? '' : 's'}` : undefined}
             />
-            <TextField
-              label="Game date"
-              type="date"
-              value={fields.game_date}
-              onChange={set('game_date')}
+            <MultiDateField
+              label="Game date(s)"
+              hint="Add one row per game — e.g. a 4-game series."
+              dates={fields.game_dates}
+              onChange={(next) => setFields((f) => ({ ...f, game_dates: next }))}
             />
             <TextField
               label="Game time"
@@ -473,6 +551,7 @@ export default function TripForm() {
                     stay2_arrival_date: '',
                     stay2_departure_date: '',
                     stay2_game_date: '',
+                    stay2_game_dates: [],
                     stay2_game_time: '',
                   }))
                 }}
@@ -503,11 +582,11 @@ export default function TripForm() {
                 value={fields.stay2_departure_date}
                 onChange={set('stay2_departure_date')}
               />
-              <TextField
-                label="Game date (stay 2)"
-                type="date"
-                value={fields.stay2_game_date}
-                onChange={set('stay2_game_date')}
+              <MultiDateField
+                label="Game date(s) (stay 2)"
+                hint="Add one row per game."
+                dates={fields.stay2_game_dates}
+                onChange={(next) => setFields((f) => ({ ...f, stay2_game_dates: next }))}
               />
               <TextField
                 label="Game time (stay 2)"

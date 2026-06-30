@@ -1010,6 +1010,7 @@ function HotelPanel({
                       arrival_date: trip.arrival_date,
                       departure_date: trip.departure_date,
                       game_date: trip.game_date,
+                      game_dates: (trip as any).game_dates,
                       king_rooms_requested: trip.king_rooms_requested,
                       suites_requested: trip.suites_requested,
                       total_rooms_requested: trip.total_rooms_requested,
@@ -1079,6 +1080,11 @@ function RateField({ label, value, highlight = false }: { label: string; value: 
 
 function TripInfoPanel({ trip }: { trip: Trip & { clients: Pick<Client, 'id' | 'team_name'> | null } }) {
   const fmt = (d: string | null) => formatDate(d) || '—'
+  // Format a list of game dates, falling back to the single game_date column.
+  const fmtGames = (dates: string[] | null | undefined, single: string | null) => {
+    const list = dates && dates.length ? dates : single ? [single] : []
+    return list.length ? list.map((d) => formatDate(d)).join(', ') : '—'
+  }
   const hasStay2 = Boolean(trip.stay2_arrival_date)
   return (
     <div className="p-6 space-y-6">
@@ -1090,7 +1096,7 @@ function TripInfoPanel({ trip }: { trip: Trip & { clients: Pick<Client, 'id' | '
           <InfoRow label={hasStay2 ? 'Stay 1 arrival' : 'Arrival'} value={fmt(trip.arrival_date)} />
           <InfoRow label={hasStay2 ? 'Stay 1 departure' : 'Departure'} value={fmt(trip.departure_date)} />
           {trip.nights != null && <InfoRow label="Nights" value={String(trip.nights)} />}
-          <InfoRow label="Game date" value={fmt(trip.game_date)} />
+          <InfoRow label="Game date(s)" value={fmtGames((trip as any).game_dates, trip.game_date)} />
           {trip.game_time && <InfoRow label="Game time" value={trip.game_time} />}
           <InfoRow label="Response deadline" value={fmt(trip.response_deadline)} />
         </dl>
@@ -1101,7 +1107,9 @@ function TripInfoPanel({ trip }: { trip: Trip & { clients: Pick<Client, 'id' | '
           <dl className="space-y-3">
             <InfoRow label="Arrival" value={fmt(trip.stay2_arrival_date)} />
             <InfoRow label="Departure" value={fmt(trip.stay2_departure_date)} />
-            {trip.stay2_game_date && <InfoRow label="Game date" value={fmt(trip.stay2_game_date)} />}
+            {(((trip as any).stay2_game_dates as string[] | null)?.length || trip.stay2_game_date) && (
+              <InfoRow label="Game date(s)" value={fmtGames((trip as any).stay2_game_dates, trip.stay2_game_date)} />
+            )}
             {trip.stay2_game_time && <InfoRow label="Game time" value={trip.stay2_game_time} />}
           </dl>
         </div>

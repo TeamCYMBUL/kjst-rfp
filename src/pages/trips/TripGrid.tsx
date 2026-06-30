@@ -578,6 +578,7 @@ export default function TripGrid() {
         arrival_date: trip.arrival_date,
         departure_date: trip.departure_date,
         game_date: trip.game_date,
+        game_dates: (trip as any).game_dates,
         king_rooms_requested: trip.king_rooms_requested,
         suites_requested: trip.suites_requested,
         total_rooms_requested: trip.total_rooms_requested,
