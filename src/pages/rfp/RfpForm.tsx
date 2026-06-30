@@ -467,6 +467,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
             <thead>
               <tr>
                 <th className={th}>King Room</th>
+                <th className={th}>Double Room</th>
                 <th className={th}>One Bedroom Suite</th>
                 <th className={th}>Total Rooms</th>
               </tr>
@@ -474,6 +475,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
             <tbody>
               <tr>
                 <td className={`${td} text-center`}>{trip.king_rooms_requested ?? '—'}</td>
+                <td className={`${td} text-center`}>{trip.double_rooms_requested ?? '—'}</td>
                 <td className={`${td} text-center`}>{trip.suites_requested ?? '—'}</td>
                 <td className={`${td} text-center font-semibold`}>{trip.total_rooms_requested ?? '—'}</td>
               </tr>
@@ -1133,7 +1135,10 @@ export default function RfpForm() {
       (item) => item.answer_type === 'yes_no' && answers[item.id]?.answer_yes_no === null,
     )
     const unansweredValue = (data?.items ?? []).filter(
-      (item) => item.answer_type !== 'yes_no' && !answers[item.id]?.answer_value?.trim(),
+      (item) =>
+        item.answer_type !== 'yes_no' &&
+        !item.label.includes('(if applicable)') &&
+        !answers[item.id]?.answer_value?.trim(),
     )
     const allMissing = [...unansweredYesNo, ...unansweredValue]
     if (allMissing.length > 0) {
@@ -1255,6 +1260,8 @@ export default function RfpForm() {
   const isCommissionItem = (item: ConcessionItem) =>
     item.answer_type === 'percent' &&
     (item.label.toLowerCase().includes('commission') || item.label.toLowerCase().includes('commissionable'))
+  const isRebateItem = (item: ConcessionItem) =>
+    item.answer_type === 'currency' && item.label.toLowerCase().includes('rebate')
   const isMeetingSpaceYesNoItem = (item: ConcessionItem) =>
     item.answer_type === 'yes_no' &&
     item.label.toLowerCase().includes('complimentary meeting space')
@@ -1264,6 +1271,7 @@ export default function RfpForm() {
   )
   const flexCancelItems = allConcessionItems.filter(isFlexCancelItem)
   const commissionItems = allConcessionItems.filter(isCommissionItem)
+  const rebateItems = allConcessionItems.filter(isRebateItem)
   const meetingSpaceYesNoItems = allConcessionItems.filter(isMeetingSpaceYesNoItem)
   const postseasonItems = data.items.filter((i) => i.section === 'postseason')
   const inSeasonItems = data.items.filter((i) => i.section === 'in_season_tournament')
@@ -1273,6 +1281,7 @@ export default function RfpForm() {
   const specialItemIds = new Set([
     ...flexCancelItems,
     ...commissionItems,
+    ...rebateItems,
     ...meetingSpaceYesNoItems,
   ].map((i) => i.id))
   const remainingItems = allConcessionItems.filter((i) => !specialItemIds.has(i.id))
@@ -1433,11 +1442,19 @@ export default function RfpForm() {
             </div>
           )}
 
-          {/* ── Section 3: Commission (#2 dealbreaker) ─── */}
-          {commissionItems.length > 0 && (
+          {/* ── Section 3: Commission + Rebate (#2 dealbreaker) ─── */}
+          {(commissionItems.length > 0 || rebateItems.length > 0) && (
             <div className="rounded-xl border border-slate-200 bg-white p-6">
               <SectionHeading>Commission</SectionHeading>
               {renderItems(commissionItems)}
+              {rebateItems.length > 0 && (
+                <>
+                  <p className="mb-3 mt-4 text-sm text-slate-500">
+                    Some hotels offer a rebate in addition to standard commission. Enter the rebate amount per room night, or leave blank if not applicable.
+                  </p>
+                  {renderItems(rebateItems)}
+                </>
+              )}
             </div>
           )}
 

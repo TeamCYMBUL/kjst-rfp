@@ -20,6 +20,7 @@ export type RfpTrip = {
   stay2_game_date: string | null
   stay2_game_time: string | null
   king_rooms_requested: number | null
+  double_rooms_requested: number | null
   suites_requested: number | null
   total_rooms_requested: number | null
   in_season_tournament_window: string | null
@@ -172,5 +173,20 @@ export async function respondRfp(args: {
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error ?? 'Failed to save')
+  return data
+}
+
+export async function declineRfp(args: {
+  token: string
+  decline_reason: string
+  decline_notes?: string
+}): Promise<{ ok: boolean }> {
+  const res = await fetch(`${BASE}/rfp-decline`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(args),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error ?? 'Failed to decline')
   return data
 }

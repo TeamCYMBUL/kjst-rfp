@@ -1110,6 +1110,7 @@ function TripInfoPanel({ trip }: { trip: Trip & { clients: Pick<Client, 'id' | '
         <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Rooms requested</h3>
         <dl className="space-y-3">
           <InfoRow label="King rooms" value={trip.king_rooms_requested != null ? String(trip.king_rooms_requested) : null} />
+          <InfoRow label="Double rooms" value={(trip as any).double_rooms_requested != null ? String((trip as any).double_rooms_requested) : null} />
           <InfoRow label="Suites" value={trip.suites_requested != null ? String(trip.suites_requested) : null} />
           <InfoRow label="Total rooms" value={trip.total_rooms_requested != null ? String(trip.total_rooms_requested) : null} />
         </dl>

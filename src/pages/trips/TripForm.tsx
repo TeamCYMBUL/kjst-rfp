@@ -28,6 +28,7 @@ const blank = {
   stay2_game_date: '',
   stay2_game_time: '',
   king_rooms_requested: '',
+  double_rooms_requested: '',
   suites_requested: '',
   total_rooms_requested: '',
   in_season_tournament_window: '',
@@ -114,6 +115,7 @@ export default function TripForm() {
             stay2_game_date: t.stay2_game_date ?? '',
             stay2_game_time: t.stay2_game_time ?? '',
             king_rooms_requested: t.king_rooms_requested?.toString() ?? '',
+            double_rooms_requested: (t.double_rooms_requested as number | null | undefined)?.toString() ?? '',
             suites_requested: t.suites_requested?.toString() ?? '',
             total_rooms_requested: t.total_rooms_requested?.toString() ?? '',
             in_season_tournament_window: t.in_season_tournament_window ?? '',
@@ -139,6 +141,9 @@ export default function TripForm() {
       king_rooms_requested:
         f.king_rooms_requested ||
         (terms.default_king_rooms != null ? String(terms.default_king_rooms) : ''),
+      double_rooms_requested:
+        f.double_rooms_requested ||
+        (terms.default_double_rooms != null ? String(terms.default_double_rooms) : ''),
       suites_requested:
         f.suites_requested || (terms.default_suites != null ? String(terms.default_suites) : ''),
       total_rooms_requested:
@@ -195,6 +200,7 @@ export default function TripForm() {
       stay2_game_date: clean(fields.stay2_game_date),
       stay2_game_time: clean(fields.stay2_game_time),
       king_rooms_requested: numOrNull(fields.king_rooms_requested),
+      double_rooms_requested: numOrNull(fields.double_rooms_requested),
       suites_requested: numOrNull(fields.suites_requested),
       total_rooms_requested: numOrNull(fields.total_rooms_requested),
       in_season_tournament_window: clean(fields.in_season_tournament_window),
@@ -521,12 +527,18 @@ export default function TripForm() {
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Rooms requested
           </h2>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-4">
             <TextField
               label="King rooms"
               type="number"
               value={fields.king_rooms_requested}
               onChange={set('king_rooms_requested')}
+            />
+            <TextField
+              label="Double rooms"
+              type="number"
+              value={fields.double_rooms_requested}
+              onChange={set('double_rooms_requested')}
             />
             <div>
               <TextField

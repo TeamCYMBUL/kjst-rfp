@@ -9,6 +9,7 @@ export type InvitationStatus = 'sent' | 'opened' | 'submitted' | 'declined' | 'a
 export type DefaultTerms = {
   agreement_status?: string
   default_king_rooms?: number | null
+  default_double_rooms?: number | null
   default_suites?: number | null
   default_total_rooms?: number | null
   in_season_tournament_window?: string
@@ -61,6 +62,7 @@ export type Trip = {
   stay2_game_date: string | null
   stay2_game_time: string | null
   king_rooms_requested: number | null
+  double_rooms_requested: number | null
   suites_requested: number | null
   total_rooms_requested: number | null
   in_season_tournament_window: string | null
