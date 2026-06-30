@@ -456,9 +456,14 @@ export type ConsolidatedHotel = {
   hotel_name: string
   status: string
   best_king_rate: number | null
+  best_suite_rate: number | null
   current_selling_rate: string | null
   occupancy_tax: string | null
   resort_fee: string | null
+  // Second-visit rates (when the trip covers two stays)
+  stay2_king_rate: number | null
+  stay2_suite_rate: number | null
+  general_comments: string | null
   meeting_space_type: string | null
   meeting_space_count: number | null
   answers: Record<string, { answer_yes_no: boolean | null; answer_value: string | null; comment: string | null }>
@@ -472,130 +477,148 @@ export type ConsolidatedCity = {
     departure_date: string | null
     game_date: string | null
     game_dates?: string[] | null
+    total_rooms_requested?: number | null
+    stay2_arrival_date?: string | null
+    stay2_departure_date?: string | null
+    stay2_game_dates?: string[] | null
+    stay2_game_date?: string | null
   }
   hotels: ConsolidatedHotel[]
   items: ConcessionItem[]
 }
 
-const MTG_LABELS: Record<string, string> = {
-  function_room: 'Function Room',
-  ballroom: 'Ballroom',
-  restaurant: 'Restaurant ⚠️',
-  suite_converted: 'Suite (converted) ⚠️',
-  none: 'None',
-}
-
+// Horizontal season grid matching KJST's "ALL HOTEL OPTIONS" layout: one row per
+// hotel bid, grouped by city/visit, with the columns they paste into each season.
 export function exportMultiCityConsolidatedXlsx(
   cities: ConsolidatedCity[],
   clientName: string,
   filename?: string,
 ): void {
   const COLS = [
-    'HOTEL',
-    'KING RATE / NIGHT',
-    'VS. CURRENT RATE',
-    'TAXES & FEES',
-    'RESORT FEE',
-    'COMP SUITES (FREE)',
-    'SUITE UPGRADES AT KING RATE',
-    'COMP TVs',
-    'COMP WHITEBOARDS',
-    'PORTERAGE ($/BAG)',
-    'PLAYOFF CLAUSE',
-    'MEETING SPACE',
-    'NOTES',
+    'C/I', 'C/O', 'NTS', 'GAME DATES', 'OPPONENT', 'HOTEL NAME',
+    'KING RATE', 'TAX FOR KING RM', 'TOTAL (Per King) w/ Tax',
+    'TOTAL RMS PER NIGHT', '# OF KINGS', '# OF COMP SUITES', '# OF SUITE UG',
+    'ADDL SUITE RATE', 'POST SEASON GTE',
+    'REVENUE ESTIMATE FOR ENTIRE STAY (Kings + Suites) TAX INCLUDED', 'COMMENTS',
   ]
+  const NCOL = COLS.length
+
+  // Short M/D (no year) to match their grid (e.g. "5/6")
+  const md = (iso: string | null | undefined): string => {
+    if (!iso) return ''
+    const [, m, d] = iso.split('-').map(Number)
+    return m && d ? `${m}/${d}` : ''
+  }
+  const num = (v: number | null | undefined): number | string => (v == null ? '' : v)
+  const round2 = (n: number) => Math.round(n * 100) / 100
 
   const rows: (string | number | null)[][] = []
+  rows.push([`${clientName} — Hotel Options`, ...Array(NCOL - 1).fill('')])
+  rows.push(COLS)
 
   for (const { trip, hotels, items } of cities) {
-    const eligible = hotels.filter((h) => ['submitted', 'awarded'].includes(h.status))
-    if (eligible.length === 0) continue
-
-    // Find relevant concession items by label
+    // Concession items that feed the grid's count/guarantee columns
     const compSuitesItem = items.find((i) => i.label.toLowerCase().includes('complimentary one bedroom suite'))
-    const suiteUpgItem = items.find((i) => i.label.toLowerCase().includes('suite upgrades at the group'))
-    const tvItem = items.find((i) => i.label.toLowerCase().includes('tv') || i.label.toLowerCase().includes('television'))
-    const wbItem = items.find((i) => i.label.toLowerCase().includes('white board') || i.label.toLowerCase().includes('whiteboard'))
-    const portItem = items.find((i) => i.label.toLowerCase().includes('baggage') || i.label.toLowerCase().includes('porterage'))
-    const playoffItem = items.find((i) => i.section === 'postseason')
+    const suiteUpgItem = items.find((i) => i.label.toLowerCase().includes('suite upgrade'))
+    const playoffItem = items.find((i) => i.section === 'postseason' || i.label.toLowerCase().includes('post') && i.label.toLowerCase().includes('season'))
 
-    // City section header
-    const arrival = trip.arrival_date ? fmtDate(trip.arrival_date) : '—'
-    const departure = trip.departure_date ? fmtDate(trip.departure_date) : '—'
-    const cityHeader = [
-      `${(trip.city ?? 'City').toUpperCase()}  ·  ${trip.opponent_label ?? ''}  ·  ${arrival} – ${departure}`,
-      ...Array(COLS.length - 1).fill(''),
+    const cityName = (trip.city ?? trip.opponent_label ?? 'City').toUpperCase()
+    const totalRooms = trip.total_rooms_requested ?? null
+
+    // A trip can cover two visits to the same city → emit two date-groups.
+    type Visit = {
+      arr: string | null
+      dep: string | null
+      games: string[]
+      kingRateKey: keyof ConsolidatedHotel
+      suiteRateKey: keyof ConsolidatedHotel
+    }
+    const visits: Visit[] = [
+      {
+        arr: trip.arrival_date, dep: trip.departure_date,
+        games: trip.game_dates && trip.game_dates.length ? trip.game_dates : (trip.game_date ? [trip.game_date] : []),
+        kingRateKey: 'best_king_rate', suiteRateKey: 'best_suite_rate',
+      },
     ]
-    rows.push(cityHeader)
-    rows.push(COLS)
-
-    for (const h of eligible) {
-      const compAns = compSuitesItem ? h.answers[compSuitesItem.id] : undefined
-      const upgAns = suiteUpgItem ? h.answers[suiteUpgItem.id] : undefined
-      const tvAns = tvItem ? h.answers[tvItem.id] : undefined
-      const wbAns = wbItem ? h.answers[wbItem.id] : undefined
-      const portAns = portItem ? h.answers[portItem.id] : undefined
-      const playoffAns = playoffItem ? h.answers[playoffItem.id] : undefined
-
-      const mtgLabel = h.meeting_space_type
-        ? (MTG_LABELS[h.meeting_space_type] ?? h.meeting_space_type)
-        : '—'
-      const mtgDisplay =
-        h.meeting_space_type && h.meeting_space_count != null && h.meeting_space_count > 1
-          ? `${mtgLabel} ×${h.meeting_space_count}`
-          : mtgLabel
-
-      const noteFrags: string[] = []
-      if (h.meeting_space_type === 'restaurant' || h.meeting_space_type === 'suite_converted') {
-        noteFrags.push('Meeting space not traditional — confirm eligibility')
-      }
-      if (h.status === 'awarded') noteFrags.push('AWARDED')
-
-      rows.push([
-        h.hotel_name,
-        h.best_king_rate ?? '—',
-        h.current_selling_rate ?? '—',
-        h.occupancy_tax ?? '—',
-        h.resort_fee ?? '—',
-        compAns ? (compAns.answer_value ?? (compAns.answer_yes_no === false ? 'None' : '—')) : '—',
-        upgAns?.answer_value ?? '—',
-        tvAns ? (tvAns.answer_yes_no === true ? 'Yes' : tvAns.answer_yes_no === false ? 'No' : (tvAns.answer_value ?? '—')) : '—',
-        wbAns ? (wbAns.answer_yes_no === true ? 'Yes' : wbAns.answer_yes_no === false ? 'No' : (wbAns.answer_value ?? '—')) : '—',
-        portAns?.answer_value ?? (portAns?.answer_yes_no === false ? 'No' : '—'),
-        playoffAns?.answer_yes_no === true ? 'Yes' : playoffAns?.answer_yes_no === false ? 'No' : '—',
-        mtgDisplay,
-        noteFrags.join('; '),
-      ])
+    if (trip.stay2_arrival_date) {
+      visits.push({
+        arr: trip.stay2_arrival_date, dep: trip.stay2_departure_date ?? null,
+        games: trip.stay2_game_dates && trip.stay2_game_dates.length ? trip.stay2_game_dates : (trip.stay2_game_date ? [trip.stay2_game_date] : []),
+        kingRateKey: 'stay2_king_rate', suiteRateKey: 'stay2_suite_rate',
+      })
     }
 
-    rows.push([]) // blank spacer between cities
+    for (const visit of visits) {
+      const nights = calcNights(visit.arr, visit.dep)
+      const gameText = visit.games.map((g) => md(g)).filter(Boolean).join(', ')
+      let firstInGroup = true
+
+      // Submitted/awarded hotels first (full rows), then unavailable/declined as name-only
+      const ordered = [...hotels].sort((a, b) => {
+        const rank = (s: string) => (['submitted', 'awarded'].includes(s) ? 0 : 1)
+        return rank(a.status) - rank(b.status)
+      })
+
+      for (const h of ordered) {
+        const submitted = ['submitted', 'awarded'].includes(h.status)
+        const opp = firstInGroup ? cityName : ''
+        firstInGroup = false
+
+        if (!submitted) {
+          const note = ['declined', 'unavailable', 'passed'].includes(h.status) ? '(Not Available)' : '(Awaiting response)'
+          rows.push([md(visit.arr), md(visit.dep), num(nights), gameText, opp, `${h.hotel_name} ${note}`,
+            '', '', '', num(totalRooms), '', '', '', '', '', '', ''])
+          continue
+        }
+
+        const kingRate = (h as any)[visit.kingRateKey] as number | null
+        const suiteRate = (h as any)[visit.suiteRateKey] as number | null
+        const taxRate = parseTaxRate(h.occupancy_tax) // e.g. 15.9 → 0.159
+        const taxForKing = kingRate != null ? round2(kingRate * taxRate) : null
+        const totalPerKing = kingRate != null ? round2(kingRate * (1 + taxRate)) : null
+
+        const compAns = compSuitesItem ? h.answers[compSuitesItem.id] : undefined
+        const upgAns = suiteUpgItem ? h.answers[suiteUpgItem.id] : undefined
+        const playoffAns = playoffItem ? h.answers[playoffItem.id] : undefined
+        const compSuites = compAns?.answer_value ? Number(compAns.answer_value) : (compAns?.answer_yes_no === true ? 1 : 0)
+        const suiteUg = upgAns?.answer_value ? Number(upgAns.answer_value) : null
+        const kings = totalRooms != null ? totalRooms - (Number.isFinite(compSuites) ? compSuites : 0) : null
+        const postGte = playoffAns?.answer_yes_no === true ? 'YES' : playoffAns?.answer_yes_no === false ? 'NO' : ''
+        const revenue =
+          kingRate != null && kings != null && nights > 0 ? round2(kingRate * (1 + taxRate) * kings * nights) : null
+
+        const commentFrags: string[] = []
+        if (h.status === 'awarded') commentFrags.push('AWARDED')
+        if (h.general_comments) commentFrags.push(h.general_comments)
+
+        rows.push([
+          md(visit.arr), md(visit.dep), num(nights), gameText, opp, h.hotel_name,
+          num(kingRate), num(taxForKing), num(totalPerKing),
+          num(totalRooms), num(kings),
+          Number.isFinite(compSuites) ? compSuites : '',
+          suiteUg != null && Number.isFinite(suiteUg) ? suiteUg : '',
+          num(suiteRate), postGte,
+          num(revenue), commentFrags.join(' — '),
+        ])
+      }
+
+      rows.push([]) // blank spacer between groups
+    }
   }
 
   const ws = XLSX.utils.aoa_to_sheet(rows)
-
   ws['!cols'] = [
-    { wch: 32 }, // Hotel
-    { wch: 16 }, // King Rate
-    { wch: 16 }, // VS Current
-    { wch: 16 }, // Taxes
-    { wch: 12 }, // Resort Fee
-    { wch: 20 }, // Comp Suites
-    { wch: 28 }, // Suite Upgrades
-    { wch: 12 }, // Comp TVs
-    { wch: 18 }, // Comp Whiteboards
-    { wch: 16 }, // Porterage
-    { wch: 14 }, // Playoff
-    { wch: 24 }, // Mtg Space
-    { wch: 44 }, // Notes
+    { wch: 7 }, { wch: 7 }, { wch: 5 }, { wch: 18 }, { wch: 18 }, { wch: 28 },
+    { wch: 11 }, { wch: 13 }, { wch: 16 }, { wch: 12 }, { wch: 10 }, { wch: 13 },
+    { wch: 12 }, { wch: 13 }, { wch: 13 }, { wch: 26 }, { wch: 50 },
   ]
 
   const clientStr = clientName.replace(/\s+/g, '_')
   const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-  const outputFile = filename ?? `${clientStr}_All_Cities_Grid_${dateStr}.xlsx`
+  const outputFile = filename ?? `${clientStr}_Hotel_Options_${dateStr}.xlsx`
 
   const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, 'All Cities')
+  XLSX.utils.book_append_sheet(wb, ws, 'ALL HOTEL OPTIONS')
   XLSX.writeFile(wb, outputFile)
 }
 
