@@ -386,6 +386,9 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
       for (let i = 0; i < group.length; i += 2) {
         const v1 = group[i]
         const v2 = group[i + 1]
+        // Always include every key (even when there's no second visit) so the
+        // bulk insert has a consistent column set across all rows — otherwise
+        // PostgREST sends NULL for the missing columns and ignores their defaults.
         const rec: any = {
           client_id: clientId,
           status: 'draft',
@@ -397,12 +400,10 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
           game_date: v1.gameDates[0] ?? null,
           king_rooms_requested: v1.kings,
           suites_requested: v1.suites,
-        }
-        if (v2) {
-          rec.stay2_arrival_date = v2.arrival
-          rec.stay2_departure_date = v2.departure
-          rec.stay2_game_dates = v2.gameDates
-          rec.stay2_game_date = v2.gameDates[0] ?? null
+          stay2_arrival_date: v2 ? v2.arrival : null,
+          stay2_departure_date: v2 ? v2.departure : null,
+          stay2_game_dates: v2 ? v2.gameDates : [],
+          stay2_game_date: v2 ? (v2.gameDates[0] ?? null) : null,
         }
         inserts.push(rec)
       }
