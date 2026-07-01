@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import type { Client, DateScenario, Invitation, Trip } from '../../lib/types'
-import { formatDate, generateToken } from '../../lib/format'
+import { formatDate, generateToken, formatMeetingSpaceNotes } from '../../lib/format'
 import { sendInvitationEmail, sendReminderEmails, sendSingleReminderEmail } from '../../lib/emailApi'
 import { Badge, ErrorNote, LinkButton, Loading } from '../../components/ui'
 import { exportTeamGrid, exportSingleHotelXlsx } from '../../lib/excelExport'
@@ -972,7 +972,7 @@ function HotelPanel({
             {(response.meeting_space_notes || response.general_comments) && (
               <div className="px-6 py-5 space-y-3">
                 {response.meeting_space_notes && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400"><span className="font-medium text-slate-600 dark:text-slate-300">Meeting space:</span> {response.meeting_space_notes}</p>
+                  <p className="whitespace-pre-line text-xs text-slate-500 dark:text-slate-400"><span className="font-medium text-slate-600 dark:text-slate-300">Meeting space:</span> {formatMeetingSpaceNotes(response.meeting_space_notes)}</p>
                 )}
                 {response.general_comments && (
                   <p className="text-xs text-slate-500 dark:text-slate-400"><span className="font-medium text-slate-600 dark:text-slate-300">General comments:</span> {response.general_comments}</p>
