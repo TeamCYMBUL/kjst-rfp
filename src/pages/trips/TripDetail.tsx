@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import type { Client, DateScenario, Invitation, Trip } from '../../lib/types'
 import { formatDate, generateToken, formatMeetingSpaceNotes } from '../../lib/format'
+import { PUBLIC_APP_URL } from '../../lib/config'
 import { sendInvitationEmail, sendReminderEmails, sendSingleReminderEmail } from '../../lib/emailApi'
 import { Badge, ErrorNote, LinkButton, Loading } from '../../components/ui'
 import { exportTeamGrid, exportSingleHotelXlsx } from '../../lib/excelExport'
@@ -1254,7 +1255,7 @@ export default function TripDetail() {
 
   const copyLink = async (token: string) => {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/rfp/${token}`)
+      await navigator.clipboard.writeText(`${PUBLIC_APP_URL}/rfp/${token}`)
       setCopied(token)
       setTimeout(() => setCopied((c) => (c === token ? null : c)), 1500)
     } catch { setError('Could not copy link.') }

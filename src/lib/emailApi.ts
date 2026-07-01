@@ -2,6 +2,7 @@
 // Both functions require an authenticated session (JWT verified server-side).
 
 import { supabase } from './supabase'
+import { PUBLIC_APP_URL } from './config'
 
 const FN_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
 
@@ -22,7 +23,7 @@ export async function sendInvitationEmail(
   const res = await fetch(`${FN_BASE}/send-invitation`, {
     method: 'POST',
     headers: await authHeaders(),
-    body: JSON.stringify({ invitation_id, base_url: window.location.origin }),
+    body: JSON.stringify({ invitation_id, base_url: PUBLIC_APP_URL }),
   })
   return res.json()
 }
@@ -34,7 +35,7 @@ export async function sendSingleReminderEmail(
   const res = await fetch(`${FN_BASE}/send-single-reminder`, {
     method: 'POST',
     headers: await authHeaders(),
-    body: JSON.stringify({ invitation_id, base_url: window.location.origin }),
+    body: JSON.stringify({ invitation_id, base_url: PUBLIC_APP_URL }),
   })
   return res.json()
 }
@@ -46,7 +47,7 @@ export async function sendReminderEmails(
   const res = await fetch(`${FN_BASE}/send-reminders`, {
     method: 'POST',
     headers: await authHeaders(),
-    body: JSON.stringify({ trip_id, base_url: window.location.origin }),
+    body: JSON.stringify({ trip_id, base_url: PUBLIC_APP_URL }),
   })
   return res.json()
 }
