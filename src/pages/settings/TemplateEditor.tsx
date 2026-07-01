@@ -268,6 +268,10 @@ export default function TemplateEditor() {
   const [error, setError] = useState<string | null>(null)
   const [orgId, setOrgId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<ActiveTab>('header')
+  // Which client's template we're editing. null = the shared "master" default
+  // (used for brand-new clients that don't have their own template yet).
+  const [clients, setClients] = useState<{ id: string; team_name: string }[]>([])
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
   const activeSection: Section = (activeTab === 'header' ? 'concessions' : activeTab) as Section
 
   // Edit state
@@ -281,9 +285,7 @@ export default function TemplateEditor() {
   const [adding, setAdding] = useState(false)
 
   useEffect(() => {
-    // Fetch org ID (needed for inserts) and items in parallel.
-    // Item loading does NOT gate on the profiles lookup —
-    // RLS already filters concession_items to the current org automatically.
+    // Fetch org ID (needed for inserts) and the client list for the selector.
     supabase
       .from('profiles')
       .select('organization_id')
@@ -291,17 +293,31 @@ export default function TemplateEditor() {
       .then(({ data }) => {
         if (data?.organization_id) setOrgId(data.organization_id)
       })
-    loadItems()
+    supabase
+      .from('clients')
+      .select('id, team_name')
+      .order('team_name')
+      .then(({ data }) => {
+        if (data) setClients(data as { id: string; team_name: string }[])
+      })
   }, [])
+
+  // Reload items whenever the selected client changes (fires on mount with null = master).
+  useEffect(() => {
+    loadItems()
+    setEditingId(null)
+    setShowAdd(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClientId])
 
   const loadItems = async () => {
     setLoading(true)
-    const { data, error } = await supabase
+    let q = supabase
       .from('concession_items')
       .select('id, sort_order, section, label, answer_type, requested_value, allow_comment')
-      .is('client_id', null)
       .eq('archived', false)
-      .order('sort_order')
+    q = selectedClientId ? q.eq('client_id', selectedClientId) : q.is('client_id', null)
+    const { data, error } = await q.order('sort_order')
     if (error) setError(error.message)
     else setItems((data as TemplateItem[]) ?? [])
     setLoading(false)
@@ -416,6 +432,7 @@ export default function TemplateEditor() {
       .from('concession_items')
       .insert({
         organization_id: orgId,
+        client_id: selectedClientId,
         section: activeSection,
         sort_order: maxOrder + 1,
         label: addState.label.trim(),
@@ -442,8 +459,26 @@ export default function TemplateEditor() {
     <div>
       <PageHeader
         title="RFP Template"
-        subtitle="Add, edit, or reorder the concession line items sent to hotels. Changes apply to future trips only — in-flight RFPs keep the items they were sent with."
+        subtitle="Each client has its own template. Pick a team to add, edit, or reorder the concession line items its hotels receive. Changes apply to future trips only — in-flight RFPs keep the items they were sent with."
       />
+
+      {/* Client selector — which team's template are we editing? */}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label className="text-sm font-medium text-slate-600">Template for:</label>
+        <select
+          value={selectedClientId ?? ''}
+          onChange={(e) => setSelectedClientId(e.target.value || null)}
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008]"
+        >
+          <option value="">— Master (default for new clients) —</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>{c.team_name}</option>
+          ))}
+        </select>
+        {selectedClientId === null && (
+          <span className="text-xs text-slate-400">The starting set copied for a client that has no template yet.</span>
+        )}
+      </div>
 
       {error && (
         <div className="mb-4">
