@@ -71,11 +71,20 @@ function calcScores(
   const massageRoomItem = concessionItems.find((c) => c.label.toLowerCase().includes('massage room'))
   const postseasonItem  = concessionItems.find((c) => c.section === 'postseason')
 
-  // Rate score (25 pts) — lowest rate = 25 pts, others proportional
-  const rates = submittedInvites
+  // Rate score (25 pts) — lowest rate = 25 pts, others proportional.
+  // Trips with a second stay are scored on BOTH stays independently (each stay's
+  // cheapest submitted rate earns full points), then averaged — so a hotel can't
+  // win purely on a strong Stay 1 rate while quoting a weak Stay 2 rate.
+  const stay1Rates = submittedInvites
     .map((inv) => responses.get(inv.id)?.best_king_rate ?? null)
     .filter((r): r is number => r != null)
-  const minRate = rates.length > 0 ? Math.min(...rates) : null
+  const minStay1Rate = stay1Rates.length > 0 ? Math.min(...stay1Rates) : null
+
+  const stay2Rates = submittedInvites
+    .map((inv) => responses.get(inv.id)?.stay2_king_rate ?? null)
+    .filter((r): r is number => r != null)
+  const hasStay2 = stay2Rates.length > 0
+  const minStay2Rate = hasStay2 ? Math.min(...stay2Rates) : null
 
   for (const inv of submittedInvites) {
     const resp = responses.get(inv.id)
@@ -99,12 +108,19 @@ function calcScores(
     // 2. Commission > 0% — 15 pts
     const commScore = (!noCommission && commValue != null && commValue.trim() !== '') ? 15 : 0
 
-    // 3. Rate competitiveness — 25 pts
+    // 3. Rate competitiveness — 25 pts (averaged across both stays when the trip has two)
+    const scoreForStay = (minRate: number | null, rate: number | null | undefined) => {
+      if (rate == null) return null
+      return minRate != null ? (minRate / rate) * 25 : 25
+    }
+    const stay1Score = scoreForStay(minStay1Rate, resp?.best_king_rate)
     let rateScore = 0
-    if (minRate != null && resp?.best_king_rate != null) {
-      rateScore = Math.round((minRate / resp.best_king_rate) * 25)
-    } else if (resp?.best_king_rate != null) {
-      rateScore = 25
+    if (hasStay2) {
+      const stay2Score = scoreForStay(minStay2Rate, resp?.stay2_king_rate)
+      const stayScores = [stay1Score, stay2Score].filter((s): s is number => s != null)
+      rateScore = stayScores.length > 0 ? Math.round(stayScores.reduce((a, b) => a + b, 0) / stayScores.length) : 0
+    } else {
+      rateScore = stay1Score != null ? Math.round(stay1Score) : 0
     }
 
     // 4. Playoff / postseason clause — 10 pts
@@ -459,6 +475,9 @@ function BidSummaryTable({
     return answers.get(invId)?.find((a) => a.concession_item_id === itemId) ?? null
   }
 
+  // Trips with a second stay show both stays' rates side by side, not just Stay 1.
+  const hasStay2 = submitted.some((inv) => responses.get(inv.id)?.stay2_king_rate != null)
+
   // no cascade — each hotel is passed individually
 
   return (
@@ -473,7 +492,8 @@ function BidSummaryTable({
           <thead>
             <tr className="border-b border-slate-100 dark:border-slate-700 text-left text-xs font-semibold text-slate-400 dark:text-slate-500">
               <th className="pb-2 pr-6">Hotel</th>
-              <th className="pb-2 pr-6 text-right whitespace-nowrap">King Rate</th>
+              <th className="pb-2 pr-6 text-right whitespace-nowrap">{hasStay2 ? 'King Rate — Stay 1' : 'King Rate'}</th>
+              {hasStay2 && <th className="pb-2 pr-6 text-right whitespace-nowrap">King Rate — Stay 2</th>}
               <th className="pb-2 pr-6 text-right whitespace-nowrap">Resort Fee</th>
               <th className="pb-2 pr-6 text-center whitespace-nowrap">Free Suites</th>
               <th className="pb-2 pr-6 text-center whitespace-nowrap">Suite Upgrades</th>
@@ -521,15 +541,18 @@ function BidSummaryTable({
                         {result?.noCommission && (
                           <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-orange-100 text-orange-600">No commission</span>
                         )}
-                        {resp?.stay2_king_rate != null && (
-                          <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">2 stays</span>
-                        )}
                       </div>
                     </td>
-                    {/* King rate */}
+                    {/* King rate — Stay 1 */}
                     <td className="py-2.5 pr-6 text-right font-medium text-slate-700 dark:text-slate-300">
                       {resp?.best_king_rate != null ? `$${resp.best_king_rate.toLocaleString()}` : '—'}
                     </td>
+                    {/* King rate — Stay 2 */}
+                    {hasStay2 && (
+                      <td className="py-2.5 pr-6 text-right font-medium text-slate-700 dark:text-slate-300">
+                        {resp?.stay2_king_rate != null ? `$${resp.stay2_king_rate.toLocaleString()}` : '—'}
+                      </td>
+                    )}
                     {/* Resort fee */}
                     <td className="py-2.5 pr-6 text-right text-slate-600 dark:text-slate-400">
                       {resp?.resort_fee || '—'}
@@ -1199,12 +1222,24 @@ export default function TripDetail() {
         else setTrip(data as Trip & { clients: Pick<Client, 'id' | 'team_name'> | null })
       })
     loadInvites()
-    supabase.from('concession_items').select('id, sort_order, section, label, answer_type, requested_value').order('sort_order')
-      .then(({ data }) => { if (data) setConcessionItems(data as ConcessionItem[]) })
     supabase.from('grid_versions').select('id, version_label, created_at').eq('trip_id', id).order('created_at', { ascending: false })
       .then(({ data }) => { setVersions((data as any[]) ?? []) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  // Load concession items scoped to this trip's client (+ shared master items).
+  // Each client now has its own template — an unscoped query would mix in every
+  // other client's items and break label-based lookups (score, summary columns).
+  useEffect(() => {
+    if (!trip) return
+    supabase
+      .from('concession_items')
+      .select('id, sort_order, section, label, answer_type, requested_value')
+      .or(`client_id.is.null,client_id.eq.${trip.client_id}`)
+      .eq('archived', false)
+      .order('sort_order')
+      .then(({ data }) => { if (data) setConcessionItems(data as ConcessionItem[]) })
+  }, [trip?.client_id])
 
   // Auto-select first submitted hotel when invites load
   useEffect(() => {
