@@ -45,6 +45,41 @@ type Answer = {
   comment: string | null
 }
 
+// ── Concession item matchers ─────────────────────────────────────────────────
+// Every client now has its own RFP template with its own wording (a hotel item
+// might say "One-Bedroom" or "One Bedroom", "3,000 sq ft" or "800 sq ft", etc.).
+// These matchers key off phrases that are consistent across all templates —
+// never off a specific number or room name — so scoring works the same
+// regardless of which client's template a trip uses. Shared by calcScores,
+// BidSummaryTable, and the hotel detail panel so all three stay in sync.
+
+// Hyphens vary ("One-Bedroom" vs "One Bedroom") across templates — normalize before matching.
+function normLabel(label: string): string {
+  return label.toLowerCase().replace(/-/g, ' ')
+}
+function findFlexCancelItem(items: ConcessionItem[]) {
+  return items.find((c) => normLabel(c.label).includes('flexible cancellation'))
+}
+function findCommissionItem(items: ConcessionItem[]) {
+  return items.find((c) => normLabel(c.label).includes('commissionable') || (normLabel(c.label).includes('commission') && c.answer_type === 'percent'))
+}
+function findCompSuitesItem(items: ConcessionItem[]) {
+  return items.find((c) => normLabel(c.label).includes('complimentary one bedroom suite'))
+}
+function findSuiteUpgItem(items: ConcessionItem[]) {
+  return items.find((c) => normLabel(c.label).includes('suite upgrade') && normLabel(c.label).includes('group'))
+}
+function findPostseasonItem(items: ConcessionItem[]) {
+  return items.find((c) => c.section === 'postseason')
+}
+// Meeting-space concessions vary in count, room names, and square footage per
+// client — score by the fraction answered Yes instead of matching a specific
+// room (e.g. "massage room") or size (e.g. "3,000 sq ft") that won't exist in
+// every template.
+function findMeetingSpaceItems(items: ConcessionItem[]) {
+  return items.filter((c) => c.answer_type === 'yes_no' && normLabel(c.label).includes('meeting space'))
+}
+
 // ── Score calculation ─────────────────────────────────────────────────────────
 
 type ScoreResult = {
@@ -63,13 +98,12 @@ function calcScores(
   if (submittedInvites.length === 0) return scores
 
   // Find key item IDs by label
-  const flexCancelItem = concessionItems.find((c) => c.label.toLowerCase().includes('flexible cancellation'))
-  const commissionItem  = concessionItems.find((c) => c.label.toLowerCase().includes('commissionable') || (c.label.toLowerCase().includes('commission') && c.answer_type === 'percent'))
-  const compSuitesItem  = concessionItems.find((c) => c.label.toLowerCase().includes('complimentary one bedroom suites'))
-  const suiteUpgItem    = concessionItems.find((c) => c.label.toLowerCase().includes('suite upgrades at the group'))
-  const meetingMainItem = concessionItems.find((c) => c.label.toLowerCase().includes('meeting space') && c.label.toLowerCase().includes('3,000'))
-  const massageRoomItem = concessionItems.find((c) => c.label.toLowerCase().includes('massage room'))
-  const postseasonItem  = concessionItems.find((c) => c.section === 'postseason')
+  const flexCancelItem = findFlexCancelItem(concessionItems)
+  const commissionItem  = findCommissionItem(concessionItems)
+  const compSuitesItem  = findCompSuitesItem(concessionItems)
+  const suiteUpgItem    = findSuiteUpgItem(concessionItems)
+  const meetingSpaceItems = findMeetingSpaceItems(concessionItems)
+  const postseasonItem  = findPostseasonItem(concessionItems)
 
   // Rate score (25 pts) — lowest rate = 25 pts, others proportional.
   // Trips with a second stay are scored on BOTH stays independently (each stay's
@@ -126,10 +160,10 @@ function calcScores(
     // 4. Playoff / postseason clause — 10 pts
     const playoffScore = getYesNo(postseasonItem) === true ? 10 : 0
 
-    // 5. Meeting space (main + massage room) — up to 10 pts
-    const meetingScore =
-      (getYesNo(meetingMainItem) === true ? 5 : 0) +
-      (getYesNo(massageRoomItem) === true ? 5 : 0)
+    // 5. Meeting space — up to 10 pts, scaled by the fraction of meeting-space
+    // items this hotel answered Yes to (item count varies per client template)
+    const meetingYesCount = meetingSpaceItems.filter((item) => ansMap.get(item.id)?.answer_yes_no === true).length
+    const meetingScore = meetingSpaceItems.length > 0 ? Math.round((meetingYesCount / meetingSpaceItems.length) * 10) : 0
 
     // 6. Suite concessions — up to 20 pts
     const compSuitesVal = Number(getValue(compSuitesItem) ?? 0)
@@ -466,9 +500,9 @@ function BidSummaryTable({
   if (submitted.length === 0) return null
 
   // Find concession item IDs for key columns
-  const commissionItem  = concessionItems.find((c) => c.label.toLowerCase().includes('commissionable') || (c.label.toLowerCase().includes('commission') && c.answer_type === 'percent'))
-  const compSuitesItem  = concessionItems.find((c) => c.label.toLowerCase().includes('complimentary one bedroom suites'))
-  const suiteUpgItem    = concessionItems.find((c) => c.label.toLowerCase().includes('suite upgrades at the group'))
+  const commissionItem  = findCommissionItem(concessionItems)
+  const compSuitesItem  = findCompSuitesItem(concessionItems)
+  const suiteUpgItem    = findSuiteUpgItem(concessionItems)
 
   const getAnswer = (invId: string, itemId: string | undefined) => {
     if (!itemId) return null
@@ -870,12 +904,11 @@ function HotelPanel({
             {/* Quick stats — top 5 items that matter most */}
             {(() => {
               const ansMap = new Map((preloadedAnswers ?? answers).map((a) => [a.concession_item_id, a]))
-              const find = (test: (c: ConcessionItem) => boolean) => concessionItems.find(test)
-              const flexItem    = find((c) => c.label.toLowerCase().includes('flexible cancellation'))
-              const commItem    = find((c) => c.label.toLowerCase().includes('commissionable') || (c.label.toLowerCase().includes('commission') && c.answer_type === 'percent'))
-              const compSuiteI  = find((c) => c.label.toLowerCase().includes('complimentary one bedroom suites'))
-              const suiteUpgI   = find((c) => c.label.toLowerCase().includes('suite upgrades at the group'))
-              const postItem    = find((c) => c.section === 'postseason')
+              const flexItem    = findFlexCancelItem(concessionItems)
+              const commItem    = findCommissionItem(concessionItems)
+              const compSuiteI  = findCompSuitesItem(concessionItems)
+              const suiteUpgI   = findSuiteUpgItem(concessionItems)
+              const postItem    = findPostseasonItem(concessionItems)
 
               const flexAns    = flexItem   ? ansMap.get(flexItem.id)   : null
               const commAns    = commItem   ? ansMap.get(commItem.id)   : null
