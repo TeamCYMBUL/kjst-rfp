@@ -1079,6 +1079,14 @@ function HotelPanel({
               >
                 ↓ Download bid (.xlsx)
               </button>
+              <a
+                href={`/trips/${trip.id}/proposal?hotel=${inv.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 block w-full rounded-lg border border-slate-200 dark:border-slate-600 px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-center"
+              >
+                🖨️ Print full proposal (PDF)
+              </a>
             </div>
 
             {/* Concessions */}
