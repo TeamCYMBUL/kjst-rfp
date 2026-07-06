@@ -29,6 +29,11 @@ export default function App() {
       <Route path="/login" element={<Login />} />
 
       <Route element={<ProtectedRoute />}>
+        {/* Standalone print page — no sidebar/scroll-container chrome, so the
+            browser's print/Save-as-PDF can flow across multiple pages instead
+            of being clipped to whatever fits in DashboardLayout's viewport. */}
+        <Route path="trips/:id/proposal" element={<ProposalPrint />} />
+
         <Route element={<DashboardLayout />}>
           <Route index element={<Dashboard />} />
 
@@ -42,7 +47,6 @@ export default function App() {
           <Route path="trips/:id" element={<TripDetail />} />
           <Route path="trips/:id/edit" element={<TripForm />} />
           <Route path="trips/:id/grid" element={<TripGrid />} />
-          <Route path="trips/:id/proposal" element={<ProposalPrint />} />
 
           <Route path="hotels" element={<HotelsList />} />
           <Route path="getting-started" element={<GettingStarted />} />
