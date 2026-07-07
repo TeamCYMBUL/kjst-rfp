@@ -23,6 +23,13 @@ type HotelNote = {
   created_at: string
 }
 
+type HotelContact = {
+  id: string
+  contact_name: string | null
+  contact_email: string | null
+  contact_phone: string | null
+}
+
 type TripUsage = {
   id: string
   opponent_label: string | null
@@ -279,6 +286,26 @@ function HotelDetail({
   const [showAddNote, setShowAddNote] = useState(false)
   const [newNote, setNewNote] = useState('')
   const [savingNote, setSavingNote] = useState(false)
+  const [hotelContacts, setHotelContacts] = useState<HotelContact[]>([])
+  const [loadingContacts, setLoadingContacts] = useState(true)
+  const [showAddContact, setShowAddContact] = useState(false)
+  const [newContactName, setNewContactName] = useState('')
+  const [newContactEmail, setNewContactEmail] = useState('')
+  const [newContactPhone, setNewContactPhone] = useState('')
+  const [savingContact, setSavingContact] = useState(false)
+
+  const loadContacts = () => {
+    setLoadingContacts(true)
+    supabase
+      .from('hotel_contacts')
+      .select('id, contact_name, contact_email, contact_phone')
+      .eq('hotel_id', hotel.id)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => {
+        setHotelContacts((data as HotelContact[]) ?? [])
+        setLoadingContacts(false)
+      })
+  }
 
   const loadNotes = () => {
     setLoadingNotes(true)
@@ -310,7 +337,31 @@ function HotelDetail({
         setLoadingTrips(false)
       })
     loadNotes()
+    loadContacts()
   }, [hotel.id, hotel.name])
+
+  const saveContact = async () => {
+    if (!newContactName.trim() && !newContactEmail.trim() && !newContactPhone.trim()) return
+    setSavingContact(true)
+    await supabase.from('hotel_contacts').insert({
+      hotel_id: hotel.id,
+      contact_name: newContactName.trim() || null,
+      contact_email: newContactEmail.trim() || null,
+      contact_phone: newContactPhone.trim() || null,
+    })
+    setSavingContact(false)
+    setNewContactName('')
+    setNewContactEmail('')
+    setNewContactPhone('')
+    setShowAddContact(false)
+    loadContacts()
+  }
+
+  const deleteContact = async (contactId: string) => {
+    if (!confirm('Delete this contact?')) return
+    await supabase.from('hotel_contacts').delete().eq('id', contactId)
+    loadContacts()
+  }
 
   const saveNote = async () => {
     if (!newNote.trim()) return
@@ -400,6 +451,97 @@ function HotelDetail({
             </dl>
           ) : (
             <p className="text-xs text-slate-400 dark:text-slate-500">No contact info on file.</p>
+          )}
+        </div>
+
+        {/* Additional contacts */}
+        <div className="px-6 py-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+              Additional Contacts
+              {hotelContacts.length > 0 && (
+                <span className="ml-2 rounded-full bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 text-[10px] font-bold text-slate-500 dark:text-slate-400 normal-case">
+                  {hotelContacts.length}
+                </span>
+              )}
+            </h3>
+            {!showAddContact && (
+              <button
+                onClick={() => setShowAddContact(true)}
+                className="text-xs font-medium text-[#1C1008] hover:underline transition-colors"
+              >
+                + Add contact
+              </button>
+            )}
+          </div>
+
+          {showAddContact && (
+            <div className="mb-3 space-y-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 p-3">
+              <input
+                autoFocus
+                className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-1.5 text-sm focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008]"
+                placeholder="Name"
+                value={newContactName}
+                onChange={(e) => setNewContactName(e.target.value)}
+              />
+              <input
+                type="email"
+                className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-1.5 text-sm focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008]"
+                placeholder="Email"
+                value={newContactEmail}
+                onChange={(e) => setNewContactEmail(e.target.value)}
+              />
+              <input
+                className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-1.5 text-sm focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008]"
+                placeholder="Phone"
+                value={newContactPhone}
+                onChange={(e) => setNewContactPhone(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={saveContact}
+                  disabled={savingContact}
+                  className="rounded bg-[#1C1008] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#2d1e0e] disabled:opacity-50"
+                >
+                  {savingContact ? 'Saving…' : 'Save contact'}
+                </button>
+                <button
+                  onClick={() => { setShowAddContact(false); setNewContactName(''); setNewContactEmail(''); setNewContactPhone('') }}
+                  className="rounded border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {loadingContacts ? (
+            <p className="text-xs text-slate-400 dark:text-slate-500">Loading…</p>
+          ) : hotelContacts.length === 0 ? (
+            <p className="text-xs text-slate-400 dark:text-slate-500">No additional contacts on file.</p>
+          ) : (
+            <div className="space-y-2">
+              {hotelContacts.map((c) => (
+                <div key={c.id} className="flex items-start justify-between gap-2 rounded-lg border border-slate-100 dark:border-slate-700 px-3 py-2">
+                  <div>
+                    {c.contact_name && <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{c.contact_name}</p>}
+                    {c.contact_email && (
+                      <a href={`mailto:${c.contact_email}`} className="block text-xs text-[#1C1008] dark:text-amber-400 hover:underline">
+                        {c.contact_email}
+                      </a>
+                    )}
+                    {c.contact_phone && <p className="text-xs text-slate-500 dark:text-slate-400">{c.contact_phone}</p>}
+                  </div>
+                  <button
+                    onClick={() => deleteContact(c.id)}
+                    className="shrink-0 text-xs text-slate-300 dark:text-slate-600 hover:text-red-400 transition-colors"
+                    title="Delete contact"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
