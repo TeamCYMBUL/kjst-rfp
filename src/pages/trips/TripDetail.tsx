@@ -67,7 +67,7 @@ function findCompSuitesItem(items: ConcessionItem[]) {
   return items.find((c) => normLabel(c.label).includes('complimentary one bedroom suite'))
 }
 function findSuiteUpgItem(items: ConcessionItem[]) {
-  return items.find((c) => normLabel(c.label).includes('suite upgrade') && normLabel(c.label).includes('group'))
+  return items.find((c) => normLabel(c.label).includes('suite upgrade'))
 }
 function findPostseasonItem(items: ConcessionItem[]) {
   return items.find((c) => c.section === 'postseason')
@@ -77,7 +77,7 @@ function findPostseasonItem(items: ConcessionItem[]) {
 // room (e.g. "massage room") or size (e.g. "3,000 sq ft") that won't exist in
 // every template.
 function findMeetingSpaceItems(items: ConcessionItem[]) {
-  return items.filter((c) => c.answer_type === 'yes_no' && normLabel(c.label).includes('meeting space'))
+  return items.filter((c) => c.answer_type === 'yes_no' && (normLabel(c.label).includes('meeting space') || normLabel(c.label).includes('function space')))
 }
 
 // ── Score calculation ─────────────────────────────────────────────────────────
@@ -241,10 +241,12 @@ type HotelSuggestion = {
 
 function InviteForm({
   tripId,
+  defaultLeague,
   onDone,
   onCancel,
 }: {
   tripId: string
+  defaultLeague?: string | null
   onDone: () => void
   onCancel: () => void
 }) {
@@ -256,7 +258,10 @@ function InviteForm({
   const [allFetched, setAllFetched] = useState<HotelSuggestion[]>([])
   const [suggestions, setSuggestions] = useState<HotelSuggestion[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
-  const [leagueTab, setLeagueTab] = useState<LeagueTab>('All')
+  const initialLeagueTab = (LEAGUE_TABS as readonly string[]).includes((defaultLeague ?? '').toUpperCase())
+    ? ((defaultLeague ?? '').toUpperCase() as LeagueTab)
+    : 'All'
+  const [leagueTab, setLeagueTab] = useState<LeagueTab>(initialLeagueTab)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -1143,7 +1148,7 @@ function RateField({ label, value, highlight = false }: { label: string; value: 
 
 // ── Trip info panel (right panel when no hotel selected) ──────────────────────
 
-function TripInfoPanel({ trip }: { trip: Trip & { clients: Pick<Client, 'id' | 'team_name'> | null } }) {
+function TripInfoPanel({ trip }: { trip: Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league'> | null } }) {
   const fmt = (d: string | null) => formatDate(d) || '—'
   // Format a list of game dates, falling back to the single game_date column.
   const fmtGames = (dates: string[] | null | undefined, single: string | null) => {
@@ -1217,7 +1222,7 @@ export default function TripDetail() {
   const navigate = useNavigate()
   const { role, canEditClient } = useRole()
   const isViewer = role === 'viewer'
-  const [trip, setTrip] = useState<(Trip & { clients: Pick<Client, 'id' | 'team_name'> | null }) | null>(null)
+  const [trip, setTrip] = useState<(Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league'> | null }) | null>(null)
   const [invites, setInvites] = useState<Invitation[] | null>(null)
   const [concessionItems, setConcessionItems] = useState<ConcessionItem[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -1257,10 +1262,10 @@ export default function TripDetail() {
   }
 
   useEffect(() => {
-    supabase.from('trips').select('*, clients(id, team_name)').eq('id', id!).single()
+    supabase.from('trips').select('*, clients(id, team_name, league)').eq('id', id!).single()
       .then(({ data, error }) => {
         if (error) setError(error.message)
-        else setTrip(data as Trip & { clients: Pick<Client, 'id' | 'team_name'> | null })
+        else setTrip(data as Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league'> | null })
       })
     loadInvites()
     supabase.from('grid_versions').select('id, version_label, created_at').eq('trip_id', id).order('created_at', { ascending: false })
@@ -1436,8 +1441,8 @@ export default function TripDetail() {
       game_date: scenario.game_date ?? null,
       date_scenarios: [],
     }).eq('id', id!)
-    const { data } = await supabase.from('trips').select('*, clients(id, team_name)').eq('id', id!).single()
-    if (data) setTrip(data as Trip & { clients: Pick<Client, 'id' | 'team_name'> | null })
+    const { data } = await supabase.from('trips').select('*, clients(id, team_name, league)').eq('id', id!).single()
+    if (data) setTrip(data as Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league'> | null })
     setConfirmingScenarioSaving(false)
     setConfirmingScenario(false)
   }
@@ -1773,6 +1778,7 @@ export default function TripDetail() {
           {showInvite && (
             <InviteForm
               tripId={id!}
+              defaultLeague={trip.clients?.league}
               onDone={() => { setShowInvite(false); loadInvites() }}
               onCancel={() => setShowInvite(false)}
             />

@@ -42,16 +42,23 @@ function autoDetect(header: string): string | null {
   if (h.includes('city')) return 'city'
   if (h.includes('opponent') || h.includes('team')) return 'opponent'
   if (h.includes('game')) return 'game_date'
-  if (h.includes('arrival') || h.includes('check-in') || h.includes('chk-in')) return 'arrival_date'
-  if (h.includes('departure') || h.includes('check-out') || h.includes('chk-out') || h.includes('checkout')) return 'departure_date'
+  if (h.includes('arrival') || h.includes('check-in') || h.includes('chk-in') || h.trim() === 'in') return 'arrival_date'
+  if (h.includes('departure') || h.includes('check-out') || h.includes('chk-out') || h.includes('checkout') || h.trim() === 'out') return 'departure_date'
   if (h.includes('king') || (h.includes('room') && !h.includes('suite'))) return 'king_rooms'
   if (h.includes('suite')) return 'suites'
   return null
 }
 
+// Strip a trailing repeat-visit marker like "Anaheim #2" → "Anaheim" so a second
+// trip to the same city in one season merges into Visit 1 + Visit 2 instead of
+// being treated as a different city.
+function stripVisitSuffix(raw: string): string {
+  return raw.replace(/\s*#\d+\s*$/, '').trim()
+}
+
 // Parse city value like "LOS ANGELES (DODGERS)" → { city: "Los Angeles", opponentLabel: "@ Los Angeles Dodgers" }
 function parseCityValue(raw: string): { city: string; opponentLabel: string } {
-  const m = raw.trim().match(/^([^(]+?)(?:\s*\(([^)]+)\))?$/)
+  const m = stripVisitSuffix(raw).match(/^([^(]+?)(?:\s*\(([^)]+)\))?$/)
   const toTitle = (s: string) => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
   const city = toTitle((m?.[1] ?? raw).trim())
   const qualifier = m?.[2]?.trim() ?? ''
@@ -108,10 +115,11 @@ function parseDate(val: string | number | null | undefined, fallbackYear?: numbe
   }
   // YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
-  // M/D/YYYY or MM/DD/YYYY
-  const mdyMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  // M/D/YYYY, MM/DD/YYYY, or M/D/YY (2-digit year — assumed 2000s)
+  const mdyMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/)
   if (mdyMatch) {
-    const [, m, d, y] = mdyMatch
+    const [, m, d, yRaw] = mdyMatch
+    const y = yRaw.length === 2 ? `20${yRaw}` : yRaw
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
   }
   // M/D without year — infer from fallbackYear (e.g. arrival date's year)

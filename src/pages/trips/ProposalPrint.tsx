@@ -365,9 +365,9 @@ export default function ProposalPrint() {
   })
 
   const compSuitesItem = concessionItems.find((c) => normLabel(c.label).includes('complimentary one bedroom suite'))
-  const suiteUpgItem = concessionItems.find((c) => normLabel(c.label).includes('suite upgrade') && normLabel(c.label).includes('group'))
+  const suiteUpgItem = concessionItems.find((c) => normLabel(c.label).includes('suite upgrade'))
   const postseasonItem = concessionItems.find((c) => c.section === 'postseason')
-  const meetingSpaceItems = concessionItems.filter((c) => c.answer_type === 'yes_no' && normLabel(c.label).includes('meeting space'))
+  const meetingSpaceItems = concessionItems.filter((c) => c.answer_type === 'yes_no' && (normLabel(c.label).includes('meeting space') || normLabel(c.label).includes('function space')))
 
   const getAnswer = (hotelIdx: number, itemId: string | undefined) => {
     if (!itemId) return null
