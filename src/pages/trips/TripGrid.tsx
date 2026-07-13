@@ -47,6 +47,8 @@ type Invitation = {
   status: string
   submitted_at: string | null
   staff_notes: string | null
+  visit1_declined: boolean
+  visit2_declined: boolean
   // PostgREST returns a single object (not array) because invitation_id has a UNIQUE constraint.
   rfp_responses: Response | null
 }
@@ -213,12 +215,14 @@ function RateRow({
   getValue,
   highlight,
   lowestRateId,
+  declinedWhen,
 }: {
   label: string
   invitations: Invitation[]
   getValue: (r: Response | null) => string | null
   highlight?: boolean
   lowestRateId?: string | null
+  declinedWhen?: (inv: Invitation) => boolean
 }) {
   return (
     <tr className="border-b border-slate-100 hover:bg-slate-50">
@@ -232,7 +236,8 @@ function RateRow({
         const isUnavailable = inv.status === 'unavailable'
         const isAwarded = inv.status === 'awarded'
         const isDimmed = isPassed || isUnavailable
-        const noResponse = !resp && !isDimmed
+        const isDeclinedVisit = declinedWhen?.(inv) ?? false
+        const noResponse = !resp && !isDimmed && !isDeclinedVisit
         return (
           <td
             key={inv.id}
@@ -248,9 +253,11 @@ function RateRow({
           >
             {isUnavailable
               ? <span className="text-xs italic text-slate-400">Not available</span>
-              : noResponse
-                ? <span className="text-xs italic text-slate-300">Awaiting response</span>
-                : val || <span className="text-slate-300">—</span>
+              : isDeclinedVisit
+                ? <span className="text-xs italic text-red-500">Declined</span>
+                : noResponse
+                  ? <span className="text-xs italic text-slate-300">Awaiting response</span>
+                  : val || <span className="text-slate-300">—</span>
             }
           </td>
         )
@@ -338,6 +345,7 @@ export default function TripGrid() {
           .from('rfp_invitations')
           .select(`
             id, hotel_name, hotel_contact_name, hotel_contact_email, status, submitted_at, staff_notes,
+            visit1_declined, visit2_declined,
             rfp_responses (
               id, completed_by_name, completed_date, best_king_rate, king_rate_notes,
               current_selling_rate, stay2_king_rate, stay2_suite_rate, stay2_selling_rate,
@@ -826,18 +834,21 @@ export default function TripGrid() {
                 getValue={(r) => (r?.best_king_rate != null ? `$${r.best_king_rate}` : null)}
                 highlight
                 lowestRateId={lowestRateId}
+                declinedWhen={(inv) => inv.visit1_declined}
               />
               <RateRow
                 label={trip?.stay2_arrival_date ? 'Selling Rate — Stay 1' : 'Current Selling Rate'}
                 invitations={invitations}
                 getValue={(r) => r?.current_selling_rate ?? null}
                 lowestRateId={lowestRateId}
+                declinedWhen={(inv) => inv.visit1_declined}
               />
               <RateRow
                 label={trip?.stay2_arrival_date ? 'Suite Rate — Stay 1' : 'Best Suite Rate'}
                 invitations={invitations}
                 getValue={(r) => (r?.best_suite_rate != null ? `$${r.best_suite_rate}` : null)}
                 lowestRateId={lowestRateId}
+                declinedWhen={(inv) => inv.visit1_declined}
               />
 
               {/* Estimated cost — Stay 1 */}
@@ -873,18 +884,21 @@ export default function TripGrid() {
                       getValue={(r) => (r?.stay2_king_rate != null ? `$${r.stay2_king_rate}` : null)}
                       highlight
                       lowestRateId={lowestRateId}
+                      declinedWhen={(inv) => inv.visit2_declined}
                     />
                     <RateRow
                       label="Selling Rate — Stay 2"
                       invitations={invitations}
                       getValue={(r) => r?.stay2_selling_rate ?? null}
                       lowestRateId={lowestRateId}
+                      declinedWhen={(inv) => inv.visit2_declined}
                     />
                     <RateRow
                       label="Suite Rate — Stay 2"
                       invitations={invitations}
                       getValue={(r) => (r?.stay2_suite_rate != null ? `$${r.stay2_suite_rate}` : null)}
                       lowestRateId={lowestRateId}
+                      declinedWhen={(inv) => inv.visit2_declined}
                     />
                     {trip.total_rooms_requested != null && stay2Nights != null && (
                       <RateRow

@@ -270,9 +270,11 @@ export default function TemplateEditor() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('header')
   // Which client's template we're editing. null = the shared "master" default
   // (used for brand-new clients that don't have their own template yet).
-  const [clients, setClients] = useState<{ id: string; team_name: string }[]>([])
+  const [clients, setClients] = useState<{ id: string; team_name: string; league: string | null }[]>([])
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
   const activeSection: Section = (activeTab === 'header' ? 'concessions' : activeTab) as Section
+  const selectedClientLeague = clients.find((c) => c.id === selectedClientId)?.league ?? null
+  const visibleTabs = TABS.filter((tab) => tab.key !== 'in_season_tournament' || selectedClientLeague !== 'NHL')
 
   // Edit state
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -295,10 +297,10 @@ export default function TemplateEditor() {
       })
     supabase
       .from('clients')
-      .select('id, team_name')
+      .select('id, team_name, league')
       .order('team_name')
       .then(({ data }) => {
-        if (data) setClients(data as { id: string; team_name: string }[])
+        if (data) setClients(data as { id: string; team_name: string; league: string | null }[])
       })
   }, [])
 
@@ -307,6 +309,7 @@ export default function TemplateEditor() {
     loadItems()
     setEditingId(null)
     setShowAdd(false)
+    if (activeTab === 'in_season_tournament' && selectedClientLeague === 'NHL') setActiveTab('header')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientId])
 
@@ -488,7 +491,7 @@ export default function TemplateEditor() {
 
       {/* Tabs */}
       <div className="mb-0 flex gap-1 border-b border-slate-200 flex-wrap">
-        {TABS.map((tab) => {
+        {visibleTabs.map((tab) => {
           const isActive = activeTab === tab.key
           const count = tab.key !== 'header'
             ? items.filter((i) => i.section === tab.key).length

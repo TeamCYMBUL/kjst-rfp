@@ -26,6 +26,8 @@ type Invitation = {
   hotel_contact_email: string | null
   status: string
   submitted_at: string | null
+  visit1_declined: boolean
+  visit2_declined: boolean
 }
 
 type Response = {
@@ -95,7 +97,10 @@ function answerText(item: ConcessionItem, ans: Answer | undefined): string {
 export default function ProposalPrint() {
   const { id: tripId } = useParams<{ id: string }>()
   const [searchParams] = useSearchParams()
-  const singleInvitationId = searchParams.get('hotel')
+  const hotelParam = searchParams.get('hotel')
+  const allHotelsMode = hotelParam === 'all'
+  const singleInvitationId = hotelParam && !allHotelsMode ? hotelParam : null
+  const fullDetailMode = Boolean(singleInvitationId) || allHotelsMode
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -120,7 +125,7 @@ export default function ProposalPrint() {
       setTrip(t)
 
       // Which hotels to include: just the one requested, or every submitted bid
-      let invQuery = supabase.from('rfp_invitations').select('id, hotel_name, hotel_contact_name, hotel_contact_email, status, submitted_at').eq('trip_id', tripId)
+      let invQuery = supabase.from('rfp_invitations').select('id, hotel_name, hotel_contact_name, hotel_contact_email, status, submitted_at, visit1_declined, visit2_declined').eq('trip_id', tripId)
       invQuery = singleInvitationId ? invQuery.eq('id', singleInvitationId) : invQuery.in('status', ['submitted', 'awarded'])
       const { data: invData } = await invQuery
       const invs: Invitation[] = (invData as unknown as Invitation[]) ?? []
@@ -196,7 +201,7 @@ export default function ProposalPrint() {
     <>
       <div style={{ background: primary, color: 'white', borderRadius: '12px 12px 0 0', padding: '24px 32px', marginTop: 80 }}>
         <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.02em' }}>KJ SPORTS TRAVEL</div>
-        <div style={{ fontSize: 13, marginTop: 4, opacity: 0.7 }}>{singleInvitationId ? 'Hotel Proposal — Full Copy' : 'Hotel Proposal'}</div>
+        <div style={{ fontSize: 13, marginTop: 4, opacity: 0.7 }}>{fullDetailMode ? 'Hotel Proposal — Full Copy' : 'Hotel Proposal'}</div>
       </div>
       <div style={{ border: '1px solid #e2e8f0', borderTop: 'none', padding: '20px 32px', background: '#f8fafc' }}>
         <div style={{ marginBottom: 6, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
@@ -228,6 +233,14 @@ export default function ProposalPrint() {
       >
         🖨️ Print / Save as PDF
       </button>
+      {!fullDetailMode && (
+        <Link
+          to={`/trips/${tripId}/proposal?hotel=all`}
+          style={{ background: 'white', color: primary, border: `1px solid #e2e8f0`, borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 500, textDecoration: 'none' }}
+        >
+          🖨️ Print All Full Proposals
+        </Link>
+      )}
       <Link
         to={`/trips/${tripId}`}
         style={{ background: 'white', color: primary, border: `1px solid #e2e8f0`, borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 500, textDecoration: 'none' }}
@@ -247,31 +260,118 @@ export default function ProposalPrint() {
     `}</style>
   )
 
-  // ── Single-hotel mode: complete copy of everything this hotel submitted ────
-  if (singleInvitationId) {
-    const inv = invitations[0]
-    if (!inv) {
+  // ── Full-copy renderer: everything one hotel submitted (reused for both a
+  // single hotel and the "print all" batch mode) ──────────────────────────────
+  const renderHotelFull = (inv: Invitation, isLast: boolean) => {
+    const resp = responses.find((r) => r.invitation_id === inv.id) ?? null
+    const hotelAnswers = resp ? answers.filter((a) => a.response_id === resp.id) : []
+    const ansByItemId = new Map(hotelAnswers.map((a) => [a.concession_item_id, a]))
+
+    const rateRows: [string, string][] = inv.visit1_declined
+      ? [
+        ['King/Suite/Selling Rate', 'Visit 1 declined'],
+        ['Occupancy Tax', resp?.occupancy_tax || '—'],
+        ['Resort Fee', resp?.resort_fee || '—'],
+      ]
+      : [
+        ['King Rate', fmtMoney(resp?.best_king_rate ?? null)],
+        ['Suite Rate', fmtMoney(resp?.best_suite_rate ?? null)],
+        ['Selling Rate', resp?.current_selling_rate || '—'],
+        ['Occupancy Tax', resp?.occupancy_tax || '—'],
+        ['Resort Fee', resp?.resort_fee || '—'],
+      ]
+    if (inv.visit2_declined) rateRows.push(['King/Suite Rate — Stay 2', 'Visit 2 declined'])
+    else if (resp?.stay2_king_rate != null) rateRows.push(['King Rate — Stay 2', fmtMoney(resp.stay2_king_rate)])
+    if (!inv.visit2_declined && resp?.stay2_suite_rate != null) rateRows.push(['Suite Rate — Stay 2', fmtMoney(resp.stay2_suite_rate)])
+    if (resp?.distance_to_arena) rateRows.push(['Distance to arena', resp.distance_to_arena])
+    if (resp?.standard_checkin_time) rateRows.push(['Standard check-in', resp.standard_checkin_time])
+
+    return (
+      <div key={inv.id} style={allHotelsMode && !isLast ? { pageBreakAfter: 'always' } : undefined}>
+        <div style={{ border: '1px solid #e2e8f0', borderTop: 'none', padding: '24px 32px' }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: primary, marginBottom: 4 }}>{inv.hotel_name}</div>
+          <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+            {[inv.hotel_contact_name, inv.hotel_contact_email].filter(Boolean).join(' · ') || 'No contact on file'}
+            {inv.submitted_at ? ` · Submitted ${fmtDate(inv.submitted_at)}` : ''}
+          </div>
+
+          {resp ? (
+            <>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#94a3b8', marginBottom: 8 }}>Rates</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 20 }}>
+                <tbody>
+                  {rateRows.map(([label, value], i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '6px 12px', color: '#64748b' }}>{label}</td>
+                      <td style={{ padding: '6px 12px', fontWeight: 600, color: '#111827', textAlign: 'right' }}>{value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {resp.meeting_space_notes && (
+                <div style={{ fontSize: 13, color: '#374151', marginBottom: 16, whiteSpace: 'pre-line' }}>
+                  <strong>Meeting space:</strong> {formatMeetingSpaceNotes(resp.meeting_space_notes)}
+                </div>
+              )}
+
+              {SECTION_ORDER.map((sectionKey) => {
+                const items = concessionItems.filter((c) => c.section === sectionKey).sort((a, b) => a.sort_order - b.sort_order)
+                if (items.length === 0) return null
+                return (
+                  <div key={sectionKey} style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#94a3b8', marginBottom: 8 }}>
+                      {SECTION_LABELS[sectionKey] ?? sectionKey}
+                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <tbody>
+                        {items.map((item) => {
+                          const ans = ansByItemId.get(item.id)
+                          return (
+                            <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                              <td style={{ padding: '6px 12px', color: '#374151', verticalAlign: 'top' }}>
+                                {item.label}
+                                {ans?.comment && (
+                                  <div style={{ marginTop: 2, fontSize: 12, color: '#92400e', background: '#fffbeb', borderRadius: 4, padding: '3px 8px', display: 'inline-block' }}>
+                                    {ans.comment}
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ padding: '6px 12px', fontWeight: 600, color: '#111827', textAlign: 'right', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
+                                {answerText(item, ans)}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              })}
+
+              {resp.general_comments && (
+                <div style={{ fontSize: 13, color: '#374151' }}>
+                  <strong>General comments:</strong> {resp.general_comments}
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{ color: '#94a3b8', fontSize: 14 }}>No response submitted yet.</div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ── Full-copy mode: one hotel, or every submitted bid batched together ─────
+  if (fullDetailMode) {
+    if (singleInvitationId && !invitations[0]) {
       return (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'system-ui, sans-serif', color: '#ef4444' }}>
           Hotel not found on this trip.
         </div>
       )
     }
-    const resp = responses.find((r) => r.invitation_id === inv.id) ?? null
-    const hotelAnswers = resp ? answers.filter((a) => a.response_id === resp.id) : []
-    const ansByItemId = new Map(hotelAnswers.map((a) => [a.concession_item_id, a]))
-
-    const rateRows: [string, string][] = [
-      ['King Rate', fmtMoney(resp?.best_king_rate ?? null)],
-      ['Suite Rate', fmtMoney(resp?.best_suite_rate ?? null)],
-      ['Selling Rate', resp?.current_selling_rate || '—'],
-      ['Occupancy Tax', resp?.occupancy_tax || '—'],
-      ['Resort Fee', resp?.resort_fee || '—'],
-    ]
-    if (resp?.stay2_king_rate != null) rateRows.push(['King Rate — Stay 2', fmtMoney(resp.stay2_king_rate)])
-    if (resp?.stay2_suite_rate != null) rateRows.push(['Suite Rate — Stay 2', fmtMoney(resp.stay2_suite_rate)])
-    if (resp?.distance_to_arena) rateRows.push(['Distance to arena', resp.distance_to_arena])
-    if (resp?.standard_checkin_time) rateRows.push(['Standard check-in', resp.standard_checkin_time])
 
     return (
       <>
@@ -279,78 +379,13 @@ export default function ProposalPrint() {
         {PrintControls}
         <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 900, margin: '0 auto', padding: '0 24px 48px' }}>
           {TripHeader}
-
-          <div style={{ border: '1px solid #e2e8f0', borderTop: 'none', padding: '24px 32px' }}>
-            <div style={{ fontSize: 17, fontWeight: 700, color: primary, marginBottom: 4 }}>{inv.hotel_name}</div>
-            <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
-              {[inv.hotel_contact_name, inv.hotel_contact_email].filter(Boolean).join(' · ') || 'No contact on file'}
-              {inv.submitted_at ? ` · Submitted ${fmtDate(inv.submitted_at)}` : ''}
+          {allHotelsMode && invitations.length === 0 ? (
+            <div style={{ border: '1px solid #e2e8f0', borderTop: 'none', padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>
+              No submitted bids yet.
             </div>
-
-            {resp ? (
-              <>
-                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#94a3b8', marginBottom: 8 }}>Rates</div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 20 }}>
-                  <tbody>
-                    {rateRows.map(([label, value], i) => (
-                      <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '6px 12px', color: '#64748b' }}>{label}</td>
-                        <td style={{ padding: '6px 12px', fontWeight: 600, color: '#111827', textAlign: 'right' }}>{value}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                {resp.meeting_space_notes && (
-                  <div style={{ fontSize: 13, color: '#374151', marginBottom: 16, whiteSpace: 'pre-line' }}>
-                    <strong>Meeting space:</strong> {formatMeetingSpaceNotes(resp.meeting_space_notes)}
-                  </div>
-                )}
-
-                {SECTION_ORDER.map((sectionKey) => {
-                  const items = concessionItems.filter((c) => c.section === sectionKey).sort((a, b) => a.sort_order - b.sort_order)
-                  if (items.length === 0) return null
-                  return (
-                    <div key={sectionKey} style={{ marginBottom: 20 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#94a3b8', marginBottom: 8 }}>
-                        {SECTION_LABELS[sectionKey] ?? sectionKey}
-                      </div>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                        <tbody>
-                          {items.map((item) => {
-                            const ans = ansByItemId.get(item.id)
-                            return (
-                              <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                <td style={{ padding: '6px 12px', color: '#374151', verticalAlign: 'top' }}>
-                                  {item.label}
-                                  {ans?.comment && (
-                                    <div style={{ marginTop: 2, fontSize: 12, color: '#92400e', background: '#fffbeb', borderRadius: 4, padding: '3px 8px', display: 'inline-block' }}>
-                                      {ans.comment}
-                                    </div>
-                                  )}
-                                </td>
-                                <td style={{ padding: '6px 12px', fontWeight: 600, color: '#111827', textAlign: 'right', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
-                                  {answerText(item, ans)}
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )
-                })}
-
-                {resp.general_comments && (
-                  <div style={{ fontSize: 13, color: '#374151' }}>
-                    <strong>General comments:</strong> {resp.general_comments}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div style={{ color: '#94a3b8', fontSize: 14 }}>No response submitted yet.</div>
-            )}
-          </div>
+          ) : (
+            invitations.map((inv, i) => renderHotelFull(inv, i === invitations.length - 1))
+          )}
           {Footer}
         </div>
       </>

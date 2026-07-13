@@ -24,7 +24,7 @@ export async function exportAllCitiesForClient(
       'id, opponent_label, city, arrival_date, departure_date, game_date, game_dates, total_rooms_requested, stay2_arrival_date, stay2_departure_date, stay2_game_date, stay2_game_dates, status',
     )
     .eq('client_id', clientId)
-    .order('arrival_date', { ascending: false })
+    .order('city', { ascending: true, nullsFirst: false })
 
   if (!trips || trips.length === 0) return { count: 0 }
 

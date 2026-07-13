@@ -66,6 +66,23 @@ export function formatMeetingSpaceNotes(raw: string | null | undefined): string 
   }
 
   const lines = spaces.map(fmtSpace).filter(Boolean) as string[]
+
+  // Named, fixed sub-spaces (e.g. Meal Room / Treatment Room / Coaches Meeting
+  // Room) required for a single yes_no item — keyed by item id, then space key.
+  if (parsed.__named && typeof parsed.__named === 'object') {
+    for (const itemSpaces of Object.values(parsed.__named)) {
+      if (!itemSpaces || typeof itemSpaces !== 'object') continue
+      for (const [, s] of Object.entries(itemSpaces as Record<string, any>)) {
+        if (!s || typeof s !== 'object') continue
+        const valueParts: string[] = []
+        if (s.name) valueParts.push(String(s.name))
+        if (s.dimensions) valueParts.push(`Size: ${s.dimensions}`)
+        if (!valueParts.length) continue
+        lines.push(s.spaceLabel ? `${s.spaceLabel}: ${valueParts.join(' · ')}` : valueParts.join(' · '))
+      }
+    }
+  }
+
   return lines.join('\n')
 }
 

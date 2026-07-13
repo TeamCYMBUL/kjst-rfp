@@ -109,7 +109,7 @@ export default function ClientDetail() {
       .from('trips')
       .select('id, opponent_label, city, arrival_date, departure_date, game_date, game_dates, total_rooms_requested, stay2_arrival_date, stay2_departure_date, stay2_game_date, stay2_game_dates, status')
       .eq('client_id', id)
-      .order('arrival_date', { ascending: false })
+      .order('city', { ascending: true, nullsFirst: false })
       .then(({ data, error }) => {
         if (error) setError(error.message)
         else setTrips(data as TripRow[])

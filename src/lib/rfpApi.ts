@@ -66,6 +66,12 @@ export type RfpInvitation = {
   hotel_contact_email: string | null
   status: string
   submitted_at: string | null
+  visit1_declined: boolean
+  visit1_decline_reason: string | null
+  visit1_decline_notes: string | null
+  visit2_declined: boolean
+  visit2_decline_reason: string | null
+  visit2_decline_notes: string | null
   trips: RfpTrip & { clients: RfpClient }
 }
 
@@ -182,7 +188,8 @@ export async function declineRfp(args: {
   token: string
   decline_reason: string
   decline_notes?: string
-}): Promise<{ ok: boolean }> {
+  visit?: 1 | 2
+}): Promise<{ ok: boolean; already_declined?: boolean; fully_declined?: boolean }> {
   const res = await fetch(`${BASE}/rfp-decline`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

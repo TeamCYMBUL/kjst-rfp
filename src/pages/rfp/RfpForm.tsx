@@ -341,9 +341,11 @@ type RfpHeaderProps = {
   scenarioAvailability: Record<string, boolean>
   setScenarioAvailability: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
   scheduleAutosave: () => void
+  visit1Declined: boolean
+  visit2Declined: boolean
 }
 
-function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAvailability, setScenarioAvailability, scheduleAutosave }: RfpHeaderProps) {
+function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAvailability, setScenarioAvailability, scheduleAutosave, visit1Declined, visit2Declined }: RfpHeaderProps) {
   const { invitation, org } = data
   const trip = invitation.trips
   const client = trip.clients
@@ -590,43 +592,56 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
           /* Single scenario: horizontal rate row matching Word doc */
           <div>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Rates</p>
+            {visit1Declined && (
+              <div className="mb-1 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                Visit 1 — Declined, no King/Suite/Selling rate required.
+              </div>
+            )}
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr>
-                  <th className={th}>
-                    Best Available King/Double Rate(s){hasStay2 ? ' — Visit 1' : ''}
-                  </th>
-                  <th className={th}>VS. Current Selling Rate</th>
-                  <th className={th}>Best Available Suite Rate(s){hasStay2 ? ' — Visit 1' : ''}</th>
+                  {!visit1Declined && (
+                    <>
+                      <th className={th}>
+                        Best Available King/Double Rate(s){hasStay2 ? ' — Visit 1' : ''}
+                      </th>
+                      <th className={th}>VS. Current Selling Rate</th>
+                      <th className={th}>Best Available Suite Rate(s){hasStay2 ? ' — Visit 1' : ''}</th>
+                    </>
+                  )}
                   <th className={th}>Occupancy Tax</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td className="border border-slate-300 p-0">
-                    <div className="flex items-center">
-                      <span className="border-r border-slate-200 bg-slate-50 px-2 py-2 text-xs text-slate-400">$</span>
-                      <input type="number" min="0" step="0.01" className={rateInput}
-                        value={resp.best_king_rate} placeholder="0.00" aria-required="true"
-                        onChange={(e) => setResp((r) => ({ ...r, best_king_rate: e.target.value }))}
-                        disabled={isReadOnly} />
-                    </div>
-                  </td>
-                  <td className="border border-slate-300 p-0">
-                    <input type="text" className={rateInput} value={resp.current_selling_rate}
-                      placeholder="e.g. $595"
-                      onChange={(e) => setResp((r) => ({ ...r, current_selling_rate: e.target.value }))}
-                      disabled={isReadOnly} />
-                  </td>
-                  <td className="border border-slate-300 p-0">
-                    <div className="flex items-center">
-                      <span className="border-r border-slate-200 bg-slate-50 px-2 py-2 text-xs text-slate-400">$</span>
-                      <input type="number" min="0" step="0.01" className={rateInput}
-                        value={resp.best_suite_rate} placeholder="0.00"
-                        onChange={(e) => setResp((r) => ({ ...r, best_suite_rate: e.target.value }))}
-                        disabled={isReadOnly} />
-                    </div>
-                  </td>
+                  {!visit1Declined && (
+                    <>
+                      <td className="border border-slate-300 p-0">
+                        <div className="flex items-center">
+                          <span className="border-r border-slate-200 bg-slate-50 px-2 py-2 text-xs text-slate-400">$</span>
+                          <input type="number" min="0" step="0.01" className={rateInput}
+                            value={resp.best_king_rate} placeholder="0.00" aria-required="true"
+                            onChange={(e) => setResp((r) => ({ ...r, best_king_rate: e.target.value }))}
+                            disabled={isReadOnly} />
+                        </div>
+                      </td>
+                      <td className="border border-slate-300 p-0">
+                        <input type="text" className={rateInput} value={resp.current_selling_rate}
+                          placeholder="e.g. $595"
+                          onChange={(e) => setResp((r) => ({ ...r, current_selling_rate: e.target.value }))}
+                          disabled={isReadOnly} />
+                      </td>
+                      <td className="border border-slate-300 p-0">
+                        <div className="flex items-center">
+                          <span className="border-r border-slate-200 bg-slate-50 px-2 py-2 text-xs text-slate-400">$</span>
+                          <input type="number" min="0" step="0.01" className={rateInput}
+                            value={resp.best_suite_rate} placeholder="0.00"
+                            onChange={(e) => setResp((r) => ({ ...r, best_suite_rate: e.target.value }))}
+                            disabled={isReadOnly} />
+                        </div>
+                      </td>
+                    </>
+                  )}
                   <td className="border border-slate-300 p-0">
                     <input type="text" className={rateInput} value={resp.occupancy_tax}
                       placeholder="e.g. 16.9% + $5/night"
@@ -638,6 +653,11 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
             </table>
             {/* Visit 2 rates row */}
             {hasStay2 && (
+              visit2Declined ? (
+                <div className="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                  Visit 2 — Declined, no rates required.
+                </div>
+              ) : (
               <table className="mt-1 w-full border-collapse text-sm">
                 <thead>
                   <tr>
@@ -677,6 +697,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
                   </tr>
                 </tbody>
               </table>
+              )
             )}
           </div>
         )}
@@ -789,6 +810,11 @@ export default function RfpForm() {
   const [declineNotes, setDeclineNotes] = useState('')
   const [declining, setDeclining] = useState(false)
   const [declineError, setDeclineError] = useState<string | null>(null)
+  // Which visit the decline applies to on a two-visit trip ('both' when the
+  // trip only has one visit, or when the hotel explicitly declines everything)
+  const [declineScope, setDeclineScope] = useState<'both' | 1 | 2>('both')
+  const [visit1Declined, setVisit1Declined] = useState(false)
+  const [visit2Declined, setVisit2Declined] = useState(false)
 
   // Night scenarios state — populated from loaded trip data
   const [nightScenarios, setNightScenarios] = useState<number[]>([1])
@@ -805,6 +831,17 @@ export default function RfpForm() {
   const [meetingSpaceDetails, setMeetingSpaceDetails] = useState<Record<string, SpaceDetail>>({})
   // Additional spaces beyond the 4 requested rooms
   const [additionalSpaces, setAdditionalSpaces] = useState<SpaceDetail[]>([])
+
+  // Fixed named sub-spaces required by a "(3) complimentary function spaces"
+  // item — just a room name and square footage per space, no type/Wi-Fi.
+  type NamedSpaceDetail = { name: string; dimensions: string; spaceLabel: string }
+  const NAMED_FUNCTION_SPACES: { key: string; label: string }[] = [
+    { key: 'meal_room', label: 'Meal Room' },
+    { key: 'treatment_room', label: 'Treatment Room' },
+    { key: 'coaches_meeting_room', label: 'Coaches Meeting Room' },
+  ]
+  const emptyNamedSpace = (label: string): NamedSpaceDetail => ({ name: '', dimensions: '', spaceLabel: label })
+  const [namedSpaceDetails, setNamedSpaceDetails] = useState<Record<string, Record<string, NamedSpaceDetail>>>({})
 
   // Form state
   const [resp, setResp] = useState<RespState>({
@@ -843,6 +880,8 @@ export default function RfpForm() {
         setData(d)
         if (d.invitation.status === 'submitted') setSubmitted(true)
         if (d.invitation.status === 'declined') setDeclined(true)
+        if (d.invitation.visit1_declined) setVisit1Declined(true)
+        if (d.invitation.visit2_declined) setVisit2Declined(true)
 
         // Populate night scenarios from the trip
         setNightScenarios(d.invitation.trips.night_scenarios ?? [1])
@@ -897,6 +936,7 @@ export default function RfpForm() {
               if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
                 if (parsed.__details) setMeetingSpaceDetails(parsed.__details)
                 if (Array.isArray(parsed.__additional)) setAdditionalSpaces(parsed.__additional)
+                if (parsed.__named) setNamedSpaceDetails(parsed.__named)
               }
             } catch {
               // Legacy plain-text — ignore, hotel will re-enter
@@ -960,8 +1000,8 @@ export default function RfpForm() {
         occupancy_tax: r.occupancy_tax,
         resort_fee: r.resort_fee,
         meeting_space_notes:
-          Object.keys(meetingSpaceDetails).length > 0 || additionalSpaces.length > 0
-            ? JSON.stringify({ __details: meetingSpaceDetails, __additional: additionalSpaces })
+          Object.keys(meetingSpaceDetails).length > 0 || additionalSpaces.length > 0 || Object.keys(namedSpaceDetails).length > 0
+            ? JSON.stringify({ __details: meetingSpaceDetails, __additional: additionalSpaces, __named: namedSpaceDetails })
             : '',
         meeting_space_type: r.meeting_space_type || null,
         meeting_space_count: r.meeting_space_count ? Number(r.meeting_space_count) : null,
@@ -981,17 +1021,32 @@ export default function RfpForm() {
         return false
       }
     },
-    [token, meetingSpaceDetails, additionalSpaces, scenarioAvailability],
+    [token, meetingSpaceDetails, additionalSpaces, namedSpaceDetails, scenarioAvailability],
   )
 
   // --- Decline ---
+  const hasStay2ForDecline = Boolean(data?.invitation.trips.stay2_arrival_date)
   const handleDecline = async () => {
     if (!token || !declineReason) return
     setDeclining(true)
     setDeclineError(null)
     try {
-      await declineRfp({ token, decline_reason: declineReason, decline_notes: declineNotes || undefined })
-      setDeclined(true)
+      const visitArg: 1 | 2 | undefined =
+        hasStay2ForDecline && declineScope !== 'both' ? declineScope : undefined
+      const result = await declineRfp({ token, decline_reason: declineReason, decline_notes: declineNotes || undefined, visit: visitArg })
+      if (visitArg === 1) setVisit1Declined(true)
+      else if (visitArg === 2) setVisit2Declined(true)
+      else {
+        setVisit1Declined(true)
+        if (hasStay2ForDecline) setVisit2Declined(true)
+      }
+      if (!hasStay2ForDecline || result.fully_declined || declineScope === 'both') setDeclined(true)
+      else {
+        setShowDeclinePanel(false)
+        setDeclineReason('')
+        setDeclineNotes('')
+        setDeclineScope('both')
+      }
     } catch (e: unknown) {
       setDeclineError((e as Error).message)
     } finally {
@@ -1038,12 +1093,12 @@ export default function RfpForm() {
     }
     const scenarios = nightScenarios
     const isMultiScenario = scenarios.length > 1
-    if (!isMultiScenario && !resp.best_king_rate.trim()) {
+    if (!visit1Declined && !isMultiScenario && !resp.best_king_rate.trim()) {
       setValidationError('Best Available King Rate is required before submitting.')
       window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
-    if (isMultiScenario) {
+    if (!visit1Declined && isMultiScenario) {
       const availableScenarios = scenarios.filter((n) => resp.scenario_rates[String(n)]?.available !== false)
       const missingRates = availableScenarios.filter((n) => !resp.scenario_rates[String(n)]?.rate?.trim())
       if (missingRates.length > 0) {
@@ -1054,13 +1109,14 @@ export default function RfpForm() {
     }
 
     // Required: VS. Current Selling Rate
-    if (!isMultiScenario && !resp.current_selling_rate.trim()) {
+    if (!visit1Declined && !isMultiScenario && !resp.current_selling_rate.trim()) {
       setValidationError('VS. Current Selling Rate is required before submitting. Please fill it in the Rates section at the top.')
       window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
 
-    // Required: Occupancy Tax
+    // Required: Occupancy Tax — one shared value for the property, not
+    // per-visit, so it's still required as long as any visit is active
     if (!resp.occupancy_tax.trim()) {
       setValidationError('Occupancy Tax is required before submitting. Please fill it in the Rates section at the top.')
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -1068,15 +1124,15 @@ export default function RfpForm() {
     }
 
     // Required: Suite Rate (always)
-    if (!isMultiScenario && !resp.best_suite_rate.trim()) {
+    if (!visit1Declined && !isMultiScenario && !resp.best_suite_rate.trim()) {
       setValidationError('Best Available Suite Rate is required before submitting. Please fill it in the Rates section at the top.')
       window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
 
-    // Required: Visit 2 rates when a second stay exists
+    // Required: Visit 2 rates when a second stay exists and it wasn't declined
     const hasStay2Val = Boolean(data?.invitation.trips.stay2_arrival_date)
-    if (hasStay2Val) {
+    if (hasStay2Val && !visit2Declined) {
       if (!resp.stay2_king_rate.trim()) {
         setValidationError('King Rate for Visit 2 is required before submitting. Please fill it in the Rates section at the top.')
         window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -1130,6 +1186,22 @@ export default function RfpForm() {
       if (!space.space_type) msErrors.push(`${prefix} — Type`)
       if (!space.dimensions?.trim()) msErrors.push(`${prefix} — Dimensions`)
       if (!space.wifi) msErrors.push(`${prefix} — Wi-Fi`)
+    }
+
+    // Named function-space fields (Meal Room / Treatment Room / Coaches
+    // Meeting Room) required when the hotel answered Yes
+    const namedFnItems = (data?.items ?? []).filter(
+      (item) => item.answer_type === 'yes_no' && item.label.toLowerCase().includes('function space'),
+    )
+    for (const item of namedFnItems) {
+      if (answers[item.id]?.answer_yes_no === true) {
+        const forItem = namedSpaceDetails[item.id] ?? {}
+        for (const space of NAMED_FUNCTION_SPACES) {
+          const detail = forItem[space.key]
+          if (!detail?.name?.trim()) msErrors.push(`${space.label} — Room name`)
+          if (!detail?.dimensions?.trim()) msErrors.push(`${space.label} — Square footage`)
+        }
+      }
     }
     if (msErrors.length > 0) {
       setValidationError(
@@ -1274,6 +1346,9 @@ export default function RfpForm() {
   const isMeetingSpaceYesNoItem = (item: ConcessionItem) =>
     item.answer_type === 'yes_no' &&
     item.label.toLowerCase().includes('complimentary meeting space')
+  const isNamedFunctionSpaceItem = (item: ConcessionItem) =>
+    item.answer_type === 'yes_no' &&
+    item.label.toLowerCase().includes('function space')
 
   const allConcessionItems = data.items.filter(
     (i) => i.section === 'concessions' || i.section === 'facilities',
@@ -1282,6 +1357,7 @@ export default function RfpForm() {
   const commissionItems = allConcessionItems.filter(isCommissionItem)
   const rebateItems = allConcessionItems.filter(isRebateItem)
   const meetingSpaceYesNoItems = allConcessionItems.filter(isMeetingSpaceYesNoItem)
+  const namedFunctionSpaceItems = allConcessionItems.filter(isNamedFunctionSpaceItem)
   const postseasonItems = data.items.filter((i) => i.section === 'postseason')
   const inSeasonItems = data.items.filter((i) => i.section === 'in_season_tournament')
 
@@ -1292,12 +1368,14 @@ export default function RfpForm() {
     ...commissionItems,
     ...rebateItems,
     ...meetingSpaceYesNoItems,
+    ...namedFunctionSpaceItems,
   ].map((i) => i.id))
   const remainingItems = allConcessionItems.filter((i) => !specialItemIds.has(i.id))
   const otherConcessionItems = remainingItems.filter((i) => i.section === 'concessions')
   const facilitiesItems = remainingItems.filter((i) => i.section === 'facilities')
 
   const isReadOnly = data.invitation.status === 'submitted'
+  const hasStay2 = Boolean(data.invitation.trips.stay2_arrival_date)
 
   // Substitute [TEAM NAME], [ROOMS], [SUITES], [KINGS] placeholders with real trip data
   const teamName = data.invitation.trips.clients.team_name ?? 'Team'
@@ -1334,18 +1412,40 @@ export default function RfpForm() {
           scenarioAvailability={scenarioAvailability}
           setScenarioAvailability={setScenarioAvailability}
           scheduleAutosave={scheduleAutosave}
+          visit1Declined={visit1Declined}
+          visit2Declined={visit2Declined}
         />
 
+        {/* ── Already-declined visit notices (two-visit trips) ── */}
+        {hasStay2 && (visit1Declined || visit2Declined) && (
+          <div className="mb-6 space-y-2">
+            {visit1Declined && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                Visit 1 has been recorded as declined. The Visit 1 rate fields below are no longer required.
+              </div>
+            )}
+            {visit2Declined && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                Visit 2 has been recorded as declined. The Visit 2 rate fields below are no longer required.
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── Can't bid panel ── */}
-        {!isReadOnly && (
+        {!isReadOnly && !(hasStay2 && visit1Declined && visit2Declined) && (
           <div className="mb-6 rounded-xl border border-slate-200 bg-white overflow-hidden">
             {!showDeclinePanel ? (
               <button
                 type="button"
-                onClick={() => setShowDeclinePanel(true)}
+                onClick={() => {
+                  if (hasStay2 && visit1Declined && !visit2Declined) setDeclineScope(2)
+                  else if (hasStay2 && visit2Declined && !visit1Declined) setDeclineScope(1)
+                  setShowDeclinePanel(true)
+                }}
                 className="w-full px-6 py-4 text-left text-sm text-slate-500 hover:bg-slate-50 transition-colors rounded-xl"
               >
-                Unable to bid on this RFP?{' '}
+                {hasStay2 && (visit1Declined || visit2Declined) ? 'Unable to bid on the remaining visit?' : 'Unable to bid on this RFP?'}{' '}
                 <span className="font-medium text-[#1C1008] hover:underline">Let us know →</span>
               </button>
             ) : (
@@ -1354,6 +1454,21 @@ export default function RfpForm() {
                 <p className="mb-4 text-xs text-slate-500">
                   Please let us know why your property cannot participate. This helps KJ Sports Travel plan accordingly.
                 </p>
+                {hasStay2 && !visit1Declined && !visit2Declined && (
+                  <div className="mb-4">
+                    <FieldLabel htmlFor="decline-scope" required>Which visit?</FieldLabel>
+                    <select
+                      id="decline-scope"
+                      className={inputCls}
+                      value={declineScope}
+                      onChange={(e) => setDeclineScope(e.target.value === 'both' ? 'both' : (Number(e.target.value) as 1 | 2))}
+                    >
+                      <option value="both">Both visits — can't bid on this trip at all</option>
+                      <option value="1">Visit 1 only</option>
+                      <option value="2">Visit 2 only</option>
+                    </select>
+                  </div>
+                )}
                 <div className="mb-4">
                   <FieldLabel htmlFor="decline-reason" required>Reason</FieldLabel>
                   <select
@@ -1404,6 +1519,7 @@ export default function RfpForm() {
                       setDeclineReason('')
                       setDeclineNotes('')
                       setDeclineError(null)
+                      setDeclineScope('both')
                     }}
                     className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
                   >
@@ -1727,6 +1843,86 @@ export default function RfpForm() {
               ))}
             </div>
           </div>
+
+          {/* ── Section 4b: Named Function Spaces ─── */}
+          {namedFunctionSpaceItems.map((item) => {
+            const ans = answers[item.id] ?? { answer_yes_no: null, answer_value: '', comment: '', commentOpen: false }
+            const answeredYes = ans.answer_yes_no === true
+            const nfsHasError = fieldErrors.has(item.id)
+            const forItem = namedSpaceDetails[item.id] ?? {}
+            return (
+              <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-6">
+                <SectionHeading>Function Spaces</SectionHeading>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+                  <p className="flex-1 text-sm leading-relaxed text-slate-800">{item.label}</p>
+                  <div className="flex-shrink-0 sm:w-48">
+                    <div id={`concession-item-${item.id}`} className={nfsHasError ? 'rounded-lg ring-2 ring-red-400 p-1' : ''}>
+                      <YesNoToggle
+                        value={ans.answer_yes_no}
+                        onChange={(v) => {
+                          setAnswer(item.id, { answer_yes_no: v })
+                          if (!v) setNamedSpaceDetails((prev) => { const next = { ...prev }; delete next[item.id]; return next })
+                        }}
+                        disabled={isReadOnly}
+                      />
+                    </div>
+                    {nfsHasError && <p className="mt-1 text-xs font-medium text-red-500">Required</p>}
+                  </div>
+                </div>
+
+                {answeredYes && (
+                  <div className="mt-3 space-y-3">
+                    {NAMED_FUNCTION_SPACES.map((space) => {
+                      const detail = forItem[space.key] ?? emptyNamedSpace(space.label)
+                      return (
+                        <div key={space.key} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                          <p className="text-xs font-medium text-slate-500 mb-3">{space.label}</p>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div>
+                              <FieldLabel htmlFor={`nfs-${item.id}-${space.key}-name`} required>Room name at your property</FieldLabel>
+                              <input
+                                id={`nfs-${item.id}-${space.key}-name`}
+                                type="text"
+                                className={inputCls}
+                                value={detail.name}
+                                onChange={(e) => {
+                                  const v = e.target.value
+                                  setNamedSpaceDetails((prev) => ({
+                                    ...prev,
+                                    [item.id]: { ...forItem, [space.key]: { ...detail, spaceLabel: space.label, name: v } },
+                                  }))
+                                }}
+                                disabled={isReadOnly}
+                                placeholder="e.g. Bayview Room"
+                              />
+                            </div>
+                            <div>
+                              <FieldLabel htmlFor={`nfs-${item.id}-${space.key}-dim`} required>Square footage</FieldLabel>
+                              <input
+                                id={`nfs-${item.id}-${space.key}-dim`}
+                                type="text"
+                                className={inputCls}
+                                value={detail.dimensions}
+                                onChange={(e) => {
+                                  const v = e.target.value
+                                  setNamedSpaceDetails((prev) => ({
+                                    ...prev,
+                                    [item.id]: { ...forItem, [space.key]: { ...detail, spaceLabel: space.label, dimensions: v } },
+                                  }))
+                                }}
+                                disabled={isReadOnly}
+                                placeholder="e.g. 800 sq ft"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
 
           {/* ── Section 5: Concessions (remaining items in RFP sort order) ─── */}
           {otherConcessionItems.length > 0 && (

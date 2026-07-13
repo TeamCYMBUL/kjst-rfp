@@ -29,7 +29,7 @@ export default function TripsList() {
       .select(
         'id, opponent_label, city, arrival_date, departure_date, status, clients(team_name), rfp_invitations(id, status)',
       )
-      .order('arrival_date', { ascending: false })
+      .order('city', { ascending: true, nullsFirst: false })
       .then(({ data, error }) => {
         if (error) setError(error.message)
         else setRows(data as unknown as Row[])

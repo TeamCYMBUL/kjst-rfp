@@ -962,27 +962,41 @@ function HotelPanel({
                     {fmt(trip.arrival_date)} – {fmt(trip.departure_date)}
                   </span>
                 )}
-              </h3>
-              <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-                <RateField label="King rate" value={fmtRate(response.best_king_rate)} />
-                <RateField label="Suite rate" value={fmtRate(response.best_suite_rate)} />
-                <RateField label="Selling rate" value={response.current_selling_rate || '—'} />
-                <RateField label="Occupancy tax" value={response.occupancy_tax || '—'} />
-                {trip.king_rooms_requested && response.best_king_rate && trip.nights && (
-                  <RateField
-                    label="Est. total cost"
-                    value={`$${(response.best_king_rate * trip.total_rooms_requested! * trip.nights).toLocaleString()}`}
-                    highlight
-                  />
+                {inv.visit1_declined && (
+                  <span className="ml-2 rounded-full bg-red-50 dark:bg-red-900/20 px-2 py-0.5 text-[10px] font-semibold normal-case text-red-600 dark:text-red-400">
+                    Declined
+                  </span>
                 )}
-              </dl>
-              {response.king_rate_notes && (
-                <p className="mt-3 text-xs text-slate-500 dark:text-slate-400"><span className="font-medium">Rate notes:</span> {response.king_rate_notes}</p>
+              </h3>
+              {inv.visit1_declined ? (
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {inv.visit1_decline_reason ? `Declined: ${inv.visit1_decline_reason.replace(/_/g, ' ')}` : 'Declined by hotel'}
+                  {inv.visit1_decline_notes && ` — ${inv.visit1_decline_notes}`}
+                </p>
+              ) : (
+                <>
+                  <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+                    <RateField label="King rate" value={fmtRate(response.best_king_rate)} />
+                    <RateField label="Suite rate" value={fmtRate(response.best_suite_rate)} />
+                    <RateField label="Selling rate" value={response.current_selling_rate || '—'} />
+                    <RateField label="Occupancy tax" value={response.occupancy_tax || '—'} />
+                    {trip.king_rooms_requested && response.best_king_rate && trip.nights && (
+                      <RateField
+                        label="Est. total cost"
+                        value={`$${(response.best_king_rate * trip.total_rooms_requested! * trip.nights).toLocaleString()}`}
+                        highlight
+                      />
+                    )}
+                  </dl>
+                  {response.king_rate_notes && (
+                    <p className="mt-3 text-xs text-slate-500 dark:text-slate-400"><span className="font-medium">Rate notes:</span> {response.king_rate_notes}</p>
+                  )}
+                </>
               )}
             </div>
 
             {/* Stay 2 rates */}
-            {hasStay2 && (response.stay2_king_rate || response.stay2_suite_rate || response.stay2_selling_rate) && (
+            {hasStay2 && (inv.visit2_declined || response.stay2_king_rate || response.stay2_suite_rate || response.stay2_selling_rate) && (
               <div className="px-6 py-5">
                 <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
                   Stay 2 Rates
@@ -991,12 +1005,24 @@ function HotelPanel({
                       {fmt(trip.stay2_arrival_date)} – {fmt(trip.stay2_departure_date)}
                     </span>
                   )}
+                  {inv.visit2_declined && (
+                    <span className="ml-2 rounded-full bg-red-50 dark:bg-red-900/20 px-2 py-0.5 text-[10px] font-semibold normal-case text-red-600 dark:text-red-400">
+                      Declined
+                    </span>
+                  )}
                 </h3>
-                <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-                  <RateField label="King rate" value={fmtRate(response.stay2_king_rate)} />
-                  <RateField label="Suite rate" value={fmtRate(response.stay2_suite_rate)} />
-                  <RateField label="Selling rate" value={response.stay2_selling_rate || '—'} />
-                </dl>
+                {inv.visit2_declined ? (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {inv.visit2_decline_reason ? `Declined: ${inv.visit2_decline_reason.replace(/_/g, ' ')}` : 'Declined by hotel'}
+                    {inv.visit2_decline_notes && ` — ${inv.visit2_decline_notes}`}
+                  </p>
+                ) : (
+                  <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+                    <RateField label="King rate" value={fmtRate(response.stay2_king_rate)} />
+                    <RateField label="Suite rate" value={fmtRate(response.stay2_suite_rate)} />
+                    <RateField label="Selling rate" value={response.stay2_selling_rate || '—'} />
+                  </dl>
+                )}
               </div>
             )}
 
