@@ -626,14 +626,14 @@ export default function TripGrid() {
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
             title="Save a snapshot of the current grid state"
           >
-            {versionSaving ? 'Saving…' : '📌 Save Snapshot'}
+            {versionSaving ? 'Saving…' : '💾 Save Version'}
           </button>
           <button
             onClick={handleExport}
             disabled={invitations.length === 0}
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
           >
-            ↓ Export Excel
+            ↓ Export (.xlsx)
           </button>
         </div>
       </div>
@@ -779,7 +779,7 @@ export default function TripGrid() {
                               title="Hotel cannot accommodate these dates"
                               className="rounded px-2 py-1 text-xs font-medium bg-slate-100 text-slate-400 hover:bg-slate-200 disabled:opacity-40 transition-colors"
                             >
-                              N/A
+                              Not available
                             </button>
                           )}
                         </div>

@@ -136,36 +136,38 @@ export default function RfpsList() {
     { key: 'overdue', label: 'Overdue' },
   ]
 
+  const th = 'px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500'
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Invitations</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">RFPs</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           Every hotel invitation across all trips — all in one place.
         </p>
       </div>
 
       {/* View tabs */}
-      <div className="flex gap-0 border-b border-slate-200">
+      <div className="flex gap-0 border-b border-slate-200 dark:border-slate-700">
         {(['invitations', 'contacts'] as ViewTab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setViewTab(tab)}
             className={`px-5 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
               viewTab === tab
-                ? 'border-[#1C1008] text-[#1C1008]'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
+                ? 'border-[#1C1008] dark:border-amber-400 text-[#1C1008] dark:text-amber-400'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
             {tab === 'invitations' ? 'Invitations' : 'Contact Sheet'}
             {tab === 'invitations' && (
-              <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+              <span className="ml-2 rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-xs text-slate-500 dark:text-slate-400">
                 {rows.length}
               </span>
             )}
             {tab === 'contacts' && (
-              <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+              <span className="ml-2 rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-xs text-slate-500 dark:text-slate-400">
                 {contacts.length}
               </span>
             )}
@@ -184,13 +186,13 @@ export default function RfpsList() {
                 className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
                   filter === key
                     ? 'bg-[#1C1008] text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                 }`}
               >
                 {label}
                 {counts[key] > 0 && (
                   <span
-                    className={`ml-1.5 text-xs ${filter === key ? 'opacity-60' : 'text-slate-400'}`}
+                    className={`ml-1.5 text-xs ${filter === key ? 'opacity-60' : 'text-slate-400 dark:text-slate-500'}`}
                   >
                     {counts[key]}
                   </span>
@@ -201,7 +203,7 @@ export default function RfpsList() {
 
           {/* Overdue alert */}
           {counts.overdue > 0 && filter !== 'overdue' && (
-            <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="flex items-center gap-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-400">
               <span>⚠️</span>
               <span>
                 <strong>{counts.overdue}</strong> invitation{counts.overdue > 1 ? 's are' : ' is'} past
@@ -217,61 +219,47 @@ export default function RfpsList() {
           )}
 
           {/* Invitations table */}
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
             {filtered.length === 0 ? (
-              <div className="p-10 text-center text-sm text-slate-400">
+              <div className="p-10 text-center text-sm text-slate-400 dark:text-slate-500">
                 No invitations match this filter.
               </div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50">
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      Hotel
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      Team
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      Trip
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      Deadline
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      Responded
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      &nbsp;
-                    </th>
+                  <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50">
+                    <th className={th}>Hotel</th>
+                    <th className={th}>Team</th>
+                    <th className={th}>Trip</th>
+                    <th className={th}>Status</th>
+                    <th className={th}>Deadline</th>
+                    <th className={th}>Responded</th>
+                    <th className={`${th} text-right`}>&nbsp;</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                   {filtered.map((row) => {
                     const overdue = isOverdue(row)
                     const trip = row.trips
                     return (
-                      <tr key={row.id} className="transition-colors hover:bg-slate-50">
+                      <tr key={row.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50">
                         <td className="px-4 py-3">
-                          <div className="font-medium text-slate-800">{row.hotel_name}</div>
+                          <div className="font-medium text-slate-800 dark:text-slate-200">{row.hotel_name}</div>
                           {row.hotel_contact_name && (
-                            <div className="text-xs text-slate-400">{row.hotel_contact_name}</div>
+                            <div className="text-xs text-slate-400 dark:text-slate-500">{row.hotel_contact_name}</div>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-slate-600">
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
                           {trip?.clients?.team_name ?? '—'}
                         </td>
                         <td className="px-4 py-3">
                           {trip ? (
                             <div>
-                              <div className="text-slate-800">
+                              <div className="text-slate-800 dark:text-slate-200">
                                 {trip.opponent_label || 'Unnamed trip'}
                               </div>
                               {trip.city && (
-                                <div className="text-xs text-slate-400">{trip.city}</div>
+                                <div className="text-xs text-slate-400 dark:text-slate-500">{trip.city}</div>
                               )}
                             </div>
                           ) : (
@@ -282,7 +270,7 @@ export default function RfpsList() {
                           <div className="flex flex-wrap items-center gap-1.5">
                             <Badge status={row.status} />
                             {overdue && (
-                              <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-600">
+                              <span className="rounded-full bg-red-100 dark:bg-red-900/30 px-2 py-0.5 text-xs font-medium text-red-600 dark:text-red-400">
                                 Overdue
                               </span>
                             )}
@@ -291,15 +279,13 @@ export default function RfpsList() {
                         <td
                           className={`px-4 py-3 text-sm ${
                             overdue
-                              ? 'font-medium text-red-600'
-                              : 'text-slate-500'
+                              ? 'font-medium text-red-600 dark:text-red-400'
+                              : 'text-slate-500 dark:text-slate-400'
                           }`}
                         >
-                          {trip?.response_deadline
-                            ? formatDate(trip.response_deadline)
-                            : '—'}
+                          {trip?.response_deadline ? formatDate(trip.response_deadline) : '—'}
                         </td>
-                        <td className="px-4 py-3 text-sm text-slate-400">
+                        <td className="px-4 py-3 text-sm text-slate-400 dark:text-slate-500">
                           {row.submitted_at ? formatDate(row.submitted_at) : '—'}
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -307,16 +293,16 @@ export default function RfpsList() {
                             <div className="flex items-center justify-end gap-3">
                               <Link
                                 to={`/trips/${trip.id}`}
-                                className="text-xs font-medium text-[#1C1008] hover:underline"
+                                className="text-xs font-medium text-[#1C1008] dark:text-amber-400 hover:underline"
                               >
-                                Trip
+                                Open trip
                               </Link>
                               {['submitted', 'awarded', 'passed'].includes(row.status) && (
                                 <Link
                                   to={`/trips/${trip.id}/grid`}
-                                  className="text-xs font-medium text-[#1C1008] hover:underline"
+                                  className="text-xs font-medium text-[#1C1008] dark:text-amber-400 hover:underline"
                                 >
-                                  Grid
+                                  Comparison grid
                                 </Link>
                               )}
                             </div>
@@ -332,61 +318,51 @@ export default function RfpsList() {
         </>
       ) : (
         /* ── Contact Sheet ── */
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-200 bg-slate-50 px-5 py-3">
-            <p className="text-sm text-slate-500">
+        <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+          <div className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 px-5 py-3">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
               {contacts.length} unique hotel contact{contacts.length !== 1 ? 's' : ''} — built
               automatically from your invitation history.
             </p>
           </div>
           {contacts.length === 0 ? (
-            <div className="p-10 text-center text-sm text-slate-400">
+            <div className="p-10 text-center text-sm text-slate-400 dark:text-slate-500">
               No contacts yet. Start inviting hotels to build your contact sheet.
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50">
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Hotel
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Contact
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Email
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Last arrival
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Trips
-                  </th>
+                <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50">
+                  <th className={th}>Hotel</th>
+                  <th className={th}>Contact</th>
+                  <th className={th}>Email</th>
+                  <th className={th}>Last arrival</th>
+                  <th className={`${th} text-right`}>Trips</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                 {contacts.map((c, i) => (
-                  <tr key={i} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-800">{c.hotel_name}</td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {c.contact_name || <span className="text-slate-300">—</span>}
+                  <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                    <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-200">{c.hotel_name}</td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                      {c.contact_name || <span className="text-slate-300 dark:text-slate-600">—</span>}
                     </td>
-                    <td className="px-4 py-3 text-slate-600">
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
                       {c.email ? (
                         <a
                           href={`mailto:${c.email}`}
-                          className="text-[#1C1008] hover:underline"
+                          className="text-[#1C1008] dark:text-amber-400 hover:underline"
                         >
                           {c.email}
                         </a>
                       ) : (
-                        <span className="text-slate-300">—</span>
+                        <span className="text-slate-300 dark:text-slate-600">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-slate-500">
+                    <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
                       {c.last_arrival ? formatDate(c.last_arrival) : '—'}
                     </td>
-                    <td className="px-4 py-3 text-right text-slate-500">{c.trip_count}</td>
+                    <td className="px-4 py-3 text-right text-slate-500 dark:text-slate-400">{c.trip_count}</td>
                   </tr>
                 ))}
               </tbody>

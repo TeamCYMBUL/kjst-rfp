@@ -61,7 +61,7 @@ export default function TripsList() {
         title="Trips"
         subtitle="Road trips an RFP is being run for."
         action={
-          !isViewer ? <LinkButton to="/trips/new">Add Trip</LinkButton> : undefined
+          !isViewer ? <LinkButton to="/trips/new">+ New trip</LinkButton> : undefined
         }
       />
 

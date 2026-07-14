@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabase'
 import { Loading, ErrorNote } from '../../components/ui'
+import { useRole } from '../../lib/useRole'
 
 type Hotel = {
   id: string
@@ -274,10 +275,12 @@ function HotelDetail({
   hotel,
   onEdit,
   onDelete,
+  isViewer,
 }: {
   hotel: Hotel
   onEdit: () => void
   onDelete: () => void
+  isViewer: boolean
 }) {
   const [trips, setTrips] = useState<TripUsage[]>([])
   const [loadingTrips, setLoadingTrips] = useState(true)
@@ -406,16 +409,18 @@ function HotelDetail({
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button onClick={onEdit}
-              className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-              Edit
-            </button>
-            <button onClick={onDelete}
-              className="rounded-lg border border-red-200 dark:border-red-800 px-3 py-1.5 text-xs font-medium text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-              Delete
-            </button>
-          </div>
+          {!isViewer && (
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={onEdit}
+                className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                Edit
+              </button>
+              <button onClick={onDelete}
+                className="rounded-lg border border-red-200 dark:border-red-800 px-3 py-1.5 text-xs font-medium text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                Delete
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -465,7 +470,7 @@ function HotelDetail({
                 </span>
               )}
             </h3>
-            {!showAddContact && (
+            {!isViewer && !showAddContact && (
               <button
                 onClick={() => setShowAddContact(true)}
                 className="text-xs font-medium text-[#1C1008] hover:underline transition-colors"
@@ -564,7 +569,7 @@ function HotelDetail({
                 </span>
               )}
             </h3>
-            {!showAddNote && (
+            {!isViewer && !showAddNote && (
               <button
                 onClick={() => setShowAddNote(true)}
                 className="text-xs font-medium text-[#1C1008] hover:underline transition-colors"
@@ -869,6 +874,8 @@ function HotelImportModal({ onClose, onImported }: ImportModalProps) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function HotelsList() {
+  const { role } = useRole()
+  const isViewer = role === 'viewer'
   const [hotels, setHotels] = useState<Hotel[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -926,7 +933,7 @@ export default function HotelsList() {
       {/* Top bar */}
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-3">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Hotel Database</h1>
+          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Hotels</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
           {filtered.length !== hotels.length
             ? `${filtered.length} of ${hotels.length} propert${hotels.length === 1 ? 'y' : 'ies'}`
@@ -934,20 +941,22 @@ export default function HotelsList() {
           {' · click any hotel to view details'}
         </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowImport(true)}
-            className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
-          >
-            ↑ Import CSV
-          </button>
-          <button
-            onClick={() => { setMode('add'); setSelectedId(null) }}
-            className="rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2d1e0e] transition-colors"
-          >
-            + Add hotel
-          </button>
-        </div>
+        {!isViewer && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowImport(true)}
+              className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+            >
+              ↑ Import CSV
+            </button>
+            <button
+              onClick={() => { setMode('add'); setSelectedId(null) }}
+              className="rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2d1e0e] transition-colors"
+            >
+              + New hotel
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-1 overflow-hidden">
@@ -1103,6 +1112,7 @@ export default function HotelsList() {
               hotel={selected}
               onEdit={() => setMode('edit')}
               onDelete={() => deleteHotel(selected)}
+              isViewer={isViewer}
             />
           )}
           {mode === 'view' && !selected && (

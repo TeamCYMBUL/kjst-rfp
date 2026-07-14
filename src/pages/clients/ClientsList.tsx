@@ -171,7 +171,7 @@ export default function ClientsList() {
             to="/clients/new"
             className="rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#2d1e0e]"
           >
-            + Add Client
+            + New client
           </Link>
         )}
       </div>
@@ -323,7 +323,7 @@ export default function ClientsList() {
                       disabled={exportingCities || selTrips.length === 0}
                       className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
                     >
-                      {exportingCities ? 'Exporting…' : '↓ Export All Cities'}
+                      {exportingCities ? 'Exporting…' : '↓ Export Hotel Options'}
                     </button>
                     {canEditClient(selected.id) && (
                       <>

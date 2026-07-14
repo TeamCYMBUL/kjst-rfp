@@ -252,10 +252,10 @@ export default function ClientDetail() {
               onClick={handleExportAllCities}
               disabled={exportingAllCities || !trips || trips.length === 0}
             >
-              {exportingAllCities ? 'Exporting…' : '↓ Export All Cities'}
+              {exportingAllCities ? 'Exporting…' : '↓ Export Hotel Options'}
             </Button>
             {canEditClient(id!) && (
-              <LinkButton to={`/trips/new?client=${id}`}>New Trip</LinkButton>
+              <LinkButton to={`/trips/new?client=${id}`}>+ New trip</LinkButton>
             )}
           </div>
         }

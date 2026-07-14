@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Button, Card, ErrorNote, Loading, PageHeader, TextField } from '../../components/ui'
+import { useRole } from '../../lib/useRole'
 
 type ActiveTab = 'header' | 'concessions' | 'facilities' | 'in_season_tournament' | 'postseason'
 type Section = 'concessions' | 'facilities' | 'in_season_tournament' | 'postseason'
@@ -150,7 +151,7 @@ const blankOrg: OrgInfo = {
   contact_email: '',
 }
 
-function HeaderTab({ orgId }: { orgId: string | null }) {
+function HeaderTab({ orgId, isViewer }: { orgId: string | null; isViewer: boolean }) {
   const [org, setOrg] = useState<OrgInfo>(blankOrg)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -252,17 +253,21 @@ function HeaderTab({ orgId }: { orgId: string | null }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <Button onClick={save} disabled={saving}>
-          {saving ? 'Saving…' : 'Save changes'}
-        </Button>
-        {saved && <span className="text-sm text-emerald-600">✓ Saved</span>}
-      </div>
+      {!isViewer && (
+        <div className="flex items-center gap-3">
+          <Button onClick={save} disabled={saving}>
+            {saving ? 'Saving…' : 'Save changes'}
+          </Button>
+          {saved && <span className="text-sm text-emerald-600">✓ Saved</span>}
+        </div>
+      )}
     </div>
   )
 }
 
 export default function TemplateEditor() {
+  const { role } = useRole()
+  const isViewer = role === 'viewer'
   const [items, setItems] = useState<TemplateItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -527,7 +532,7 @@ export default function TemplateEditor() {
 
       <Card className="overflow-hidden rounded-tl-none">
         {/* Header tab */}
-        {activeTab === 'header' && <HeaderTab orgId={orgId} />}
+        {activeTab === 'header' && <HeaderTab orgId={orgId} isViewer={isViewer} />}
 
         {/* Item rows (concession tabs only) */}
         {activeTab !== 'header' && <div className="divide-y divide-slate-100">
@@ -547,23 +552,27 @@ export default function TemplateEditor() {
               >
                 {/* Move buttons + sort order */}
                 <div className="flex w-6 flex-col items-center gap-0.5 pt-0.5 text-slate-300">
-                  <button
-                    onClick={() => moveItem(item, 'up')}
-                    disabled={idx === 0}
-                    className="leading-none hover:text-slate-600 disabled:opacity-20"
-                    title="Move up"
-                  >
-                    ▲
-                  </button>
+                  {!isViewer && (
+                    <button
+                      onClick={() => moveItem(item, 'up')}
+                      disabled={idx === 0}
+                      className="leading-none hover:text-slate-600 disabled:opacity-20"
+                      title="Move up"
+                    >
+                      ▲
+                    </button>
+                  )}
                   <span className="text-[10px] font-mono">{item.sort_order}</span>
-                  <button
-                    onClick={() => moveItem(item, 'down')}
-                    disabled={idx === sectionItems.length - 1}
-                    className="leading-none hover:text-slate-600 disabled:opacity-20"
-                    title="Move down"
-                  >
-                    ▼
-                  </button>
+                  {!isViewer && (
+                    <button
+                      onClick={() => moveItem(item, 'down')}
+                      disabled={idx === sectionItems.length - 1}
+                      className="leading-none hover:text-slate-600 disabled:opacity-20"
+                      title="Move down"
+                    >
+                      ▼
+                    </button>
+                  )}
                 </div>
 
                 {/* Label + meta */}
@@ -587,19 +596,21 @@ export default function TemplateEditor() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button
-                    variant="secondary"
-                    onClick={() =>
-                      editingId === item.id ? setEditingId(null) : startEdit(item)
-                    }
-                  >
-                    {editingId === item.id ? 'Cancel' : 'Edit'}
-                  </Button>
-                  <Button variant="danger" onClick={() => archiveItem(item)}>
-                    Remove
-                  </Button>
-                </div>
+                {!isViewer && (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      variant="secondary"
+                      onClick={() =>
+                        editingId === item.id ? setEditingId(null) : startEdit(item)
+                      }
+                    >
+                      {editingId === item.id ? 'Cancel' : 'Edit'}
+                    </Button>
+                    <Button variant="danger" onClick={() => archiveItem(item)}>
+                      Remove
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* Inline edit form */}
@@ -621,7 +632,7 @@ export default function TemplateEditor() {
         </div>}
 
         {/* Add item footer (concession tabs only) */}
-        {activeTab !== 'header' && <div className="border-t border-slate-200 px-4 py-4">
+        {activeTab !== 'header' && !isViewer && <div className="border-t border-slate-200 px-4 py-4">
           {!showAdd ? (
             <Button
               variant="secondary"

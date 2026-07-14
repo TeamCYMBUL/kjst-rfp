@@ -124,7 +124,7 @@ export default function Tickets() {
   return (
     <div>
       <PageHeader
-        title="Tickets"
+        title="Submit a Ticket"
         subtitle="Spot a bug or something worth tweaking? Submit it here — it goes straight to the team so we can fix it fast."
       />
 
