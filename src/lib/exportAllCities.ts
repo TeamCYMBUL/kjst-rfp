@@ -9,6 +9,13 @@ export async function exportAllCitiesForClient(
   clientId: string,
   clientName: string,
 ): Promise<{ count: number }> {
+  // Client branding for the grid header (logo + team name + season)
+  const { data: client } = await supabase
+    .from('clients')
+    .select('team_name, logo_url, season')
+    .eq('id', clientId)
+    .maybeSingle()
+
   // Master + client-specific concession items (for the count/guarantee columns)
   const { data: allItemsData } = await supabase
     .from('concession_items')
@@ -33,7 +40,8 @@ export async function exportAllCitiesForClient(
     const { data: invs } = await supabase
       .from('rfp_invitations')
       .select(`
-        id, hotel_name, status,
+        id, hotel_name, status, staff_notes,
+        visit1_declined, visit1_decline_reason, visit2_declined, visit2_decline_reason,
         rfp_responses(
           best_king_rate, best_suite_rate, current_selling_rate, occupancy_tax, resort_fee,
           stay2_king_rate, stay2_suite_rate, general_comments,
@@ -58,6 +66,11 @@ export async function exportAllCitiesForClient(
       return {
         hotel_name: inv.hotel_name,
         status: inv.status,
+        staff_notes: inv.staff_notes ?? null,
+        visit1_declined: inv.visit1_declined ?? false,
+        visit1_decline_reason: inv.visit1_decline_reason ?? null,
+        visit2_declined: inv.visit2_declined ?? false,
+        visit2_decline_reason: inv.visit2_decline_reason ?? null,
         best_king_rate: r?.best_king_rate ?? null,
         best_suite_rate: r?.best_suite_rate ?? null,
         current_selling_rate: r?.current_selling_rate ?? null,
@@ -91,6 +104,9 @@ export async function exportAllCitiesForClient(
     })
   }
 
-  exportMultiCityConsolidatedXlsx(cityData, clientName)
+  await exportMultiCityConsolidatedXlsx(cityData, clientName, {
+    logoUrl: client?.logo_url ?? null,
+    season: client?.season ?? null,
+  })
   return { count: cityData.length }
 }

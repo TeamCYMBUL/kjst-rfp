@@ -455,6 +455,12 @@ export function exportTeamGridXlsx(
 export type ConsolidatedHotel = {
   hotel_name: string
   status: string
+  staff_notes: string | null
+  // Per-visit availability — a hotel can be sold out for one visit but not the other
+  visit1_declined: boolean
+  visit1_decline_reason: string | null
+  visit2_declined: boolean
+  visit2_decline_reason: string | null
   best_king_rate: number | null
   best_suite_rate: number | null
   current_selling_rate: string | null
@@ -487,139 +493,236 @@ export type ConsolidatedCity = {
   items: ConcessionItem[]
 }
 
-// Horizontal season grid matching KJST's "ALL HOTEL OPTIONS" layout: one row per
-// hotel bid, grouped by city/visit, with the columns they paste into each season.
-export function exportMultiCityConsolidatedXlsx(
+// Fetch a client logo and return an ExcelJS-embeddable buffer + extension.
+// Returns null on any failure (missing/SVG/unsupported/CORS) so the export
+// falls back to a text-only branded header instead of breaking.
+async function loadLogoForExcel(
+  url: string,
+): Promise<{ buffer: Uint8Array; extension: 'png' | 'jpeg' | 'gif' } | null> {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const ct = (res.headers.get('content-type') ?? '').toLowerCase()
+    const urlExt = url.split('.').pop()?.toLowerCase() ?? ''
+    let extension: 'png' | 'jpeg' | 'gif' | null = null
+    if (ct.includes('png') || urlExt === 'png') extension = 'png'
+    else if (ct.includes('jpeg') || ct.includes('jpg') || urlExt === 'jpg' || urlExt === 'jpeg') extension = 'jpeg'
+    else if (ct.includes('gif') || urlExt === 'gif') extension = 'gif'
+    if (!extension) return null // svg/webp/unknown → text-only fallback
+    const buf = await res.arrayBuffer()
+    return { buffer: new Uint8Array(buf), extension }
+  } catch {
+    return null
+  }
+}
+
+// Client-facing "Hotel Options" grid — a branded, editable .xlsx matching KJST's
+// season grid: alpha by city, one row per hotel offer, Stay 1/Stay 2 blocks,
+// sold-out hotels kept but red-struck. Uses ExcelJS (dynamic import) for cell
+// styling + an embedded client logo, which the community `xlsx` build cannot do.
+export async function exportMultiCityConsolidatedXlsx(
   cities: ConsolidatedCity[],
   clientName: string,
-  filename?: string,
-): void {
-  const COLS = [
-    'C/I', 'C/O', 'NTS', 'GAME DATES', 'OPPONENT', 'HOTEL NAME',
-    'KING RATE', 'TAX FOR KING RM', 'TOTAL (Per King) w/ Tax',
-    'TOTAL RMS PER NIGHT', '# OF KINGS', '# OF COMP SUITES', '# OF SUITE UG',
-    'ADDL SUITE RATE', 'POST SEASON GTE',
-    'REVENUE ESTIMATE FOR ENTIRE STAY (Kings + Suites) TAX INCLUDED', 'COMMENTS',
+  opts: { logoUrl?: string | null; season?: string | null; filename?: string } = {},
+): Promise<void> {
+  const mod: any = await import('exceljs')
+  const ExcelJS = mod.default ?? mod
+
+  const DARK = 'FF1C1008'
+  const HEADER_FILL = 'FFEDE9E4'
+  const RED = 'FFFF0000'
+
+  const COLS: { header: string; width: number }[] = [
+    { header: '#', width: 4 },
+    { header: 'Stay', width: 7 },
+    { header: 'City', width: 15 },
+    { header: 'Game Date', width: 11 },
+    { header: 'C/I', width: 10 },
+    { header: 'C/O', width: 10 },
+    { header: 'Nts', width: 5 },
+    { header: 'Hotel Choices', width: 30 },
+    { header: 'Rate', width: 9 },
+    { header: 'Comp Suite', width: 9 },
+    { header: 'Suite UG', width: 9 },
+    { header: 'Postseason Guaranteed', width: 14 },
+    { header: 'Notes', width: 55 },
   ]
   const NCOL = COLS.length
 
-  // Short M/D (no year) to match their grid (e.g. "5/6")
-  const md = (iso: string | null | undefined): string => {
-    if (!iso) return ''
-    const [, m, d] = iso.split('-').map(Number)
-    return m && d ? `${m}/${d}` : ''
-  }
-  const num = (v: number | null | undefined): number | string => (v == null ? '' : v)
-  const round2 = (n: number) => Math.round(n * 100) / 100
+  const wb = new ExcelJS.Workbook()
+  const ws = wb.addWorksheet('Hotel Options', {
+    views: [{ state: 'frozen', ySplit: 4 }], // keep branding + header on screen
+  })
+  ws.columns = COLS.map((c) => ({ width: c.width }))
 
-  const rows: (string | number | null)[][] = []
-  rows.push([`${clientName} — Hotel Options`, ...Array(NCOL - 1).fill('')])
-  rows.push(COLS)
+  // ── Branding band (rows 1-2) ──
+  const seasonLabel = opts.season ? String(opts.season) : ''
+  const dateStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  for (let r = 1; r <= 2; r++) {
+    for (let c = 1; c <= NCOL; c++) {
+      ws.getCell(r, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK } }
+    }
+  }
+  ws.mergeCells(1, 1, 1, NCOL)
+  ws.mergeCells(2, 1, 2, NCOL)
+  const titleCell = ws.getCell(1, 1)
+  titleCell.value = clientName + (seasonLabel ? `  —  ${seasonLabel}` : '')
+  titleCell.font = { name: 'Arial', size: 18, bold: true, color: { argb: 'FFFFFFFF' } }
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' }
+  const subCell = ws.getCell(2, 1)
+  subCell.value = `Hotel Options  ·  Prepared by KJ Sports Travel  ·  ${dateStr}`
+  subCell.font = { name: 'Arial', size: 9, color: { argb: 'FFD6C6B8' } }
+  subCell.alignment = { horizontal: 'center', vertical: 'middle' }
+  ws.getRow(1).height = 46
+  ws.getRow(2).height = 18
+
+  // Embed client logo (best-effort; text-only fallback on any failure)
+  const logo = opts.logoUrl ? await loadLogoForExcel(opts.logoUrl) : null
+  if (logo) {
+    const imgId = wb.addImage({ buffer: logo.buffer, extension: logo.extension })
+    ws.addImage(imgId, { tl: { col: 0.15, row: 0.2 }, ext: { width: 108, height: 52 } })
+  }
+
+  // ── Column header row (row 4; row 3 is a thin spacer) ──
+  ws.getRow(3).height = 6
+  const headerRow = ws.getRow(4)
+  COLS.forEach((c, i) => {
+    const cell = headerRow.getCell(i + 1)
+    cell.value = c.header
+    cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: DARK } }
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_FILL } }
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+    cell.border = { bottom: { style: 'thin', color: { argb: 'FFBBB2A8' } } }
+  })
+  headerRow.height = 30
+  ws.getCell(4, 12).note = 'YES / NO from hotel responses. Change to LIMITED manually if applicable.'
+
+  const REASON_LABELS: Record<string, string> = {
+    sold_out: 'Sold out / no availability',
+    insufficient_rooms: 'Insufficient rooms available',
+    rate_conflict: 'Rate restrictions in effect',
+    no_suites: 'Unable to accommodate suites',
+    not_competing: 'Chose not to compete',
+    other: 'Not available',
+  }
+  const toDate = (iso: string | null | undefined): Date | null => {
+    if (!iso) return null
+    const [y, m, d] = iso.split('-').map(Number)
+    // Local noon so the serialized date never shifts a day across timezones.
+    return y && m && d ? new Date(y, m - 1, d, 12) : null
+  }
+  const CENTER_COLS = new Set([0, 1, 3, 4, 5, 6, 8, 9, 10, 11])
+
+  let rowIdx = 4
+  let counter = 0
 
   for (const { trip, hotels, items } of cities) {
-    // Concession items that feed the grid's count/guarantee columns
     const compSuitesItem = items.find((i) => i.label.toLowerCase().includes('complimentary one bedroom suite'))
     const suiteUpgItem = items.find((i) => i.label.toLowerCase().includes('suite upgrade'))
-    const playoffItem = items.find((i) => i.section === 'postseason' || i.label.toLowerCase().includes('post') && i.label.toLowerCase().includes('season'))
-
+    const playoffItem = items.find(
+      (i) => i.section === 'postseason' || (i.label.toLowerCase().includes('post') && i.label.toLowerCase().includes('season')),
+    )
     const cityName = (trip.city ?? trip.opponent_label ?? 'City').toUpperCase()
-    const totalRooms = trip.total_rooms_requested ?? null
 
-    // A trip can cover two visits to the same city → emit two date-groups.
-    type Visit = {
-      arr: string | null
-      dep: string | null
-      games: string[]
-      kingRateKey: keyof ConsolidatedHotel
-      suiteRateKey: keyof ConsolidatedHotel
-    }
+    type Visit = { index: 1 | 2; arr: string | null; dep: string | null; games: string[]; kingKey: keyof ConsolidatedHotel }
     const visits: Visit[] = [
       {
-        arr: trip.arrival_date, dep: trip.departure_date,
-        games: trip.game_dates && trip.game_dates.length ? trip.game_dates : (trip.game_date ? [trip.game_date] : []),
-        kingRateKey: 'best_king_rate', suiteRateKey: 'best_suite_rate',
+        index: 1, arr: trip.arrival_date, dep: trip.departure_date,
+        games: trip.game_dates?.length ? trip.game_dates : trip.game_date ? [trip.game_date] : [],
+        kingKey: 'best_king_rate',
       },
     ]
     if (trip.stay2_arrival_date) {
       visits.push({
-        arr: trip.stay2_arrival_date, dep: trip.stay2_departure_date ?? null,
-        games: trip.stay2_game_dates && trip.stay2_game_dates.length ? trip.stay2_game_dates : (trip.stay2_game_date ? [trip.stay2_game_date] : []),
-        kingRateKey: 'stay2_king_rate', suiteRateKey: 'stay2_suite_rate',
+        index: 2, arr: trip.stay2_arrival_date, dep: trip.stay2_departure_date ?? null,
+        games: trip.stay2_game_dates?.length ? trip.stay2_game_dates : trip.stay2_game_date ? [trip.stay2_game_date] : [],
+        kingKey: 'stay2_king_rate',
       })
     }
 
     for (const visit of visits) {
       const nights = calcNights(visit.arr, visit.dep)
-      const gameText = visit.games.map((g) => md(g)).filter(Boolean).join(', ')
-      let firstInGroup = true
+      const gameDates = visit.games.map((g) => toDate(g)).filter(Boolean) as Date[]
+      const gameCell: string | Date | null =
+        gameDates.length > 1 ? gameDates.map((g) => `${g.getMonth() + 1}/${g.getDate()}`).join(', ') : gameDates[0] ?? null
+      const stayLabel = visits.length > 1 ? `Stay ${visit.index}` : 'Stay 1'
 
-      // Submitted/awarded hotels first (full rows), then unavailable/declined as name-only
-      const ordered = [...hotels].sort((a, b) => {
-        const rank = (s: string) => (['submitted', 'awarded'].includes(s) ? 0 : 1)
-        return rank(a.status) - rank(b.status)
-      })
+      const soldOut = (h: ConsolidatedHotel): boolean =>
+        ['declined', 'unavailable', 'passed'].includes(h.status) || (visit.index === 1 ? h.visit1_declined : h.visit2_declined)
+      const isBid = (h: ConsolidatedHotel) => ['submitted', 'awarded'].includes(h.status)
+      const rank = (h: ConsolidatedHotel) => (soldOut(h) ? 2 : isBid(h) ? 0 : 1)
+      const ordered = [...hotels].sort((a, b) => rank(a) - rank(b))
 
+      let first = true
       for (const h of ordered) {
-        const submitted = ['submitted', 'awarded'].includes(h.status)
-        const opp = firstInGroup ? cityName : ''
-        firstInGroup = false
+        counter += 1
+        rowIdx += 1
+        const struck = soldOut(h)
+        const bid = isBid(h) && !struck
+        const row = ws.getRow(rowIdx)
 
-        if (!submitted) {
-          const note = ['declined', 'unavailable', 'passed'].includes(h.status) ? '(Not Available)' : '(Awaiting response)'
-          rows.push([md(visit.arr), md(visit.dep), num(nights), gameText, opp, `${h.hotel_name} ${note}`,
-            '', '', '', num(totalRooms), '', '', '', '', '', '', ''])
-          continue
-        }
-
-        const kingRate = (h as any)[visit.kingRateKey] as number | null
-        const suiteRate = (h as any)[visit.suiteRateKey] as number | null
-        const taxRate = parseTaxRate(h.occupancy_tax) // e.g. 15.9 → 0.159
-        const taxForKing = kingRate != null ? round2(kingRate * taxRate) : null
-        const totalPerKing = kingRate != null ? round2(kingRate * (1 + taxRate)) : null
-
+        const kingRate = (h as any)[visit.kingKey] as number | null
         const compAns = compSuitesItem ? h.answers[compSuitesItem.id] : undefined
         const upgAns = suiteUpgItem ? h.answers[suiteUpgItem.id] : undefined
         const playoffAns = playoffItem ? h.answers[playoffItem.id] : undefined
-        const compSuites = compAns?.answer_value ? Number(compAns.answer_value) : (compAns?.answer_yes_no === true ? 1 : 0)
+        const compSuites = compAns?.answer_value ? Number(compAns.answer_value) : compAns?.answer_yes_no === true ? 1 : 0
         const suiteUg = upgAns?.answer_value ? Number(upgAns.answer_value) : null
-        const kings = totalRooms != null ? totalRooms - (Number.isFinite(compSuites) ? compSuites : 0) : null
         const postGte = playoffAns?.answer_yes_no === true ? 'YES' : playoffAns?.answer_yes_no === false ? 'NO' : ''
-        const revenue =
-          kingRate != null && kings != null && nights > 0 ? round2(kingRate * (1 + taxRate) * kings * nights) : null
 
-        const commentFrags: string[] = []
-        if (h.status === 'awarded') commentFrags.push('AWARDED')
-        if (h.general_comments) commentFrags.push(h.general_comments)
+        const reason = visit.index === 1 ? h.visit1_decline_reason : h.visit2_decline_reason
+        const noteFrags: string[] = []
+        if (h.status === 'awarded') noteFrags.push('AWARDED')
+        if (struck) noteFrags.push(reason ? REASON_LABELS[reason] ?? 'Not available' : 'Not available')
+        if (h.staff_notes) noteFrags.push(h.staff_notes)
+        if (h.general_comments) noteFrags.push(h.general_comments)
 
-        rows.push([
-          md(visit.arr), md(visit.dep), num(nights), gameText, opp, h.hotel_name,
-          num(kingRate), num(taxForKing), num(totalPerKing),
-          num(totalRooms), num(kings),
-          Number.isFinite(compSuites) ? compSuites : '',
-          suiteUg != null && Number.isFinite(suiteUg) ? suiteUg : '',
-          num(suiteRate), postGte,
-          num(revenue), commentFrags.join(' — '),
-        ])
+        const vals: (string | number | Date | null)[] = [
+          counter,
+          first ? stayLabel : '',
+          first ? cityName : '',
+          gameCell,
+          toDate(visit.arr),
+          toDate(visit.dep),
+          nights,
+          h.hotel_name.replace(/\n/g, ' ').trim(),
+          bid ? kingRate ?? null : null,
+          bid && Number.isFinite(compSuites) && compSuites > 0 ? compSuites : null,
+          bid && suiteUg != null && Number.isFinite(suiteUg) ? suiteUg : null,
+          bid ? postGte : '',
+          noteFrags.join('\n'),
+        ]
+        first = false
+
+        vals.forEach((v, i) => {
+          const cell = row.getCell(i + 1)
+          cell.value = v as any
+          cell.font = struck
+            ? { name: 'Arial', size: 10, color: { argb: RED }, strike: true }
+            : { name: 'Arial', size: 10 }
+          cell.alignment = { vertical: 'top', wrapText: i === 12, horizontal: CENTER_COLS.has(i) ? 'center' : 'left' }
+        })
+        row.getCell(4).numFmt = 'm/d/yy'
+        row.getCell(5).numFmt = 'm/d/yy'
+        row.getCell(6).numFmt = 'm/d/yy'
+        row.getCell(9).numFmt = '$#,##0'
       }
-
-      rows.push([]) // blank spacer between groups
     }
   }
 
-  const ws = XLSX.utils.aoa_to_sheet(rows)
-  ws['!cols'] = [
-    { wch: 7 }, { wch: 7 }, { wch: 5 }, { wch: 18 }, { wch: 18 }, { wch: 28 },
-    { wch: 11 }, { wch: 13 }, { wch: 16 }, { wch: 12 }, { wch: 10 }, { wch: 13 },
-    { wch: 12 }, { wch: 13 }, { wch: 13 }, { wch: 26 }, { wch: 50 },
-  ]
-
   const clientStr = clientName.replace(/\s+/g, '_')
-  const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-  const outputFile = filename ?? `${clientStr}_Hotel_Options_${dateStr}.xlsx`
+  const fileDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const outputFile = opts.filename ?? `${clientStr}_Hotel_Options_${fileDate}.xlsx`
 
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, 'ALL HOTEL OPTIONS')
-  XLSX.writeFile(wb, outputFile)
+  const buf = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = outputFile
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
