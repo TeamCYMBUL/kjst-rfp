@@ -328,6 +328,7 @@ export default function Dashboard() {
   const [hasClients, setHasClients] = useState(false)
   const [view, setView] = useState<ViewMode>('deadline')
   const [showClosed, setShowClosed] = useState(false)
+  const [clientFilter, setClientFilter] = useState<string | null>(null)
   useEffect(() => {
     const load = async () => {
       const [tripsRes, clientsRes] = await Promise.all([
@@ -386,6 +387,13 @@ export default function Dashboard() {
 
   // What the list actually shows
   const displayedTrips = showClosed ? trips : openTrips
+
+  // Distinct clients present in the fetched trips — no separate query needed
+  const clientOptions = [...new Map(trips.filter((t) => t.clients).map((t) => [t.clients!.id, t.clients!.team_name])).entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]))
+  const clientFilteredTrips = clientFilter
+    ? displayedTrips.filter((t) => t.clients?.id === clientFilter)
+    : displayedTrips
 
   // Empty state: no non-closed trips at all
   if (openTrips.length === 0 && closedCount === 0) {
@@ -576,6 +584,18 @@ export default function Dashboard() {
             {showClosed ? '✓' : '○'} Show closed ({closedCount})
           </button>
         )}
+        {view === 'client' && clientOptions.length > 0 && (
+          <select
+            value={clientFilter ?? ''}
+            onChange={(e) => setClientFilter(e.target.value || null)}
+            className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008]"
+          >
+            <option value="">All clients</option>
+            {clientOptions.map(([clientId, teamName]) => (
+              <option key={clientId} value={clientId}>{teamName}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Trip list — renders based on active view */}
@@ -593,7 +613,7 @@ export default function Dashboard() {
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               {showClosed ? 'All trips' : 'Active & draft trips'} · grouped by client
             </h2>
-            <ClientView trips={displayedTrips} />
+            <ClientView trips={clientFilteredTrips} />
           </>
         )}
         {view === 'status' && (

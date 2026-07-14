@@ -190,7 +190,14 @@ function ScoreBadge({ score }: { score: number }) {
 
 // ── Status dot ────────────────────────────────────────────────────────────────
 
-function StatusDot({ status }: { status: string }) {
+function StatusDot({ status, sentAt }: { status: string; sentAt?: string | null }) {
+  // An invitation reads as 'sent' in the DB the moment it's added — sentAt is
+  // the only reliable signal an email actually went out. Show a hollow dot
+  // for a draft that was never emailed instead of the same filled dot as a
+  // real "sent, awaiting response" invitation.
+  if (sentAt === null && (status === 'sent' || status === 'opened')) {
+    return <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full border-2 border-slate-300 dark:border-slate-600" />
+  }
   const color =
     status === 'submitted' || status === 'awarded'
       ? 'bg-emerald-500'
@@ -828,7 +835,13 @@ function HotelPanel({
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge status={inv.status} />
+            {!inv.sent_at && (inv.status === 'sent' || inv.status === 'opened') ? (
+              <span className="inline-flex rounded-full bg-slate-100 dark:bg-slate-700 px-2.5 py-0.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+                Draft — not sent
+              </span>
+            ) : (
+              <Badge status={inv.status} />
+            )}
             {/* Undo awarded / passed / unavailable */}
             {(inv.status === 'awarded' || inv.status === 'passed' || inv.status === 'unavailable') && (
               <button
@@ -892,12 +905,17 @@ function HotelPanel({
         )}
 
         {!isSubmitted && !isPassed && !isUnavailable && (
-          <div className="m-6 rounded-xl border border-amber-100 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-6 text-center">
-            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Awaiting response</p>
-            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-              {inv.sent_at ? `Invited ${formatDate(inv.sent_at)}` : 'Email not sent yet'}
-            </p>
-          </div>
+          inv.sent_at ? (
+            <div className="m-6 rounded-xl border border-amber-100 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-6 text-center">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Awaiting response</p>
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">Invited {formatDate(inv.sent_at)}</p>
+            </div>
+          ) : (
+            <div className="m-6 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 p-6 text-center">
+              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Not sent yet</p>
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Email not sent yet</p>
+            </div>
+          )
         )}
 
         {isSubmitted && loadingBid && (
@@ -1263,6 +1281,10 @@ export default function TripDetail() {
   const [copied, setCopied] = useState<string | null>(null)
   const [sendingReminders, setSendingReminders] = useState(false)
   const [reminderResult, setReminderResult] = useState<{ sent: number; skipped: number } | null>(null)
+  // Bulk-select + bulk-send hotels
+  const [selectedInviteIds, setSelectedInviteIds] = useState<Set<string>>(new Set())
+  const [bulkSending, setBulkSending] = useState(false)
+  const [bulkSendResult, setBulkSendResult] = useState<{ hotelName: string; email: string | null; ok: boolean; error?: string }[] | null>(null)
   // Bulk responses + answers for the summary table and scoring
   const [allResponses, setAllResponses] = useState<Map<string, HotelResponse>>(new Map())
   const [allAnswers, setAllAnswers] = useState<Map<string, Answer[]>>(new Map())
@@ -1375,6 +1397,45 @@ export default function TripDetail() {
     setSendingEmail(null)
     if ('error' in result) { setError(result.error) }
     else { setEmailFlash(inv.id); setTimeout(() => setEmailFlash((f) => (f === inv.id ? null : f)), 2000); loadInvites() }
+  }
+
+  const toggleInviteSelected = (inviteId: string) => {
+    setSelectedInviteIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(inviteId)) next.delete(inviteId)
+      else next.add(inviteId)
+      return next
+    })
+  }
+
+  const selectAllNotSent = () => {
+    if (!invites) return
+    const ids = invites.filter((i) => !i.sent_at && i.hotel_contact_email).map((i) => i.id)
+    setSelectedInviteIds(new Set(ids))
+  }
+
+  const sendBulkInvites = async () => {
+    if (!invites || selectedInviteIds.size === 0) return
+    const targets = invites.filter((i) => selectedInviteIds.has(i.id))
+    setBulkSending(true); setError(null)
+
+    const results = await Promise.all(
+      targets.map(async (inv) => {
+        if (!inv.hotel_contact_email) {
+          return { hotelName: inv.hotel_name, email: null, ok: false, error: 'No email address on file' }
+        }
+        const result = await sendInvitationEmail(inv.id)
+        if ('error' in result) {
+          return { hotelName: inv.hotel_name, email: inv.hotel_contact_email, ok: false, error: result.error }
+        }
+        return { hotelName: inv.hotel_name, email: inv.hotel_contact_email, ok: true }
+      }),
+    )
+
+    setBulkSending(false)
+    setBulkSendResult(results)
+    setSelectedInviteIds(new Set())
+    loadInvites()
   }
 
   const sendReminder = async (inv: Invitation) => {
@@ -1749,7 +1810,36 @@ export default function TripDetail() {
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               Hotels {invites.length > 0 && `(${invites.length})`}
             </span>
+            {!isViewer && invites.some((i) => !i.sent_at && i.hotel_contact_email) && (
+              <button
+                onClick={selectAllNotSent}
+                className="text-xs font-medium text-[#1C1008] hover:underline"
+              >
+                Select all not sent
+              </button>
+            )}
           </div>
+
+          {!isViewer && selectedInviteIds.size > 0 && (
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 px-4 py-2">
+              <span className="text-xs text-slate-500 dark:text-slate-400">{selectedInviteIds.size} selected</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSelectedInviteIds(new Set())}
+                  className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={sendBulkInvites}
+                  disabled={bulkSending}
+                  className="rounded-lg bg-[#1C1008] px-3 py-1 text-xs font-semibold text-white hover:bg-[#2d1e0e] disabled:opacity-50"
+                >
+                  {bulkSending ? 'Sending…' : `Send email (${selectedInviteIds.size})`}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Hotel list — flex-1 + min-h-0 lets it shrink when invite form is open */}
           <div className="flex-1 min-h-0 overflow-y-auto">
@@ -1768,11 +1858,20 @@ export default function TripDetail() {
                     isSelected ? 'bg-slate-100 dark:bg-slate-700' : 'hover:bg-slate-50 dark:hover:bg-slate-700'
                   }`}
                 >
+                  {!isViewer && (
+                    <input
+                      type="checkbox"
+                      checked={selectedInviteIds.has(inv.id)}
+                      onChange={(e) => { e.stopPropagation(); toggleInviteSelected(inv.id) }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="ml-4 h-3.5 w-3.5 shrink-0 rounded border-slate-300 dark:border-slate-600 text-[#1C1008] focus:ring-[#1C1008]"
+                    />
+                  )}
                   <button
                     onClick={() => setSelectedId(inv.id)}
-                    className="flex flex-1 min-w-0 items-center gap-3 px-4 py-3 text-left"
+                    className={`flex flex-1 min-w-0 items-center gap-3 py-3 pr-4 text-left ${isViewer ? 'pl-4' : 'pl-3'}`}
                   >
-                    <StatusDot status={inv.status} />
+                    <StatusDot status={inv.status} sentAt={inv.sent_at} />
                     <div className="min-w-0 flex-1">
                       <div className={`truncate text-sm font-medium ${isAwarded ? 'text-amber-700' : 'text-slate-800 dark:text-slate-200'}`}>
                         {isAwarded && '🏆 '}{inv.hotel_name}
@@ -1884,6 +1983,38 @@ export default function TripDetail() {
           )}
         </div>
       </div>
+
+      {/* ── Bulk send result — dismissible, does not auto-hide ── */}
+      {bulkSendResult && (
+        <div className="fixed bottom-6 right-6 z-50 w-96 max-w-[calc(100vw-3rem)] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 px-4 py-3">
+            <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+              Bulk send results — {bulkSendResult.filter((r) => r.ok).length}/{bulkSendResult.length} sent
+            </span>
+            <button
+              onClick={() => setBulkSendResult(null)}
+              className="text-slate-400 dark:text-slate-500 hover:text-slate-600"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="max-h-64 overflow-y-auto p-2">
+            {bulkSendResult.map((r, i) => (
+              <div key={i} className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-xs">
+                <span className={r.ok ? 'text-emerald-500' : 'text-red-500'}>{r.ok ? '✓' : '✗'}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium text-slate-700 dark:text-slate-300">{r.hotelName}</div>
+                  {r.ok ? (
+                    <div className="truncate text-slate-400 dark:text-slate-500">{r.email}</div>
+                  ) : (
+                    <div className="truncate text-red-500">{r.error}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Decline toast ── */}
       {declineToast && (

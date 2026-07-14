@@ -319,6 +319,11 @@ export default function ClientDetail() {
                       <td className="py-2 pr-4 text-slate-600 dark:text-slate-400">{trip.city || '—'}</td>
                       <td className="py-2 pr-4 text-slate-600 dark:text-slate-400">
                         {formatDate(trip.arrival_date)} – {formatDate(trip.departure_date)}
+                        {trip.stay2_arrival_date && (
+                          <span className="ml-1.5 inline-block rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            +2nd visit {formatDate(trip.stay2_arrival_date)}
+                          </span>
+                        )}
                       </td>
                       <td className="py-2">
                         <Badge status={trip.status} />

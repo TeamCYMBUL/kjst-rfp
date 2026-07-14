@@ -11,6 +11,7 @@ type Row = {
   city: string | null
   arrival_date: string | null
   departure_date: string | null
+  stay2_arrival_date: string | null
   status: string
   clients: { team_name: string } | null
   rfp_invitations: { id: string; status: string }[]
@@ -27,7 +28,7 @@ export default function TripsList() {
     supabase
       .from('trips')
       .select(
-        'id, opponent_label, city, arrival_date, departure_date, status, clients(team_name), rfp_invitations(id, status)',
+        'id, opponent_label, city, arrival_date, departure_date, stay2_arrival_date, status, clients(team_name), rfp_invitations(id, status)',
       )
       .order('city', { ascending: true, nullsFirst: false })
       .then(({ data, error }) => {
@@ -109,6 +110,11 @@ export default function TripsList() {
                       {t.city && <div className="font-medium text-slate-700 dark:text-slate-300">{t.city}</div>}
                       <div className="text-xs text-slate-400 dark:text-slate-500">
                         {formatDate(t.arrival_date)} – {formatDate(t.departure_date)}
+                        {t.stay2_arrival_date && (
+                          <span className="ml-1.5 inline-block rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            +2nd visit {formatDate(t.stay2_arrival_date)}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-5 py-3">
