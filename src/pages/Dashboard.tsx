@@ -116,7 +116,7 @@ function DeadlineView({ trips }: { trips: DashTrip[] }) {
   )
 }
 
-/** By Client — trips grouped under team headers */
+/** By Client — trips grouped under collapsible team sections */
 function ClientView({ trips }: { trips: DashTrip[] }) {
   // Group by client id
   const groups = new Map<string, { name: string; trips: DashTrip[] }>()
@@ -129,8 +129,48 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
   // Sort groups alphabetically
   const sorted = [...groups.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name))
 
+  const isUrgent = (g: { trips: DashTrip[] }) =>
+    g.trips.some((t) => {
+      const d = daysUntil(t.response_deadline)
+      return d !== null && d >= 0 && d <= 7
+    })
+
+  // Default collapsed so the page stays short with many clients. Auto-open when
+  // there's only one group (nothing to collapse) or a client has an urgent deadline.
+  // Parent remounts this with a key when the client filter changes, so defaults recompute.
+  const [openKeys, setOpenKeys] = useState<Set<string>>(() => {
+    const s = new Set<string>()
+    if (sorted.length === 1) {
+      sorted.forEach(([k]) => s.add(k))
+    } else {
+      sorted.forEach(([k, g]) => { if (isUrgent(g)) s.add(k) })
+    }
+    return s
+  })
+
+  const toggle = (key: string) =>
+    setOpenKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+
+  const allKeys = sorted.map(([k]) => k)
+  const allOpen = allKeys.length > 0 && allKeys.every((k) => openKeys.has(k))
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-3">
+      {sorted.length > 1 && (
+        <div className="flex justify-end">
+          <button
+            onClick={() => setOpenKeys(allOpen ? new Set() : new Set(allKeys))}
+            className="text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
+          >
+            {allOpen ? 'Collapse all' : 'Expand all'}
+          </button>
+        </div>
+      )}
       {sorted.map(([key, group]) => {
         const allInvited = group.trips.reduce((n, t) => n + t.rfp_invitations.length, 0)
         const allSubmitted = group.trips.reduce(
@@ -139,15 +179,26 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
             t.rfp_invitations.filter((i) => ['submitted', 'awarded'].includes(i.status)).length,
           0,
         )
-        const hasUrgent = group.trips.some((t) => {
-          const d = daysUntil(t.response_deadline)
-          return d !== null && d >= 0 && d <= 7
-        })
+        const hasUrgent = isUrgent(group)
+        const isOpen = openKeys.has(key)
         return (
-          <div key={key}>
-            {/* Client header */}
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-700 pb-2">
+          <div
+            key={key}
+            className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+          >
+            {/* Client header — click to expand/collapse */}
+            <button
+              onClick={() => toggle(key)}
+              aria-expanded={isOpen}
+              className="flex w-full flex-wrap items-center justify-between gap-2 px-5 py-3.5 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/40"
+            >
               <div className="flex items-center gap-3">
+                <span
+                  className={`text-slate-400 dark:text-slate-500 transition-transform ${isOpen ? 'rotate-90' : ''}`}
+                  aria-hidden
+                >
+                  ▸
+                </span>
                 <span className="text-base font-semibold text-slate-800 dark:text-slate-200">{group.name}</span>
                 {hasUrgent && (
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
@@ -167,12 +218,14 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
                   </span>
                 )}
               </div>
-            </div>
-            <div className="space-y-3">
-              {group.trips.map((trip) => (
-                <TripCard key={trip.id} trip={trip} showClient={false} />
-              ))}
-            </div>
+            </button>
+            {isOpen && (
+              <div className="space-y-3 border-t border-slate-100 dark:border-slate-700 p-4">
+                {group.trips.map((trip) => (
+                  <TripCard key={trip.id} trip={trip} showClient={false} />
+                ))}
+              </div>
+            )}
           </div>
         )
       })}
@@ -613,7 +666,7 @@ export default function Dashboard() {
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               {showClosed ? 'All trips' : 'Active & draft trips'} · grouped by client
             </h2>
-            <ClientView trips={clientFilteredTrips} />
+            <ClientView key={clientFilter ?? 'all'} trips={clientFilteredTrips} />
           </>
         )}
         {view === 'status' && (
