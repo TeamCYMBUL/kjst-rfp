@@ -165,6 +165,23 @@ export default function DashboardLayout() {
             <span className="mr-2">📋</span>RFP Template
           </NavLink>
 
+          {/* Timeline — admin only. Gated on the profiles-based role so it agrees
+              with the RLS/is_admin() source (which is profiles.role, not staff_profiles). */}
+          {role === 'admin' && (
+            <NavLink
+              to="/timeline"
+              className={({ isActive }) =>
+                `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-white/15 text-white'
+                    : 'text-white/60 hover:bg-white/10 hover:text-white'
+                }`
+              }
+            >
+              <span className="mr-2">🕓</span>Timeline
+            </NavLink>
+          )}
+
           {/* Team — admin only */}
           {isAdmin && (
             <NavLink

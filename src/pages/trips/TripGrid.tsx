@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { logActivity } from '../../lib/activity'
 import { formatDate, formatMeetingSpaceNotes } from '../../lib/format'
 import { exportComparisonXlsx } from '../../lib/excelExport'
 import type { ConcessionItem } from '../../lib/rfpApi'
@@ -494,6 +495,13 @@ export default function TripGrid() {
         status: inv.id === invitationId ? 'awarded' : inv.status === 'submitted' ? 'passed' : inv.status,
       }))
       await saveGridVersion(`Awarded: ${hotelName}`, awardedInvitations)
+      // Timeline: record the award (no base-table timestamp exists for this).
+      void logActivity({
+        event_type: 'awarded',
+        client_id: trip?.client_id ?? null,
+        trip_id: id ?? null,
+        detail: { hotel_name: hotelName },
+      })
       await loadData()
     } finally {
       setSaving(false)

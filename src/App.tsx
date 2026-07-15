@@ -19,6 +19,7 @@ import HotelsList from './pages/hotels/HotelsList'
 import RfpsList from './pages/rfps/RfpsList'
 import Tickets from './pages/tickets/Tickets'
 import TeamPage from './pages/team/TeamPage'
+import TimelinePage from './pages/timeline/TimelinePage'
 import GettingStarted from './pages/GettingStarted'
 
 export default function App() {
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="template" element={<TemplateEditor />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="team" element={<TeamPage />} />
+          <Route path="timeline" element={<TimelinePage />} />
         </Route>
       </Route>
     </Routes>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { logActivity } from '../../lib/activity'
 import type { Client, DateScenario, Invitation, Trip } from '../../lib/types'
 import { formatDate, generateToken, formatMeetingSpaceNotes } from '../../lib/format'
 import { PUBLIC_APP_URL } from '../../lib/config'
@@ -1294,6 +1295,7 @@ export default function TripDetail() {
   const [viewingVersion, setViewingVersion] = useState<{label: string; snapshot: any} | null>(null)
   const [savingVersion, setSavingVersion] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
+  const [proposalSentMarked, setProposalSentMarked] = useState(false)
   const exportRef = useRef<HTMLDivElement>(null)
   const [showDeclineModal, setShowDeclineModal] = useState(false)
   const [sendingDeclines, setSendingDeclines] = useState(false)
@@ -1444,7 +1446,10 @@ export default function TripDetail() {
     const result = await sendSingleReminderEmail(inv.id)
     setSendingReminder(null)
     if ('error' in result) { setError(result.error) }
-    else { setReminderFlash(inv.id); setTimeout(() => setReminderFlash((f) => (f === inv.id ? null : f)), 2500) }
+    else {
+      setReminderFlash(inv.id); setTimeout(() => setReminderFlash((f) => (f === inv.id ? null : f)), 2500)
+      void logActivity({ event_type: 'reminder_sent', client_id: trip?.client_id ?? null, trip_id: id ?? null, detail: { hotel_name: inv.hotel_name } })
+    }
   }
 
   const markUnavailable = async (inv: Invitation) => {
@@ -1501,7 +1506,12 @@ export default function TripDetail() {
     const result = await sendReminderEmails(id)
     setSendingReminders(false)
     if ('error' in result) setError(result.error)
-    else setReminderResult(result)
+    else {
+      setReminderResult(result)
+      if (result.sent > 0) {
+        void logActivity({ event_type: 'reminder_sent', client_id: trip?.client_id ?? null, trip_id: id, detail: { count: result.sent } })
+      }
+    }
   }
 
   const sendDeclines = async () => {
@@ -1662,11 +1672,30 @@ export default function TripDetail() {
                     to={`/trips/${id}/proposal`}
                     target="_blank"
                     onClick={() => setExportOpen(false)}
-                    className="flex w-full flex-col px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                    className="flex w-full flex-col border-b border-slate-100 dark:border-slate-700 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                   >
                     <span className="text-sm font-medium text-slate-800 dark:text-slate-200">Proposal PDF</span>
                     <span className="text-xs text-slate-400 dark:text-slate-500">Clean proposal to email the client</span>
                   </Link>
+                  {/* Records the delivery moment for the admin lifecycle Timeline.
+                      Downloads are unlogged, so this is the one explicit "sent to client" marker. */}
+                  <button
+                    onClick={() => {
+                      void logActivity({
+                        event_type: 'proposal_sent',
+                        client_id: trip?.client_id ?? null,
+                        trip_id: id ?? null,
+                      })
+                      setProposalSentMarked(true)
+                      setExportOpen(false)
+                    }}
+                    className="flex w-full flex-col px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                  >
+                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                      {proposalSentMarked ? 'Proposal marked as sent ✓' : 'Mark proposal sent'}
+                    </span>
+                    <span className="text-xs text-slate-400 dark:text-slate-500">Records the delivery time on the admin timeline</span>
+                  </button>
                 </div>
               )}
             </div>

@@ -5,6 +5,7 @@ import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import mammoth from 'mammoth'
 import { parseCalendarSchedulePdf } from '../../lib/parseCalendarPdf'
 import { supabase } from '../../lib/supabase'
+import { logActivity } from '../../lib/activity'
 import { useRole } from '../../lib/useRole'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
@@ -434,6 +435,8 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
     const { error: insertError } = await supabase.from('trips').insert(inserts)
     setImporting(false)
     if (insertError) { setError(insertError.message); return }
+    // Timeline: mark the lifecycle start anchor for this program.
+    void logActivity({ event_type: 'schedule_imported', client_id: clientId, detail: { count: inserts.length } })
     setCreatedCount(inserts.length)
     setStep(4)
     onImported(inserts.length)

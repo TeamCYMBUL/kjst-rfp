@@ -86,6 +86,39 @@ export function formatMeetingSpaceNotes(raw: string | null | undefined): string 
   return lines.join('\n')
 }
 
+// Human-readable elapsed duration between two timestamps (or a raw ms span).
+// Used by the admin lifecycle Timeline for cycle-time metrics.
+// Examples: "3d 4h", "6h", "45m", "under a minute".
+export function humanizeDuration(
+  from: number | string | Date,
+  to?: number | string | Date,
+): string {
+  const start = from instanceof Date ? from.getTime() : typeof from === 'string' ? new Date(from).getTime() : from
+  const end =
+    to === undefined
+      ? start // single-arg form treats `from` as a raw ms span below
+      : to instanceof Date
+        ? to.getTime()
+        : typeof to === 'string'
+          ? new Date(to).getTime()
+          : to
+  let ms = to === undefined ? (typeof from === 'number' ? from : NaN) : end - start
+  if (Number.isNaN(ms)) return '—'
+  if (ms < 0) ms = 0
+
+  const mins = Math.floor(ms / 60000)
+  if (mins < 1) return 'under a minute'
+  if (mins < 60) return `${mins}m`
+
+  const hours = Math.floor(mins / 60)
+  const remMins = mins % 60
+  if (hours < 24) return remMins ? `${hours}h ${remMins}m` : `${hours}h`
+
+  const days = Math.floor(hours / 24)
+  const remHours = hours % 24
+  return remHours ? `${days}d ${remHours}h` : `${days}d`
+}
+
 // URL-safe random token for a hotel's /rfp/{token} link.
 export function generateToken(): string {
   const bytes = new Uint8Array(24)
