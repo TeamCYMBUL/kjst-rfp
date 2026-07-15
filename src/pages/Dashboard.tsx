@@ -18,7 +18,6 @@ type DashTrip = {
   rfp_invitations: { id: string; status: string; hotel_name: string }[]
 }
 
-type ViewMode = 'deadline' | 'client' | 'status'
 
 function daysUntil(dateStr: string | null): number | null {
   if (!dateStr) return null
@@ -102,17 +101,6 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
         </div>
       </div>
     </Link>
-  )
-}
-
-/** By Deadline — flat sorted list (current behavior) */
-function DeadlineView({ trips }: { trips: DashTrip[] }) {
-  return (
-    <div className="space-y-3">
-      {trips.map((trip) => (
-        <TripCard key={trip.id} trip={trip} showClient />
-      ))}
-    </div>
   )
 }
 
@@ -233,88 +221,6 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
   )
 }
 
-/** By Status — trips grouped by their workflow stage */
-function StatusView({ trips }: { trips: DashTrip[] }) {
-  const statusGroups: { key: string; label: string; emoji: string; color: string; filter: (t: DashTrip) => boolean }[] = [
-    {
-      key: 'needs_attention',
-      label: 'Needs attention',
-      emoji: '🔴',
-      color: 'text-red-700',
-      filter: (t) => {
-        const d = daysUntil(t.response_deadline)
-        const hasOutstanding = t.rfp_invitations.some(
-          (i) => !['submitted', 'awarded', 'passed', 'declined'].includes(i.status),
-        )
-        return hasOutstanding && d !== null && d >= 0 && d <= 3
-      },
-    },
-    {
-      key: 'collecting',
-      label: 'Collecting bids',
-      emoji: '📬',
-      color: 'text-blue-700',
-      filter: (t) =>
-        t.status === 'collecting' ||
-        (t.rfp_invitations.length > 0 && t.status === 'sent'),
-    },
-    {
-      key: 'draft',
-      label: 'Draft — not yet sent',
-      emoji: '✏️',
-      color: 'text-slate-600',
-      filter: (t) => t.status === 'draft',
-    },
-  ]
-
-  // Each trip appears in the first group it matches
-  const assigned = new Set<string>()
-  const grouped = statusGroups.map((g) => {
-    const groupTrips = trips.filter((t) => !assigned.has(t.id) && g.filter(t))
-    groupTrips.forEach((t) => assigned.add(t.id))
-    return { ...g, trips: groupTrips }
-  })
-
-  // Catch-all: anything not yet assigned
-  const remaining = trips.filter((t) => !assigned.has(t.id))
-
-  return (
-    <div className="space-y-8">
-      {grouped
-        .filter((g) => g.trips.length > 0)
-        .map((g) => (
-          <div key={g.key}>
-            <div className="mb-3 border-b border-slate-200 dark:border-slate-700 pb-2">
-              <span className={`text-sm font-semibold ${g.color}`}>
-                {g.emoji} {g.label}
-              </span>
-              <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">{g.trips.length} trip{g.trips.length !== 1 ? 's' : ''}</span>
-            </div>
-            <div className="space-y-3">
-              {g.trips.map((trip) => (
-                <TripCard key={trip.id} trip={trip} showClient />
-              ))}
-            </div>
-          </div>
-        ))}
-      {remaining.length > 0 && (
-        <div>
-          <div className="mb-3 border-b border-slate-200 dark:border-slate-700 pb-2">
-            <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">📋 Other active trips</span>
-            <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">{remaining.length} trip{remaining.length !== 1 ? 's' : ''}</span>
-          </div>
-          <div className="space-y-3">
-            {remaining.map((trip) => (
-              <TripCard key={trip.id} trip={trip} showClient />
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-
 function OnboardingBanner() {
   const { steps, completedCount, allDone, loading } = useOnboardingProgress()
   if (loading || allDone) return null
@@ -368,18 +274,11 @@ function OnboardingBanner() {
   )
 }
 
-const VIEW_OPTIONS: { key: ViewMode; label: string; icon: string }[] = [
-  { key: 'deadline', label: 'By Deadline', icon: '📅' },
-  { key: 'client', label: 'By Client', icon: '🏀' },
-  { key: 'status', label: 'By Status', icon: '📊' },
-]
-
 export default function Dashboard() {
   const [trips, setTrips] = useState<DashTrip[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [hasClients, setHasClients] = useState(false)
-  const [view, setView] = useState<ViewMode>('deadline')
   const [showClosed, setShowClosed] = useState(false)
   const [clientFilter, setClientFilter] = useState<string | null>(null)
   useEffect(() => {
@@ -607,76 +506,41 @@ export default function Dashboard() {
         </details>
       )}
 
-      {/* View toggle + closed toggle */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1">
-          {VIEW_OPTIONS.map((opt) => (
-            <button
-              key={opt.key}
-              onClick={() => setView(opt.key)}
-              className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                view === opt.key
-                  ? 'bg-[#1C1008] text-white shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
-              }`}
-            >
-              <span>{opt.icon}</span>
-              <span>{opt.label}</span>
-            </button>
-          ))}
-        </div>
-        {closedCount > 0 && (
-          <button
-            onClick={() => setShowClosed((v) => !v)}
-            className={`flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors ${
-              showClosed
-                ? 'border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-                : 'border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
-            }`}
-          >
-            {showClosed ? '✓' : '○'} Show closed ({closedCount})
-          </button>
-        )}
-        {view === 'client' && clientOptions.length > 0 && (
-          <select
-            value={clientFilter ?? ''}
-            onChange={(e) => setClientFilter(e.target.value || null)}
-            className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008]"
-          >
-            <option value="">All clients</option>
-            {clientOptions.map(([clientId, teamName]) => (
-              <option key={clientId} value={clientId}>{teamName}</option>
-            ))}
-          </select>
-        )}
-      </div>
-
-      {/* Trip list — renders based on active view */}
+      {/* Trips by client — the single home view. Header row carries the filter
+          and show-closed controls; urgency is handled by the panels above. */}
       <div>
-        {view === 'deadline' && (
-          <>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-              {showClosed ? 'All trips' : 'Active & draft trips'} · soonest deadline first
-            </h2>
-            <DeadlineView trips={displayedTrips} />
-          </>
-        )}
-        {view === 'client' && (
-          <>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-              {showClosed ? 'All trips' : 'Active & draft trips'} · grouped by client
-            </h2>
-            <ClientView key={clientFilter ?? 'all'} trips={clientFilteredTrips} />
-          </>
-        )}
-        {view === 'status' && (
-          <>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-              {showClosed ? 'All trips' : 'Active & draft trips'} · grouped by status
-            </h2>
-            <StatusView trips={displayedTrips} />
-          </>
-        )}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+            {showClosed ? 'All trips' : 'Active & draft trips'} · by client
+          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            {clientOptions.length > 0 && (
+              <select
+                value={clientFilter ?? ''}
+                onChange={(e) => setClientFilter(e.target.value || null)}
+                className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008]"
+              >
+                <option value="">All clients</option>
+                {clientOptions.map(([clientId, teamName]) => (
+                  <option key={clientId} value={clientId}>{teamName}</option>
+                ))}
+              </select>
+            )}
+            {closedCount > 0 && (
+              <button
+                onClick={() => setShowClosed((v) => !v)}
+                className={`flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors ${
+                  showClosed
+                    ? 'border-slate-400 dark:border-slate-500 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                    : 'border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
+                }`}
+              >
+                {showClosed ? '✓' : '○'} Show closed ({closedCount})
+              </button>
+            )}
+          </div>
+        </div>
+        <ClientView key={clientFilter ?? 'all'} trips={clientFilteredTrips} />
       </div>
 
     </div>
