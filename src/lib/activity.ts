@@ -1,5 +1,10 @@
 import { supabase } from './supabase'
 
+// The lifecycle Timeline is restricted to this single operator account (not all
+// admins). Mirrors the SQL is_timeline_admin() helper, which is the enforced
+// gate. Change in both places if this ever moves.
+export const TIMELINE_ADMIN_EMAIL = 'info@cymbul.co'
+
 // Lifecycle moments that have no timestamp home on a base table and so must be
 // logged explicitly. Everything else (trip_created, invite_sent, bid_received,
 // bid_declined, build_saved) is derived from base-table timestamps by the

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { useRole } from '../../lib/useRole'
+import { useAuth } from '../../auth/AuthContext'
+import { TIMELINE_ADMIN_EMAIL } from '../../lib/activity'
 import { humanizeDuration } from '../../lib/format'
 import { ErrorNote, Loading } from '../../components/ui'
 
@@ -215,7 +216,8 @@ function Tile({ value, label, sublabel, tone = 'ink' }: {
 const ALL_TYPES = Object.keys(EVENT_META) as TimelineEvent['event_type'][]
 
 export default function TimelinePage() {
-  const { role, loading: roleLoading } = useRole()
+  const { user, loading: authLoading } = useAuth()
+  const allowed = user?.email === TIMELINE_ADMIN_EMAIL
   const [clients, setClients] = useState<{ id: string; team_name: string }[]>([])
   const [clientId, setClientId] = useState<string>('') // '' = all clients (global feed)
   const [events, setEvents] = useState<TimelineEvent[]>([])
@@ -230,7 +232,7 @@ export default function TimelinePage() {
   }, [])
 
   useEffect(() => {
-    if (role !== 'admin') return
+    if (!allowed) return
     setLoading(true); setError(null)
     supabase
       .rpc('get_lifecycle_timeline', { p_client_id: clientId || null })
@@ -239,7 +241,7 @@ export default function TimelinePage() {
         else setEvents((data ?? []) as TimelineEvent[])
         setLoading(false)
       })
-  }, [role, clientId])
+  }, [allowed, clientId])
 
   const cycles = useMemo(() => buildCycles(events), [events])
 
@@ -281,14 +283,14 @@ export default function TimelinePage() {
   const dur = (ms: number | null) => (ms === null ? '—' : humanizeDuration(ms))
 
   // ── Gating ────────────────────────────────────────────────────────────────
-  if (roleLoading) return <Loading />
-  if (role !== 'admin') {
+  if (authLoading) return <Loading />
+  if (!allowed) {
     return (
       <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-12 text-center">
         <div className="text-3xl mb-2">🔒</div>
-        <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Admin access only</h1>
+        <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Restricted</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          The lifecycle timeline is available to administrators.
+          The lifecycle timeline is limited to the KJST operations account.
         </p>
       </div>
     )

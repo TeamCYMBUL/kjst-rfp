@@ -4,6 +4,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import { useProfile } from '../hooks/useProfile'
 import { useOnboardingProgress } from '../hooks/useOnboardingProgress'
 import { useRole } from '../lib/useRole'
+import { TIMELINE_ADMIN_EMAIL } from '../lib/activity'
 
 
 function KJLogoMark({ dark = false }: { dark?: boolean }) {
@@ -165,9 +166,9 @@ export default function DashboardLayout() {
             <span className="mr-2">📋</span>RFP Template
           </NavLink>
 
-          {/* Timeline — admin only. Gated on the profiles-based role so it agrees
-              with the RLS/is_admin() source (which is profiles.role, not staff_profiles). */}
-          {role === 'admin' && (
+          {/* Timeline — restricted to the single timeline-admin account (not all
+              admins). Mirrors the SQL is_timeline_admin() gate on the data. */}
+          {user?.email === TIMELINE_ADMIN_EMAIL && (
             <NavLink
               to="/timeline"
               className={({ isActive }) =>
