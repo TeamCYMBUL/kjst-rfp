@@ -1634,7 +1634,7 @@ export default function TripDetail() {
             Trip info
           </button>
           {!isViewer && (
-            <button onClick={doSendReminders} disabled={sendingReminders} className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors">
+            <button onClick={doSendReminders} disabled={sendingReminders} title="Nudge every hotel that hasn't responded yet. Sending from here keeps all follow-ups in one place." className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors">
               {sendingReminders ? 'Sending…' : 'Send reminders'}
             </button>
           )}
@@ -1677,8 +1677,9 @@ export default function TripDetail() {
                     <span className="text-sm font-medium text-slate-800 dark:text-slate-200">Proposal PDF</span>
                     <span className="text-xs text-slate-400 dark:text-slate-500">Clean proposal to email the client</span>
                   </Link>
-                  {/* Records the delivery moment for the admin lifecycle Timeline.
-                      Downloads are unlogged, so this is the one explicit "sent to client" marker. */}
+                  {/* Records the delivery moment for the lifecycle pipeline.
+                      Downloads are unlogged, so this is the one explicit "sent to client" marker.
+                      Manager-facing copy stays workflow-oriented (no mention of the admin view). */}
                   <button
                     onClick={() => {
                       void logActivity({
@@ -1689,12 +1690,15 @@ export default function TripDetail() {
                       setProposalSentMarked(true)
                       setExportOpen(false)
                     }}
+                    title="Click once you've emailed the proposal to the client, so the pipeline shows it went out."
                     className="flex w-full flex-col px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                   >
                     <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
                       {proposalSentMarked ? 'Proposal marked as sent ✓' : 'Mark proposal sent'}
                     </span>
-                    <span className="text-xs text-slate-400 dark:text-slate-500">Records the delivery time on the admin timeline</span>
+                    <span className="text-xs text-slate-400 dark:text-slate-500">
+                      {proposalSentMarked ? 'Logged. Thanks!' : 'Click after you email the proposal to the client'}
+                    </span>
                   </button>
                 </div>
               )}
@@ -1704,6 +1708,7 @@ export default function TripDetail() {
             <button
               onClick={saveVersion}
               disabled={savingVersion}
+              title="Save a snapshot when you finalize a build, so you can point back to what the client saw."
               className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors"
             >
               {savingVersion ? 'Saving…' : '💾 Save Version'}
