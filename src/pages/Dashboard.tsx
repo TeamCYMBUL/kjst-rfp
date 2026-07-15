@@ -4,8 +4,6 @@ import { supabase } from '../lib/supabase'
 import { formatDate } from '../lib/format'
 import { Badge, ErrorNote, LinkButton, Loading } from '../components/ui'
 import { useOnboardingProgress } from '../hooks/useOnboardingProgress'
-import { sendSingleReminderEmail } from '../lib/emailApi'
-import { logActivity } from '../lib/activity'
 
 
 
@@ -17,7 +15,7 @@ type DashTrip = {
   arrival_date: string | null
   response_deadline: string | null
   clients: { id: string; team_name: string } | null
-  rfp_invitations: { id: string; status: string; hotel_name: string; hotel_contact_email: string | null; sent_at: string | null }[]
+  rfp_invitations: { id: string; status: string; hotel_name: string; sent_at: string | null }[]
 }
 
 
@@ -25,6 +23,23 @@ function daysUntil(dateStr: string | null): number | null {
   if (!dateStr) return null
   const diff = new Date(dateStr).getTime() - Date.now()
   return Math.ceil(diff / (1000 * 60 * 60 * 24))
+}
+
+// A trip is "delinquent" when hotels it invited have gone quiet: still awaiting
+// (sent/opened), and either the response deadline has passed or it's been 3+
+// days since the invite went out with no reply. Deadlines are usually blank in
+// practice, so quiet-since-invited is the primary trigger.
+const STALE_DAYS = 3
+function delinquentCount(trip: DashTrip): number {
+  const dl = daysUntil(trip.response_deadline)
+  const overdue = dl !== null && dl < 0
+  return trip.rfp_invitations.filter((inv) => {
+    if (!['sent', 'opened'].includes(inv.status)) return false
+    if (overdue) return true
+    if (!inv.sent_at) return false
+    const daysWaiting = Math.floor((Date.now() - new Date(inv.sent_at).getTime()) / 86400000)
+    return daysWaiting >= STALE_DAYS
+  }).length
 }
 
 function DeadlineChip({ deadline }: { deadline: string | null }) {
@@ -57,10 +72,15 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
     ['submitted', 'awarded'].includes(i.status),
   ).length
   const opened = trip.rfp_invitations.filter((i) => i.status === 'opened').length
+  const delinquent = delinquentCount(trip)
   return (
     <Link
       to={`/trips/${trip.id}`}
-      className="block rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4 transition hover:border-[#E5D5C8] hover:shadow-sm dark:hover:border-slate-600"
+      className={`block rounded-xl border bg-white dark:bg-slate-800 px-5 py-4 transition hover:shadow-sm ${
+        delinquent > 0
+          ? 'border-red-300 dark:border-red-800/70 hover:border-red-400 dark:hover:border-red-700'
+          : 'border-slate-200 dark:border-slate-700 hover:border-[#E5D5C8] dark:hover:border-slate-600'
+      }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -71,6 +91,14 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
             {trip.city && <span className="text-slate-400 dark:text-slate-500">· {trip.city}</span>}
             <Badge status={trip.status} />
             <DeadlineChip deadline={trip.response_deadline} />
+            {delinquent > 0 && (
+              <span
+                title={`${delinquent} hotel${delinquent !== 1 ? 's' : ''} invited with no reply yet — consider a reminder`}
+                className="inline-flex items-center gap-1 rounded-full bg-red-100 dark:bg-red-900/40 px-2 py-0.5 text-xs font-semibold text-red-700 dark:text-red-300"
+              >
+                ⚑ {delinquent} delinquent
+              </span>
+            )}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
             {showClient && trip.clients?.team_name && (
@@ -170,6 +198,7 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
           0,
         )
         const hasUrgent = isUrgent(group)
+        const groupDelinquent = group.trips.reduce((n, t) => n + delinquentCount(t), 0)
         const isOpen = openKeys.has(key)
         return (
           <div
@@ -193,6 +222,14 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
                 {hasUrgent && (
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                     ⏰ Deadline soon
+                  </span>
+                )}
+                {groupDelinquent > 0 && (
+                  <span
+                    title={`${groupDelinquent} hotel${groupDelinquent !== 1 ? 's' : ''} across this client with no reply yet`}
+                    className="inline-flex items-center gap-1 rounded-full bg-red-100 dark:bg-red-900/40 px-2 py-0.5 text-xs font-semibold text-red-700 dark:text-red-300"
+                  >
+                    ⚑ {groupDelinquent} delinquent
                   </span>
                 )}
               </div>
@@ -276,147 +313,6 @@ function OnboardingBanner() {
   )
 }
 
-/** Needs attention — hotels that were invited and are still awaiting a response,
- *  either past deadline or due within 7 days. One-click reminder per hotel. */
-function NeedsAttention({ trips }: { trips: DashTrip[] }) {
-  const [sending, setSending] = useState<Set<string>>(new Set())
-  const [sent, setSent] = useState<Set<string>>(new Set())
-  const [errors, setErrors] = useState<Record<string, string>>({})
-
-  // An invitation "needs attention" when the hotel was invited (sent/opened),
-  // hasn't responded, and has gone quiet — 3+ days since it was sent — or its
-  // trip deadline (when set) is overdue or within 7 days. Most deadlines are
-  // blank in practice, so quiet-since-invited is the primary signal.
-  const STALE_DAYS = 3
-  const items = trips.flatMap((trip) => {
-    const dl = daysUntil(trip.response_deadline) // null when no deadline; <0 overdue
-    return trip.rfp_invitations
-      .filter((inv) => ['sent', 'opened'].includes(inv.status))
-      .map((inv) => ({
-        inviteId: inv.id,
-        hotelName: inv.hotel_name,
-        hasEmail: !!inv.hotel_contact_email,
-        tripId: trip.id,
-        tripName: trip.opponent_label || trip.city || 'Trip',
-        client: trip.clients?.team_name ?? null,
-        clientId: trip.clients?.id ?? null,
-        dl,
-        daysWaiting: inv.sent_at
-          ? Math.floor((Date.now() - new Date(inv.sent_at).getTime()) / 86400000)
-          : null,
-      }))
-      .filter((it) => {
-        const deadlineUrgent = it.dl !== null && it.dl <= 7
-        const stale = it.daysWaiting !== null && it.daysWaiting >= STALE_DAYS
-        return deadlineUrgent || stale
-      })
-  })
-  // Overdue-by-deadline first (soonest), then longest-waiting.
-  items.sort((a, b) => {
-    const ao = a.dl !== null && a.dl < 0
-    const bo = b.dl !== null && b.dl < 0
-    if (ao && bo) return a.dl! - b.dl!
-    if (ao) return -1
-    if (bo) return 1
-    return (b.daysWaiting ?? 0) - (a.daysWaiting ?? 0)
-  })
-
-  if (items.length === 0) return null
-
-  const remind = async (item: (typeof items)[number]) => {
-    setSending((prev) => new Set(prev).add(item.inviteId))
-    setErrors((prev) => { const n = { ...prev }; delete n[item.inviteId]; return n })
-    const res = await sendSingleReminderEmail(item.inviteId)
-    setSending((prev) => { const n = new Set(prev); n.delete(item.inviteId); return n })
-    if ('error' in res) {
-      setErrors((prev) => ({ ...prev, [item.inviteId]: res.error }))
-    } else {
-      setSent((prev) => new Set(prev).add(item.inviteId))
-      void logActivity({
-        event_type: 'reminder_sent',
-        client_id: item.clientId,
-        trip_id: item.tripId,
-        detail: { hotel_name: item.hotelName },
-      })
-    }
-  }
-
-  return (
-    <details className="rounded-xl border border-amber-200 dark:border-amber-800/70 bg-amber-50 dark:bg-amber-900/15" open>
-      <summary className="flex cursor-pointer select-none list-none items-center gap-3 px-5 py-3.5">
-        <span className="text-base">🔔</span>
-        <div className="flex-1">
-          <span className="text-sm font-semibold text-amber-900 dark:text-amber-300">
-            Needs attention — {items.length} hotel{items.length !== 1 ? 's' : ''} awaiting a response
-          </span>
-          <span className="ml-2 text-xs text-amber-700 dark:text-amber-500">
-            invited but quiet for 3+ days
-          </span>
-        </div>
-        <span className="text-xs text-amber-500 dark:text-amber-500/70">▾</span>
-      </summary>
-      <div className="border-t border-amber-200 dark:border-amber-800/70 px-4 pb-4 pt-3">
-        <div className="space-y-2">
-          {items.map((item) => {
-            const isSending = sending.has(item.inviteId)
-            const isSent = sent.has(item.inviteId)
-            const err = errors[item.inviteId]
-            const overdue = item.dl !== null && item.dl < 0
-            const dueSoon = item.dl !== null && item.dl >= 0 && item.dl <= 7
-            const chipText = overdue
-              ? `${Math.abs(item.dl!)} day${Math.abs(item.dl!) !== 1 ? 's' : ''} overdue`
-              : dueSoon
-                ? (item.dl === 0 ? 'due today' : `due in ${item.dl} day${item.dl !== 1 ? 's' : ''}`)
-                : item.daysWaiting !== null
-                  ? `waiting ${item.daysWaiting} day${item.daysWaiting !== 1 ? 's' : ''}`
-                  : 'awaiting reply'
-            return (
-              <div
-                key={item.inviteId}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5"
-              >
-                <div className="min-w-0">
-                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{item.hotelName}</span>
-                  <span className="mx-2 text-slate-300 dark:text-slate-600">·</span>
-                  <span className="text-sm text-slate-500 dark:text-slate-400">
-                    {[item.client, item.tripName].filter(Boolean).join(' — ')}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`text-xs font-medium ${overdue ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}
-                  >
-                    {chipText}
-                  </span>
-                  {isSent ? (
-                    <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">✓ Reminder sent</span>
-                  ) : (
-                    <button
-                      onClick={() => remind(item)}
-                      disabled={isSending || !item.hasEmail}
-                      title={!item.hasEmail ? 'No email address on file for this hotel' : 'Send a follow-up reminder to this hotel'}
-                      className="rounded-lg bg-[#1C1008] px-2.5 py-1 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40 transition-opacity"
-                    >
-                      {isSending ? 'Sending…' : 'Send reminder'}
-                    </button>
-                  )}
-                  <Link
-                    to={`/trips/${item.tripId}`}
-                    className="rounded-lg border border-slate-200 dark:border-slate-600 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                  >
-                    View trip →
-                  </Link>
-                  {err && <span className="w-full text-right text-xs text-red-500">{err}</span>}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    </details>
-  )
-}
-
 export default function Dashboard() {
   const [trips, setTrips] = useState<DashTrip[]>([])
   const [loading, setLoading] = useState(true)
@@ -430,7 +326,7 @@ export default function Dashboard() {
         supabase
           .from('trips')
           .select(
-            'id, opponent_label, city, status, arrival_date, response_deadline, clients(id, team_name), rfp_invitations(id, status, hotel_name, hotel_contact_email, sent_at)',
+            'id, opponent_label, city, status, arrival_date, response_deadline, clients(id, team_name), rfp_invitations(id, status, hotel_name, sent_at)',
           )
           .order('response_deadline', { ascending: true }),
         supabase.from('clients').select('id').limit(1),
@@ -574,11 +470,9 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Needs attention — hotels awaiting a response, with a one-click reminder */}
-      <NeedsAttention trips={openTrips} />
-
       {/* Trips by client — the single home view. Header row carries the filter
-          and show-closed controls; urgency is handled by the panels above. */}
+          and show-closed controls; delinquent trips are flagged inline and rolled
+          up onto each client header. */}
       <div>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
