@@ -1593,6 +1593,17 @@ export default function TripDetail() {
       allAnswers as Map<string, any[]>,
       concessionItems,
     )
+    markProposalSent()
+  }
+
+  // Records the "proposal delivered" moment for the lifecycle pipeline. Fires
+  // automatically whenever a manager generates a client-facing deliverable
+  // (grid or PDF) — that's the last in-app step before everything moves to
+  // email. Deduped server-side, so re-exporting a trip never double-logs.
+  const markProposalSent = () => {
+    if (!id) return
+    void supabase.rpc('mark_proposal_sent', { p_trip_id: id, p_client_id: trip?.client_id ?? null })
+    setProposalSentMarked(true)
   }
 
   if (error && !trip) return <ErrorNote message={error} />
@@ -1671,33 +1682,26 @@ export default function TripDetail() {
                   <Link
                     to={`/trips/${id}/proposal`}
                     target="_blank"
-                    onClick={() => setExportOpen(false)}
+                    onClick={() => { markProposalSent(); setExportOpen(false) }}
                     className="flex w-full flex-col border-b border-slate-100 dark:border-slate-700 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                   >
                     <span className="text-sm font-medium text-slate-800 dark:text-slate-200">Proposal PDF</span>
                     <span className="text-xs text-slate-400 dark:text-slate-500">Clean proposal to email the client</span>
                   </Link>
-                  {/* Records the delivery moment for the lifecycle pipeline.
-                      Downloads are unlogged, so this is the one explicit "sent to client" marker.
-                      Manager-facing copy stays workflow-oriented (no mention of the admin view). */}
+                  {/* Backstop: generating either deliverable above already records
+                      the proposal as delivered (markProposalSent, deduped server-side).
+                      This stays as a manual confirm for the rare case a proposal went
+                      out without exporting from here. Copy stays workflow-oriented. */}
                   <button
-                    onClick={() => {
-                      void logActivity({
-                        event_type: 'proposal_sent',
-                        client_id: trip?.client_id ?? null,
-                        trip_id: id ?? null,
-                      })
-                      setProposalSentMarked(true)
-                      setExportOpen(false)
-                    }}
-                    title="Click once you've emailed the proposal to the client, so the pipeline shows it went out."
+                    onClick={() => { markProposalSent(); setExportOpen(false) }}
+                    title="Usually recorded automatically when you generate the grid or PDF above. Use this only if a proposal went out another way."
                     className="flex w-full flex-col px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                   >
                     <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                      {proposalSentMarked ? 'Proposal marked as sent ✓' : 'Mark proposal sent'}
+                      {proposalSentMarked ? 'Marked as sent ✓' : 'Mark proposal sent'}
                     </span>
                     <span className="text-xs text-slate-400 dark:text-slate-500">
-                      {proposalSentMarked ? 'Logged. Thanks!' : 'Click after you email the proposal to the client'}
+                      {proposalSentMarked ? 'Recorded' : 'Only if you sent it without exporting here'}
                     </span>
                   </button>
                 </div>
