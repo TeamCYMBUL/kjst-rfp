@@ -16,7 +16,6 @@ import TemplateEditor from './pages/settings/TemplateEditor'
 import SettingsPage from './pages/settings/Settings'
 import Dashboard from './pages/Dashboard'
 import HotelsList from './pages/hotels/HotelsList'
-import RfpsList from './pages/rfps/RfpsList'
 import Tickets from './pages/tickets/Tickets'
 import TeamPage from './pages/team/TeamPage'
 import TimelinePage from './pages/timeline/TimelinePage'
@@ -51,7 +50,6 @@ export default function App() {
           <Route path="trips/:id/edit" element={<TripForm />} />
           <Route path="trips/:id/grid" element={<TripGrid />} />
 
-          <Route path="rfps" element={<RfpsList />} />
           <Route path="hotels" element={<HotelsList />} />
           <Route path="tickets" element={<Tickets />} />
           <Route path="getting-started" element={<GettingStarted />} />

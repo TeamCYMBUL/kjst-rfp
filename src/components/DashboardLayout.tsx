@@ -124,20 +124,6 @@ export default function DashboardLayout() {
             <span className="mr-2">✈️</span>Trips
           </NavLink>
 
-          {/* RFPs — every hotel invitation across all trips */}
-          <NavLink
-            to="/rfps"
-            className={({ isActive }) =>
-              `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-white/15 text-white'
-                  : 'text-white/60 hover:bg-white/10 hover:text-white'
-              }`
-            }
-          >
-            <span className="mr-2">📨</span>RFPs
-          </NavLink>
-
           {/* Hotels */}
           <NavLink
             to="/hotels"
