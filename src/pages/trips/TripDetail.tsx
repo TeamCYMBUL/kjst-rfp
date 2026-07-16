@@ -1200,7 +1200,6 @@ function HotelPanel({
                     {answeredItems.map((item) => {
                       const ans = answerMap.get(item.id)!
                       const isYes = ans.answer_yes_no === true
-                      const isNo = ans.answer_yes_no === false
                       return (
                         <div key={item.id} className="flex items-start justify-between gap-4 text-sm">
                           <span className="text-slate-600 dark:text-slate-300">{item.label}</span>
