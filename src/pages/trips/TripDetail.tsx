@@ -1300,6 +1300,8 @@ export default function TripDetail() {
   const { role, canEditClient } = useRole()
   const isViewer = role === 'viewer'
   const [trip, setTrip] = useState<(Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league'> | null }) | null>(null)
+  // Sibling trips for this client (for the Next/Prev city shortcut), alpha by city.
+  const [siblings, setSiblings] = useState<{ id: string; city: string | null }[]>([])
   const [invites, setInvites] = useState<Invitation[] | null>(null)
   const [concessionItems, setConcessionItems] = useState<ConcessionItem[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -1367,6 +1369,19 @@ export default function TripDetail() {
       .eq('archived', false)
       .order('sort_order')
       .then(({ data }) => { if (data) setConcessionItems(data as ConcessionItem[]) })
+  }, [trip?.client_id])
+
+  // Sibling trips for the Next/Prev city shortcut — same client, alpha by city
+  // (matches the trips list ordering) so a user can move city to city without
+  // going back to the clients overview.
+  useEffect(() => {
+    if (!trip?.client_id) return
+    supabase
+      .from('trips')
+      .select('id, city')
+      .eq('client_id', trip.client_id)
+      .order('city', { ascending: true, nullsFirst: false })
+      .then(({ data }) => setSiblings((data ?? []) as { id: string; city: string | null }[]))
   }, [trip?.client_id])
 
   // Auto-select first submitted hotel when invites load
@@ -1644,6 +1659,10 @@ export default function TripDetail() {
   if (error && !trip) return <ErrorNote message={error} />
   if (!trip || !invites) return <Loading />
 
+  const sibIndex = siblings.findIndex((s) => s.id === id)
+  const prevTrip = sibIndex > 0 ? siblings[sibIndex - 1] : null
+  const nextTrip = sibIndex >= 0 && sibIndex < siblings.length - 1 ? siblings[sibIndex + 1] : null
+
   const noEmailSent = invites.filter((i) => !i.sent_at && i.hotel_contact_email).length
   const allResponded = invites.length > 0 && invites.filter((i) => ['submitted', 'awarded'].includes(i.status)).length === invites.filter((i) => i.status !== 'passed' && i.status !== 'unavailable').length
   const awarded = invites.find((i) => i.status === 'awarded')
@@ -1668,6 +1687,30 @@ export default function TripDetail() {
           <p className="text-sm text-slate-500 dark:text-slate-400">
             {[trip.clients?.team_name, trip.city].filter(Boolean).join(' · ')}
           </p>
+          {/* Next / Prev city — jump between this client's trips without leaving */}
+          {siblings.length > 1 && (
+            <div className="mt-1.5 flex items-center gap-1.5 text-xs">
+              <button
+                onClick={() => prevTrip && navigate(`/trips/${prevTrip.id}`)}
+                disabled={!prevTrip}
+                title={prevTrip ? `Previous city: ${prevTrip.city ?? 'Trip'}` : 'First city'}
+                className="rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                ← {prevTrip?.city ?? 'Prev'}
+              </button>
+              <span className="px-1 text-slate-400 dark:text-slate-500 tabular-nums">
+                City {sibIndex + 1} of {siblings.length}
+              </span>
+              <button
+                onClick={() => nextTrip && navigate(`/trips/${nextTrip.id}`)}
+                disabled={!nextTrip}
+                title={nextTrip ? `Next city: ${nextTrip.city ?? 'Trip'}` : 'Last city'}
+                className="rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                {nextTrip?.city ?? 'Next'} →
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {reminderResult && (
