@@ -1687,28 +1687,31 @@ export default function TripDetail() {
           <p className="text-sm text-slate-500 dark:text-slate-400">
             {[trip.clients?.team_name, trip.city].filter(Boolean).join(' · ')}
           </p>
-          {/* Next / Prev city — jump between this client's trips without leaving */}
+          {/* Next / Prev city — jump between this client's trips without leaving.
+              Prev is hidden at the first city, Next at the last. */}
           {siblings.length > 1 && (
             <div className="mt-1.5 flex items-center gap-1.5 text-xs">
-              <button
-                onClick={() => prevTrip && navigate(`/trips/${prevTrip.id}`)}
-                disabled={!prevTrip}
-                title={prevTrip ? `Previous city: ${prevTrip.city ?? 'Trip'}` : 'First city'}
-                className="rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                ← {prevTrip?.city ?? 'Prev'}
-              </button>
+              {prevTrip && (
+                <button
+                  onClick={() => navigate(`/trips/${prevTrip.id}`)}
+                  title={`Previous city: ${prevTrip.city ?? 'Trip'}`}
+                  className="rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                >
+                  ← {prevTrip.city ?? 'Prev'}
+                </button>
+              )}
               <span className="px-1 text-slate-400 dark:text-slate-500 tabular-nums">
                 City {sibIndex + 1} of {siblings.length}
               </span>
-              <button
-                onClick={() => nextTrip && navigate(`/trips/${nextTrip.id}`)}
-                disabled={!nextTrip}
-                title={nextTrip ? `Next city: ${nextTrip.city ?? 'Trip'}` : 'Last city'}
-                className="rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                {nextTrip?.city ?? 'Next'} →
-              </button>
+              {nextTrip && (
+                <button
+                  onClick={() => navigate(`/trips/${nextTrip.id}`)}
+                  title={`Next city: ${nextTrip.city ?? 'Trip'}`}
+                  className="rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                >
+                  {nextTrip.city ?? 'Next'} →
+                </button>
+              )}
             </div>
           )}
         </div>
