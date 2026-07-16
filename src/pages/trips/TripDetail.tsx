@@ -81,6 +81,21 @@ function findMeetingSpaceItems(items: ConcessionItem[]) {
   return items.filter((c) => c.answer_type === 'yes_no' && (normLabel(c.label).includes('meeting space') || normLabel(c.label).includes('function space')))
 }
 
+// Free-suite / suite-upgrade concessions are a number ('quantity') in some
+// templates (e.g. Mets) and Yes/No in others (e.g. Sharks). Read whichever the
+// answer used so the value shows and scores correctly either way.
+function suiteAnswerView(
+  ans: { answer_yes_no?: boolean | null; answer_value?: string | null } | null | undefined,
+): { display: string; positive: boolean } {
+  if (!ans) return { display: '—', positive: false }
+  if (ans.answer_yes_no != null) return { display: ans.answer_yes_no ? 'Yes' : 'No', positive: ans.answer_yes_no === true }
+  const n = Number(ans.answer_value)
+  return {
+    display: ans.answer_value != null && ans.answer_value !== '' ? String(ans.answer_value) : '—',
+    positive: Number.isFinite(n) && n > 0,
+  }
+}
+
 // A hotel is emailable only while its RFP is still in play. Once it's submitted,
 // awarded, passed, declined, or marked unavailable, the proposal process is
 // complete for that hotel and there's nothing to (re)send or remind.
@@ -184,10 +199,11 @@ function calcScores(
     const meetingYesCount = meetingSpaceItems.filter((item) => ansMap.get(item.id)?.answer_yes_no === true).length
     const meetingScore = meetingSpaceItems.length > 0 ? Math.round((meetingYesCount / meetingSpaceItems.length) * 10) : 0
 
-    // 6. Suite concessions — up to 20 pts
-    const compSuitesVal = Number(getValue(compSuitesItem) ?? 0)
-    const suiteUpgVal   = Number(getValue(suiteUpgItem)   ?? 0)
-    const suiteScore = (compSuitesVal > 0 ? 10 : 0) + (suiteUpgVal > 0 ? 10 : 0)
+    // 6. Suite concessions — up to 20 pts. Works whether the template uses a
+    // quantity (a number > 0) or Yes/No (Yes counts) for these items.
+    const compPositive = suiteAnswerView(compSuitesItem ? ansMap.get(compSuitesItem.id) : null).positive
+    const upgPositive  = suiteAnswerView(suiteUpgItem ? ansMap.get(suiteUpgItem.id) : null).positive
+    const suiteScore = (compPositive ? 10 : 0) + (upgPositive ? 10 : 0)
 
     const rawTotal = flexScore + commScore + rateScore + playoffScore + meetingScore + suiteScore
     const total = Math.min(100, Number.isFinite(rawTotal) ? rawTotal : 0)
@@ -623,17 +639,17 @@ function BidSummaryTable({
                     <td className="py-2.5 pr-6 text-right text-slate-600 dark:text-slate-400">
                       {resp?.resort_fee || '—'}
                     </td>
-                    {/* Free (comp) suites */}
+                    {/* Free (comp) suites — quantity or Yes/No depending on template */}
                     <td className="py-2.5 pr-6 text-center">
-                      <span className={`font-semibold ${Number(compSuites?.answer_value ?? 0) > 0 ? 'text-emerald-600' : 'text-slate-400 dark:text-slate-500'}`}>
-                        {compSuites?.answer_value ?? '—'}
-                      </span>
+                      {(() => { const v = suiteAnswerView(compSuites); return (
+                        <span className={`font-semibold ${v.positive ? 'text-emerald-600' : 'text-slate-400 dark:text-slate-500'}`}>{v.display}</span>
+                      )})()}
                     </td>
-                    {/* Suite upgrades at king rate */}
+                    {/* Suite upgrades at king rate — quantity or Yes/No depending on template */}
                     <td className="py-2.5 pr-6 text-center">
-                      <span className={`font-semibold ${Number(suiteUpg?.answer_value ?? 0) > 0 ? 'text-emerald-600' : 'text-slate-400 dark:text-slate-500'}`}>
-                        {suiteUpg?.answer_value ?? '—'}
-                      </span>
+                      {(() => { const v = suiteAnswerView(suiteUpg); return (
+                        <span className={`font-semibold ${v.positive ? 'text-emerald-600' : 'text-slate-400 dark:text-slate-500'}`}>{v.display}</span>
+                      )})()}
                     </td>
                     {/* Commission */}
                     <td className={`py-2.5 pr-6 text-right font-medium ${result?.noCommission ? 'text-orange-500' : 'text-slate-700 dark:text-slate-300'}`}>
@@ -966,8 +982,8 @@ function HotelPanel({
               const chips: Chip[] = []
               if (flexAns)  chips.push({ label: 'Flex cancel',      value: flexAns.answer_yes_no  === true ? '✓ Yes' : '✗ No',  ok: flexAns.answer_yes_no,  warn: noFlex })
               if (commAns)  chips.push({ label: 'Commission',        value: commAns.answer_value ?? '—',                          warn: noComm })
-              if (compAns)  chips.push({ label: 'Free suites',       value: compAns.answer_value  ?? '—',                          ok: Number(compAns.answer_value ?? 0) > 0 })
-              if (upgAns)   chips.push({ label: 'Suite upgrades',    value: upgAns.answer_value   ?? '—',                          ok: Number(upgAns.answer_value  ?? 0) > 0 })
+              if (compAns)  { const v = suiteAnswerView(compAns); chips.push({ label: 'Free suites',    value: v.display, ok: v.positive }) }
+              if (upgAns)   { const v = suiteAnswerView(upgAns);  chips.push({ label: 'Suite upgrades', value: v.display, ok: v.positive }) }
               if (postAns)  chips.push({ label: 'Playoff clause',    value: postAns.answer_yes_no === true ? '✓ Yes' : '✗ No',  ok: postAns.answer_yes_no })
               if (score != null) chips.push({ label: 'Score', value: String(score) })
 
