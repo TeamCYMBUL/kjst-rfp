@@ -81,6 +81,12 @@ function findMeetingSpaceItems(items: ConcessionItem[]) {
   return items.filter((c) => c.answer_type === 'yes_no' && (normLabel(c.label).includes('meeting space') || normLabel(c.label).includes('function space')))
 }
 
+// A hotel is emailable only while its RFP is still in play. Once it's submitted,
+// awarded, passed, declined, or marked unavailable, the proposal process is
+// complete for that hotel and there's nothing to (re)send or remind.
+const EMAIL_DONE_STATUSES = ['submitted', 'awarded', 'passed', 'declined', 'unavailable']
+const canEmailStatus = (status: string) => !EMAIL_DONE_STATUSES.includes(status)
+
 // ── Score calculation ─────────────────────────────────────────────────────────
 
 type ScoreResult = {
@@ -94,6 +100,7 @@ function calcScores(
   responses: Map<string, HotelResponse>,
   answers: Map<string, Answer[]>,
   concessionItems: ConcessionItem[],
+  tripHasStay2: boolean,
 ): Map<string, ScoreResult> {
   const scores = new Map<string, ScoreResult>()
   if (submittedInvites.length === 0) return scores
@@ -110,16 +117,23 @@ function calcScores(
   // Trips with a second stay are scored on BOTH stays independently (each stay's
   // cheapest submitted rate earns full points), then averaged — so a hotel can't
   // win purely on a strong Stay 1 rate while quoting a weak Stay 2 rate.
+  // Rates can arrive as numeric strings; 0 / blank means "not provided" (e.g. a
+  // hotel with no second stay), NOT a real $0 quote. Normalize to a positive
+  // number or null so 0 never enters the min or a 0/0 division.
+  const toRate = (v: unknown): number | null => {
+    const n = typeof v === 'number' ? v : v != null ? Number(v) : NaN
+    return Number.isFinite(n) && n > 0 ? n : null
+  }
+
   const stay1Rates = submittedInvites
-    .map((inv) => responses.get(inv.id)?.best_king_rate ?? null)
+    .map((inv) => toRate(responses.get(inv.id)?.best_king_rate))
     .filter((r): r is number => r != null)
   const minStay1Rate = stay1Rates.length > 0 ? Math.min(...stay1Rates) : null
 
   const stay2Rates = submittedInvites
-    .map((inv) => responses.get(inv.id)?.stay2_king_rate ?? null)
+    .map((inv) => toRate(responses.get(inv.id)?.stay2_king_rate))
     .filter((r): r is number => r != null)
-  const hasStay2 = stay2Rates.length > 0
-  const minStay2Rate = hasStay2 ? Math.min(...stay2Rates) : null
+  const minStay2Rate = stay2Rates.length > 0 ? Math.min(...stay2Rates) : null
 
   for (const inv of submittedInvites) {
     const resp = responses.get(inv.id)
@@ -145,17 +159,21 @@ function calcScores(
 
     // 3. Rate competitiveness — 25 pts (averaged across both stays when the trip has two)
     const scoreForStay = (minRate: number | null, rate: number | null | undefined) => {
-      if (rate == null) return null
-      return minRate != null ? (minRate / rate) * 25 : 25
+      const r = toRate(rate)
+      if (r == null) return null
+      return minRate != null ? (minRate / r) * 25 : 25
     }
     const stay1Score = scoreForStay(minStay1Rate, resp?.best_king_rate)
+    const v1 = stay1Score != null && Number.isFinite(stay1Score) ? stay1Score : 0
     let rateScore = 0
-    if (hasStay2) {
+    if (tripHasStay2) {
+      // Strict: on a two-stay trip, a missing/blank stay scores 0 for that stay,
+      // so a hotel that only bids one stay can't win on a single strong rate.
       const stay2Score = scoreForStay(minStay2Rate, resp?.stay2_king_rate)
-      const stayScores = [stay1Score, stay2Score].filter((s): s is number => s != null)
-      rateScore = stayScores.length > 0 ? Math.round(stayScores.reduce((a, b) => a + b, 0) / stayScores.length) : 0
+      const v2 = stay2Score != null && Number.isFinite(stay2Score) ? stay2Score : 0
+      rateScore = Math.round((v1 + v2) / 2)
     } else {
-      rateScore = stay1Score != null ? Math.round(stay1Score) : 0
+      rateScore = Math.round(v1)
     }
 
     // 4. Playoff / postseason clause — 10 pts
@@ -171,7 +189,8 @@ function calcScores(
     const suiteUpgVal   = Number(getValue(suiteUpgItem)   ?? 0)
     const suiteScore = (compSuitesVal > 0 ? 10 : 0) + (suiteUpgVal > 0 ? 10 : 0)
 
-    const total = Math.min(100, flexScore + commScore + rateScore + playoffScore + meetingScore + suiteScore)
+    const rawTotal = flexScore + commScore + rateScore + playoffScore + meetingScore + suiteScore
+    const total = Math.min(100, Number.isFinite(rawTotal) ? rawTotal : 0)
     scores.set(inv.id, { score: total, noFlexCancel, noCommission })
   }
   return scores
@@ -859,7 +878,7 @@ function HotelPanel({
             >
               {copied === inv.token ? '✓ Copied' : 'Copy link'}
             </button>
-            {inv.status !== 'submitted' && inv.status !== 'awarded' && inv.status !== 'unavailable' && (
+            {canEmailStatus(inv.status) && (
               <button
                 onClick={() => onSendEmail(inv)}
                 disabled={!inv.hotel_contact_email || sendingEmail === inv.id}
@@ -1014,36 +1033,49 @@ function HotelPanel({
               )}
             </div>
 
-            {/* Stay 2 rates */}
-            {hasStay2 && (inv.visit2_declined || response.stay2_king_rate || response.stay2_suite_rate || response.stay2_selling_rate) && (
-              <div className="px-6 py-5">
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                  Stay 2 Rates
-                  {trip.stay2_arrival_date && (
-                    <span className="ml-2 font-normal normal-case text-slate-300 dark:text-slate-600">
-                      {fmt(trip.stay2_arrival_date)} – {fmt(trip.stay2_departure_date)}
-                    </span>
+            {/* Stay 2 rates — always shown on a two-stay trip so a missing stay
+                is visible (and flagged) rather than silently absent. */}
+            {hasStay2 && (() => {
+              const stay2Num = Number(response.stay2_king_rate)
+              const stay2Provided = Number.isFinite(stay2Num) && stay2Num > 0
+              return (
+                <div className="px-6 py-5">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                    Stay 2 Rates
+                    {trip.stay2_arrival_date && (
+                      <span className="ml-2 font-normal normal-case text-slate-300 dark:text-slate-600">
+                        {fmt(trip.stay2_arrival_date)} – {fmt(trip.stay2_departure_date)}
+                      </span>
+                    )}
+                    {inv.visit2_declined ? (
+                      <span className="ml-2 rounded-full bg-red-50 dark:bg-red-900/20 px-2 py-0.5 text-[10px] font-semibold normal-case text-red-600 dark:text-red-400">
+                        Declined
+                      </span>
+                    ) : !stay2Provided && (
+                      <span className="ml-2 rounded-full bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 text-[10px] font-semibold normal-case text-amber-600 dark:text-amber-400">
+                        Not provided
+                      </span>
+                    )}
+                  </h3>
+                  {inv.visit2_declined ? (
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {inv.visit2_decline_reason ? `Declined: ${inv.visit2_decline_reason.replace(/_/g, ' ')}` : 'Declined by hotel'}
+                      {inv.visit2_decline_notes && ` — ${inv.visit2_decline_notes}`}
+                    </p>
+                  ) : !stay2Provided ? (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      This hotel did not provide a Stay 2 rate, so it scores 0 for Stay 2.
+                    </p>
+                  ) : (
+                    <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+                      <RateField label="King rate" value={fmtRate(response.stay2_king_rate)} />
+                      <RateField label="Suite rate" value={fmtRate(response.stay2_suite_rate)} />
+                      <RateField label="Selling rate" value={response.stay2_selling_rate || '—'} />
+                    </dl>
                   )}
-                  {inv.visit2_declined && (
-                    <span className="ml-2 rounded-full bg-red-50 dark:bg-red-900/20 px-2 py-0.5 text-[10px] font-semibold normal-case text-red-600 dark:text-red-400">
-                      Declined
-                    </span>
-                  )}
-                </h3>
-                {inv.visit2_declined ? (
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {inv.visit2_decline_reason ? `Declined: ${inv.visit2_decline_reason.replace(/_/g, ' ')}` : 'Declined by hotel'}
-                    {inv.visit2_decline_notes && ` — ${inv.visit2_decline_notes}`}
-                  </p>
-                ) : (
-                  <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-                    <RateField label="King rate" value={fmtRate(response.stay2_king_rate)} />
-                    <RateField label="Suite rate" value={fmtRate(response.stay2_suite_rate)} />
-                    <RateField label="Selling rate" value={response.stay2_selling_rate || '—'} />
-                  </dl>
-                )}
-              </div>
-            )}
+                </div>
+              )
+            })()}
 
             {/* Date scenario availability */}
             {trip.date_scenarios?.length > 0 && response.scenario_availability && (
@@ -1378,9 +1410,9 @@ export default function TripDetail() {
 
         setAllResponses(respMap)
         setAllAnswers(ansMap)
-        setScores(calcScores(submitted, respMap, ansMap, concessionItems))
+        setScores(calcScores(submitted, respMap, ansMap, concessionItems, Boolean(trip?.stay2_arrival_date)))
       })
-  }, [invites, concessionItems])
+  }, [invites, concessionItems, trip?.stay2_arrival_date])
 
   const selectedInvite = invites?.find((i) => i.id === selectedId) ?? null
 
@@ -1402,6 +1434,8 @@ export default function TripDetail() {
   }
 
   const toggleInviteSelected = (inviteId: string) => {
+    const inv = invites?.find((i) => i.id === inviteId)
+    if (inv && !canEmailStatus(inv.status)) return // completed proposals aren't emailable
     setSelectedInviteIds((prev) => {
       const next = new Set(prev)
       if (next.has(inviteId)) next.delete(inviteId)
@@ -1418,7 +1452,8 @@ export default function TripDetail() {
 
   const sendBulkInvites = async () => {
     if (!invites || selectedInviteIds.size === 0) return
-    const targets = invites.filter((i) => selectedInviteIds.has(i.id))
+    // Never email a hotel whose proposal is already complete, even if it somehow got selected.
+    const targets = invites.filter((i) => selectedInviteIds.has(i.id) && canEmailStatus(i.status))
     setBulkSending(true); setError(null)
 
     const results = await Promise.all(
@@ -1884,9 +1919,11 @@ export default function TripDetail() {
                     <input
                       type="checkbox"
                       checked={selectedInviteIds.has(inv.id)}
+                      disabled={!canEmailStatus(inv.status)}
                       onChange={(e) => { e.stopPropagation(); toggleInviteSelected(inv.id) }}
                       onClick={(e) => e.stopPropagation()}
-                      className="ml-4 h-3.5 w-3.5 shrink-0 rounded border-slate-300 dark:border-slate-600 text-[#1C1008] focus:ring-[#1C1008]"
+                      title={!canEmailStatus(inv.status) ? 'Proposal already in — no email needed' : undefined}
+                      className="ml-4 h-3.5 w-3.5 shrink-0 rounded border-slate-300 dark:border-slate-600 text-[#1C1008] focus:ring-[#1C1008] disabled:opacity-30 disabled:cursor-not-allowed"
                     />
                   )}
                   <button
