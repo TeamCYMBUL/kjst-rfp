@@ -1205,9 +1205,12 @@ function HotelPanel({
                         <div key={item.id} className="flex items-start justify-between gap-4 text-sm">
                           <span className="text-slate-600 dark:text-slate-300">{item.label}</span>
                           <div className="text-right shrink-0">
-                            {item.answer_type === 'yes_no' ? (
-                              <span className={`font-medium ${isYes ? 'text-emerald-600' : isNo ? 'text-red-500' : 'text-slate-400 dark:text-slate-500'}`}>
-                                {isYes ? '✓ Yes' : isNo ? '✗ No' : '—'}
+                            {/* Show what the hotel actually answered: a Yes/No if they gave one
+                                (covers legacy answers on items later switched to quantity), else
+                                the entered number. Keeps this panel in sync with the summary. */}
+                            {ans.answer_yes_no != null ? (
+                              <span className={`font-medium ${isYes ? 'text-emerald-600' : 'text-red-500'}`}>
+                                {isYes ? '✓ Yes' : '✗ No'}
                               </span>
                             ) : (
                               <span className="font-medium text-slate-700 dark:text-slate-300">{ans.answer_value || '—'}</span>
