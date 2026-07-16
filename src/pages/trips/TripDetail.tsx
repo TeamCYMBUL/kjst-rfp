@@ -1681,6 +1681,9 @@ export default function TripDetail() {
   const prevTrip = sibIndex > 0 ? siblings[sibIndex - 1] : null
   const nextTrip = sibIndex >= 0 && sibIndex < siblings.length - 1 ? siblings[sibIndex + 1] : null
 
+  const submittedInvites = invites.filter((i) => ['submitted', 'awarded'].includes(i.status))
+  const unprintedCount = submittedInvites.filter((i) => !i.printed_at).length
+
   const noEmailSent = invites.filter((i) => !i.sent_at && i.hotel_contact_email).length
   const allResponded = invites.length > 0 && invites.filter((i) => ['submitted', 'awarded'].includes(i.status)).length === invites.filter((i) => i.status !== 'passed' && i.status !== 'unavailable').length
   const awarded = invites.find((i) => i.status === 'awarded')
@@ -1769,7 +1772,29 @@ export default function TripDetail() {
                 <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" /></svg>
               </button>
               {exportOpen && (
-                <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg overflow-hidden">
+                <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg overflow-hidden">
+                  {/* Batch-print the full write-ups. "New" prints only bids not yet
+                      printed, so the team never re-prints the same batch. */}
+                  <Link
+                    to={`/trips/${id}/proposal?hotel=all`}
+                    target="_blank"
+                    onClick={() => setExportOpen(false)}
+                    className={`flex w-full flex-col border-b border-slate-100 dark:border-slate-700 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${submittedInvites.length === 0 ? 'pointer-events-none opacity-40' : ''}`}
+                  >
+                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200">🖨️ Print all proposals ({submittedInvites.length})</span>
+                    <span className="text-xs text-slate-400 dark:text-slate-500">Full write-up for every bid received</span>
+                  </Link>
+                  <Link
+                    to={`/trips/${id}/proposal?hotel=new`}
+                    target="_blank"
+                    onClick={() => setExportOpen(false)}
+                    className={`flex w-full flex-col border-b border-slate-100 dark:border-slate-700 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${unprintedCount === 0 ? 'pointer-events-none opacity-40' : ''}`}
+                  >
+                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200">🖨️ Print new proposals ({unprintedCount})</span>
+                    <span className="text-xs text-slate-400 dark:text-slate-500">
+                      {unprintedCount === 0 ? 'Nothing new since last print' : 'Only bids not yet printed'}
+                    </span>
+                  </Link>
                   <button
                     onClick={() => { exportForTeam(); setExportOpen(false) }}
                     disabled={!invites || invites.filter((i) => ['submitted', 'awarded'].includes(i.status)).length === 0}

@@ -99,8 +99,9 @@ export default function ProposalPrint() {
   const [searchParams] = useSearchParams()
   const hotelParam = searchParams.get('hotel')
   const allHotelsMode = hotelParam === 'all'
-  const singleInvitationId = hotelParam && !allHotelsMode ? hotelParam : null
-  const fullDetailMode = Boolean(singleInvitationId) || allHotelsMode
+  const newMode = hotelParam === 'new' // only bids not yet printed (progressive batch)
+  const singleInvitationId = hotelParam && !allHotelsMode && !newMode ? hotelParam : null
+  const fullDetailMode = Boolean(singleInvitationId) || allHotelsMode || newMode
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -124,12 +125,27 @@ export default function ProposalPrint() {
       const t = tripData as unknown as Trip
       setTrip(t)
 
-      // Which hotels to include: just the one requested, or every submitted bid
+      // Which hotels to include: one requested hotel, every submitted bid ("all"),
+      // or only bids not yet printed ("new" — progressive batch).
       let invQuery = supabase.from('rfp_invitations').select('id, hotel_name, hotel_contact_name, hotel_contact_email, status, submitted_at, visit1_declined, visit2_declined').eq('trip_id', tripId)
-      invQuery = singleInvitationId ? invQuery.eq('id', singleInvitationId) : invQuery.in('status', ['submitted', 'awarded'])
+      if (singleInvitationId) {
+        invQuery = invQuery.eq('id', singleInvitationId)
+      } else {
+        invQuery = invQuery.in('status', ['submitted', 'awarded'])
+        if (newMode) invQuery = invQuery.is('printed_at', null)
+      }
       const { data: invData } = await invQuery
       const invs: Invitation[] = (invData as unknown as Invitation[]) ?? []
       setInvitations(invs)
+
+      // Printing a full proposal marks those hotels as printed, so the next
+      // "print new" run only picks up bids that have arrived since.
+      if (fullDetailMode && invs.length > 0) {
+        await supabase
+          .from('rfp_invitations')
+          .update({ printed_at: new Date().toISOString() })
+          .in('id', invs.map((i) => i.id))
+      }
 
       // Concession items scoped to THIS trip's client (+ shared master) — an
       // unscoped query would mix in every other client's template now that
@@ -163,7 +179,7 @@ export default function ProposalPrint() {
       setLoading(false)
     }
     load()
-  }, [tripId, singleInvitationId])
+  }, [tripId, hotelParam])
 
   // Auto-print after data loads
   useEffect(() => {
@@ -379,9 +395,9 @@ export default function ProposalPrint() {
         {PrintControls}
         <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 900, margin: '0 auto', padding: '0 24px 48px' }}>
           {TripHeader}
-          {allHotelsMode && invitations.length === 0 ? (
+          {(allHotelsMode || newMode) && invitations.length === 0 ? (
             <div style={{ border: '1px solid #e2e8f0', borderTop: 'none', padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>
-              No submitted bids yet.
+              {newMode ? 'No new proposals since your last print.' : 'No submitted bids yet.'}
             </div>
           ) : (
             invitations.map((inv, i) => renderHotelFull(inv, i === invitations.length - 1))

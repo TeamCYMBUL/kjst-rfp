@@ -90,6 +90,7 @@ export type Invitation = {
   sent_at: string | null
   opened_at: string | null
   submitted_at: string | null
+  printed_at: string | null
   staff_notes: string | null
   created_at: string
   visit1_declined: boolean
