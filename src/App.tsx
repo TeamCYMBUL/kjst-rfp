@@ -11,6 +11,7 @@ import TripForm from './pages/trips/TripForm'
 import TripDetail from './pages/trips/TripDetail'
 import TripGrid from './pages/trips/TripGrid'
 import ProposalPrint from './pages/trips/ProposalPrint'
+import ClientProposalsPrint from './pages/clients/ClientProposalsPrint'
 import RfpForm from './pages/rfp/RfpForm'
 import TemplateEditor from './pages/settings/TemplateEditor'
 import SettingsPage from './pages/settings/Settings'
@@ -35,6 +36,7 @@ export default function App() {
             browser's print/Save-as-PDF can flow across multiple pages instead
             of being clipped to whatever fits in DashboardLayout's viewport. */}
         <Route path="trips/:id/proposal" element={<ProposalPrint />} />
+        <Route path="clients/:id/proposals" element={<ClientProposalsPrint />} />
 
         <Route element={<DashboardLayout />}>
           <Route index element={<Dashboard />} />
