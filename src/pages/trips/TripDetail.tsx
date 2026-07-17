@@ -534,7 +534,7 @@ function BidSummaryTable({
   onSelect: (id: string) => void
   onPass: (inv: Invitation) => void
   onResetStatus: (inv: Invitation) => void
-  onReopen: (inv: Invitation, notify: boolean) => void
+  onReopen: (inv: Invitation) => void
   reopeningId: string | null
   onRemove: (inv: Invitation) => void
   passingId: string | null
@@ -697,10 +697,9 @@ function BidSummaryTable({
                               submission (e.g. after a date change). Preserves answers. */}
                           {(inv.status === 'submitted' || inv.status === 'awarded') && (
                             <button
-                              onClick={() => onReopen(inv, true)}
+                              onClick={() => onReopen(inv)}
                               disabled={reopeningId === inv.id}
-                              title="Reopen so the hotel can revise their proposal (their answers are kept). Emails them their link. Alt-click to reopen without emailing."
-                              onClickCapture={(e) => { if (e.altKey) { e.preventDefault(); e.stopPropagation(); onReopen(inv, false) } }}
+                              title="Reopen so the hotel can revise their proposal (their answers are kept)"
                               className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1 text-xs font-medium text-slate-500 dark:text-slate-400 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-900/20 dark:hover:text-amber-400 disabled:opacity-40 transition-colors"
                             >
                               {reopeningId === inv.id ? '…' : '↺ Reopen'}
@@ -764,7 +763,7 @@ function HotelPanel({
   onSendReminder: (inv: Invitation) => void
   onMarkUnavailable: (inv: Invitation) => void
   onResetStatus: (inv: Invitation) => void
-  onReopen: (inv: Invitation, notify: boolean) => void
+  onReopen: (inv: Invitation) => void
   reopeningId: string | null
   onCopyLink: (token: string) => void
   onContactUpdated: (id: string, name: string | null, email: string | null) => void
@@ -908,10 +907,9 @@ function HotelPanel({
             {/* Reopen a submitted/awarded proposal so the hotel can revise it */}
             {(inv.status === 'submitted' || inv.status === 'awarded') && (
               <button
-                onClick={() => onReopen(inv, true)}
+                onClick={() => onReopen(inv)}
                 disabled={reopeningId === inv.id}
-                onClickCapture={(e) => { if (e.altKey) { e.preventDefault(); e.stopPropagation(); onReopen(inv, false) } }}
-                title="Reopen so the hotel can revise their proposal (their answers are kept). Emails them their link. Alt-click to reopen without emailing."
+                title="Reopen so the hotel can revise their proposal (their answers are kept)"
                 className="rounded-lg border border-amber-200 dark:border-amber-700 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-40 transition-colors"
               >
                 {reopeningId === inv.id ? 'Reopening…' : '↺ Reopen for edits'}
@@ -1581,13 +1579,11 @@ export default function TripDetail() {
 
   // Reopen a submitted hotel's proposal so they can revise it (e.g. dates changed).
   // Their saved answers are preserved — they edit and resubmit, they don't refill.
-  // Optionally emails the hotel their link with a review-and-resubmit note.
+  // Clicking Reopen opens a small dialog with an explicit email / no-email choice.
   const [reopeningId, setReopeningId] = useState<string | null>(null)
-  const reopenHotel = async (inv: Invitation, notify: boolean) => {
-    const msg = notify
-      ? `Reopen "${inv.hotel_name}" so they can revise their proposal?\n\nTheir previous answers are kept. They'll get an email with their link asking them to review the updated details and resubmit.`
-      : `Reopen "${inv.hotel_name}" so they can revise their proposal?\n\nTheir previous answers are kept. NO email will be sent — you'll need to contact them yourself.`
-    if (!confirm(msg)) return
+  const [reopenTarget, setReopenTarget] = useState<Invitation | null>(null)
+  const confirmReopen = async (inv: Invitation, notify: boolean) => {
+    setReopenTarget(null)
     setReopeningId(inv.id)
     const res = await reopenRfp(inv.id, { notify })
     setReopeningId(null)
@@ -1986,7 +1982,7 @@ export default function TripDetail() {
           onSelect={setSelectedId}
           onPass={passHotel}
           onResetStatus={resetHotelStatus}
-          onReopen={reopenHotel}
+          onReopen={setReopenTarget}
           reopeningId={reopeningId}
           onRemove={removeInviteFromTable}
           passingId={awardingId}
@@ -2171,7 +2167,7 @@ export default function TripDetail() {
               onSendReminder={sendReminder}
               onMarkUnavailable={markUnavailable}
               onResetStatus={resetHotelStatus}
-              onReopen={reopenHotel}
+              onReopen={setReopenTarget}
               reopeningId={reopeningId}
               onCopyLink={copyLink}
               onContactUpdated={(id, name, email) => {
@@ -2348,6 +2344,40 @@ export default function TripDetail() {
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reopen dialog — explicit email / no-email choice (kept dead simple) */}
+      {reopenTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setReopenTarget(null)}>
+          <div className="w-full max-w-md rounded-xl bg-white dark:bg-slate-800 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Reopen {reopenTarget.hotel_name}'s proposal?
+            </h3>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+              Their proposal unlocks so they can revise it. <strong>All their previous answers are saved</strong> — they only adjust what changed, then resubmit.
+            </p>
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                onClick={() => confirmReopen(reopenTarget, true)}
+                className="rounded-lg bg-[#1C1008] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#2d1e0e]"
+              >
+                Reopen &amp; email them their link
+              </button>
+              <button
+                onClick={() => confirmReopen(reopenTarget, false)}
+                className="rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700"
+              >
+                Reopen — I'll contact them myself
+              </button>
+              <button
+                onClick={() => setReopenTarget(null)}
+                className="mt-1 px-4 py-2 text-sm font-medium text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
