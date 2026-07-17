@@ -113,6 +113,9 @@ export default function ClientsList() {
   const [leagueFilter, setLeagueFilter] = useState<string>('all')
   const [error, setError] = useState<string | null>(null)
   const [showImport, setShowImport] = useState(false)
+  // Submitted bids across the selected client's trips, and how many are unprinted
+  // — drives the progressive batch-print buttons.
+  const [proposalCounts, setProposalCounts] = useState<{ total: number; unprinted: number } | null>(null)
   const { role, canEditClient } = useRole()
 
   const loadClients = (keepSelected?: string) => {
@@ -138,6 +141,29 @@ export default function ClientsList() {
   }
 
   useEffect(() => { loadClients() }, [])
+
+  // Load proposal (bid) counts for the selected client, for the batch-print buttons.
+  useEffect(() => {
+    if (!selected) { setProposalCounts(null); return }
+    const tripIds = selected.trips.map((t) => t.id)
+    if (tripIds.length === 0) { setProposalCounts({ total: 0, unprinted: 0 }); return }
+    let cancelled = false
+    setProposalCounts(null)
+    supabase
+      .from('rfp_invitations')
+      .select('printed_at')
+      .in('trip_id', tripIds)
+      .in('status', ['submitted', 'awarded'])
+      .then(({ data }) => {
+        if (cancelled) return
+        const bids = data ?? []
+        setProposalCounts({
+          total: bids.length,
+          unprinted: bids.filter((b: any) => b.printed_at == null).length,
+        })
+      })
+    return () => { cancelled = true }
+  }, [selected])
 
   if (error) return <ErrorNote message={error} />
   if (!clients) return <Loading />
@@ -373,6 +399,48 @@ export default function ClientsList() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Proposals — progressive batch print */}
+              <div className="border-b border-slate-200 dark:border-slate-700 px-6 py-5">
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  Print Proposals
+                </h3>
+                {proposalCounts === null ? (
+                  <p className="text-sm text-slate-400 dark:text-slate-500">Loading…</p>
+                ) : proposalCounts.total === 0 ? (
+                  <p className="text-sm text-slate-400 dark:text-slate-500 italic">No submitted bids yet for this team.</p>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <a
+                      href={`/clients/${selected.id}/proposals?mode=all`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#2d1e0e]"
+                    >
+                      🖨️ Print all proposals
+                      <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{proposalCounts.total}</span>
+                    </a>
+                    <a
+                      href={`/clients/${selected.id}/proposals?mode=new`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition-colors ${
+                        proposalCounts.unprinted > 0
+                          ? 'border-[#1C1008]/30 text-[#1C1008] hover:bg-[#1C1008]/5 dark:border-amber-400/30 dark:text-amber-400'
+                          : 'pointer-events-none border-slate-200 text-slate-400 dark:border-slate-700 dark:text-slate-600'
+                      }`}
+                    >
+                      🖨️ Print new proposals
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${proposalCounts.unprinted > 0 ? 'bg-[#1C1008]/10 dark:bg-white/10' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                        {proposalCounts.unprinted}
+                      </span>
+                    </a>
+                    <p className="mt-1 w-full text-xs text-slate-400 dark:text-slate-500">
+                      Full write-ups for every submitted bid, grouped by trip. Printing marks bids as printed; "new" then shows only bids that have come in since your last print.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Primary contact card */}
