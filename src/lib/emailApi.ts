@@ -40,6 +40,29 @@ export async function sendSingleReminderEmail(
   return res.json()
 }
 
+/**
+ * Reopen a submitted hotel's proposal so they can revise (not refill) it — e.g.
+ * after a trip's dates change. Their saved answers are preserved. When notify is
+ * true (default), the hotel is emailed their existing link with a review-and-
+ * resubmit note.
+ */
+export async function reopenRfp(
+  invitation_id: string,
+  opts?: { notify?: boolean; note?: string },
+): Promise<{ ok: true; reopened: true; emailed: boolean; sent_to?: string; warning?: string } | { error: string }> {
+  const res = await fetch(`${FN_BASE}/rfp-reopen`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({
+      invitation_id,
+      base_url: PUBLIC_APP_URL,
+      notify: opts?.notify ?? true,
+      note: opts?.note ?? null,
+    }),
+  })
+  return res.json()
+}
+
 /** Send reminder emails to all non-submitted hotels for a trip. */
 export async function sendReminderEmails(
   trip_id: string,

@@ -5,7 +5,7 @@ import { logActivity } from '../../lib/activity'
 import type { Client, DateScenario, Invitation, Trip } from '../../lib/types'
 import { formatDate, generateToken, formatMeetingSpaceNotes } from '../../lib/format'
 import { PUBLIC_APP_URL } from '../../lib/config'
-import { sendInvitationEmail, sendReminderEmails, sendSingleReminderEmail } from '../../lib/emailApi'
+import { sendInvitationEmail, sendReminderEmails, sendSingleReminderEmail, reopenRfp } from '../../lib/emailApi'
 import { Badge, ErrorNote, LinkButton, Loading } from '../../components/ui'
 import { exportTeamGrid, exportSingleHotelXlsx } from '../../lib/excelExport'
 import { useRole } from '../../lib/useRole'
@@ -519,6 +519,8 @@ function BidSummaryTable({
   onSelect,
   onPass,
   onResetStatus,
+  onReopen,
+  reopeningId,
   onRemove,
   passingId,
   isViewer,
@@ -532,6 +534,8 @@ function BidSummaryTable({
   onSelect: (id: string) => void
   onPass: (inv: Invitation) => void
   onResetStatus: (inv: Invitation) => void
+  onReopen: (inv: Invitation, notify: boolean) => void
+  reopeningId: string | null
   onRemove: (inv: Invitation) => void
   passingId: string | null
   isViewer?: boolean
@@ -689,6 +693,19 @@ function BidSummaryTable({
                               {passingId === inv.id ? '…' : 'Pass'}
                             </button>
                           )}
+                          {/* Reopen for edits — lets the hotel revise a locked
+                              submission (e.g. after a date change). Preserves answers. */}
+                          {(inv.status === 'submitted' || inv.status === 'awarded') && (
+                            <button
+                              onClick={() => onReopen(inv, true)}
+                              disabled={reopeningId === inv.id}
+                              title="Reopen so the hotel can revise their proposal (their answers are kept). Emails them their link. Alt-click to reopen without emailing."
+                              onClickCapture={(e) => { if (e.altKey) { e.preventDefault(); e.stopPropagation(); onReopen(inv, false) } }}
+                              className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1 text-xs font-medium text-slate-500 dark:text-slate-400 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-900/20 dark:hover:text-amber-400 disabled:opacity-40 transition-colors"
+                            >
+                              {reopeningId === inv.id ? '…' : '↺ Reopen'}
+                            </button>
+                          )}
                           {/* Remove hotel from RFP entirely */}
                           <button
                             onClick={() => onRemove(inv)}
@@ -728,6 +745,8 @@ function HotelPanel({
   onSendReminder,
   onMarkUnavailable,
   onResetStatus,
+  onReopen,
+  reopeningId,
   onCopyLink,
   onContactUpdated,
   sendingEmail,
@@ -745,6 +764,8 @@ function HotelPanel({
   onSendReminder: (inv: Invitation) => void
   onMarkUnavailable: (inv: Invitation) => void
   onResetStatus: (inv: Invitation) => void
+  onReopen: (inv: Invitation, notify: boolean) => void
+  reopeningId: string | null
   onCopyLink: (token: string) => void
   onContactUpdated: (id: string, name: string | null, email: string | null) => void
   sendingEmail: string | null
@@ -877,6 +898,24 @@ function HotelPanel({
               </span>
             ) : (
               <Badge status={inv.status} />
+            )}
+            {/* Reopened-for-revision indicator (status is back to sent/opened after a reopen) */}
+            {inv.reopened_at && ['sent', 'opened'].includes(inv.status) && (
+              <span className="inline-flex rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-300">
+                ↺ Reopened — awaiting revised bid
+              </span>
+            )}
+            {/* Reopen a submitted/awarded proposal so the hotel can revise it */}
+            {(inv.status === 'submitted' || inv.status === 'awarded') && (
+              <button
+                onClick={() => onReopen(inv, true)}
+                disabled={reopeningId === inv.id}
+                onClickCapture={(e) => { if (e.altKey) { e.preventDefault(); e.stopPropagation(); onReopen(inv, false) } }}
+                title="Reopen so the hotel can revise their proposal (their answers are kept). Emails them their link. Alt-click to reopen without emailing."
+                className="rounded-lg border border-amber-200 dark:border-amber-700 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-40 transition-colors"
+              >
+                {reopeningId === inv.id ? 'Reopening…' : '↺ Reopen for edits'}
+              </button>
             )}
             {/* Undo awarded / passed / unavailable */}
             {(inv.status === 'awarded' || inv.status === 'passed' || inv.status === 'unavailable') && (
@@ -1540,6 +1579,28 @@ export default function TripDetail() {
     loadInvites()
   }
 
+  // Reopen a submitted hotel's proposal so they can revise it (e.g. dates changed).
+  // Their saved answers are preserved — they edit and resubmit, they don't refill.
+  // Optionally emails the hotel their link with a review-and-resubmit note.
+  const [reopeningId, setReopeningId] = useState<string | null>(null)
+  const reopenHotel = async (inv: Invitation, notify: boolean) => {
+    const msg = notify
+      ? `Reopen "${inv.hotel_name}" so they can revise their proposal?\n\nTheir previous answers are kept. They'll get an email with their link asking them to review the updated details and resubmit.`
+      : `Reopen "${inv.hotel_name}" so they can revise their proposal?\n\nTheir previous answers are kept. NO email will be sent — you'll need to contact them yourself.`
+    if (!confirm(msg)) return
+    setReopeningId(inv.id)
+    const res = await reopenRfp(inv.id, { notify })
+    setReopeningId(null)
+    if ('error' in res) {
+      alert(`Could not reopen: ${res.error}`)
+      return
+    }
+    if (res.warning) alert(res.warning)
+    else if (notify && res.emailed) alert(`Reopened. Email sent to ${res.sent_to}.`)
+    else if (notify && !res.emailed) alert('Reopened, but the email could not be sent.')
+    loadInvites()
+  }
+
   // Remove a hotel from this RFP entirely (sidebar — receives MouseEvent to stop propagation)
   const removeInvite = async (inv: Invitation, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -1925,6 +1986,8 @@ export default function TripDetail() {
           onSelect={setSelectedId}
           onPass={passHotel}
           onResetStatus={resetHotelStatus}
+          onReopen={reopenHotel}
+          reopeningId={reopeningId}
           onRemove={removeInviteFromTable}
           passingId={awardingId}
           isViewer={isViewer}
@@ -2108,6 +2171,8 @@ export default function TripDetail() {
               onSendReminder={sendReminder}
               onMarkUnavailable={markUnavailable}
               onResetStatus={resetHotelStatus}
+              onReopen={reopenHotel}
+              reopeningId={reopeningId}
               onCopyLink={copyLink}
               onContactUpdated={(id, name, email) => {
                 setInvites((prev) =>

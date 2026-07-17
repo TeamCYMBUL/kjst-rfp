@@ -66,6 +66,7 @@ export type RfpInvitation = {
   hotel_contact_email: string | null
   status: string
   submitted_at: string | null
+  reopened_at: string | null
   visit1_declined: boolean
   visit1_decline_reason: string | null
   visit1_decline_notes: string | null

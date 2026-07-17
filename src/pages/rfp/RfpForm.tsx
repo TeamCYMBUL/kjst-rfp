@@ -1416,6 +1416,16 @@ export default function RfpForm() {
           visit2Declined={visit2Declined}
         />
 
+        {/* ── Reopened notice: trip details changed after this hotel submitted ── */}
+        {data.invitation.reopened_at && !isReadOnly && (
+          <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+            <p className="text-sm font-semibold text-amber-900">This RFP was reopened — trip details have changed.</p>
+            <p className="mt-1 text-sm text-amber-800">
+              Your previous answers are saved below. Please review the updated details, adjust anything affected, and resubmit. You do not need to start over.
+            </p>
+          </div>
+        )}
+
         {/* ── Already-declined visit notices (two-visit trips) ── */}
         {hasStay2 && (visit1Declined || visit2Declined) && (
           <div className="mb-6 space-y-2">
