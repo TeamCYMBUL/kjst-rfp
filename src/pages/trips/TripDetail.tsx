@@ -7,6 +7,7 @@ import { formatDate, generateToken, formatMeetingSpaceNotes } from '../../lib/fo
 import { PUBLIC_APP_URL } from '../../lib/config'
 import { sendInvitationEmail, sendReminderEmails, sendSingleReminderEmail, reopenRfp } from '../../lib/emailApi'
 import { Badge, ErrorNote, LinkButton, Loading } from '../../components/ui'
+import { PageHint } from '../../components/PageHint'
 import { exportTeamGrid, exportSingleHotelXlsx } from '../../lib/excelExport'
 import { useRole } from '../../lib/useRole'
 
@@ -1966,6 +1967,17 @@ export default function TripDetail() {
           >
             Confirm dates
           </button>
+        </div>
+      )}
+
+      {/* ── What-to-do-here hint ── */}
+      {!isViewer && (
+        <div className="mx-6 mt-4">
+          <PageHint id="trip-workspace">
+            This is a trip's workspace. <strong>Invite hotels</strong>, then their bids land here as they submit.
+            Once bids are in, open the <strong>comparison grid</strong> to review side by side, mark a winner, and use
+            <strong> Send to client</strong> to export the grid or print proposals.
+          </PageHint>
         </div>
       )}
 

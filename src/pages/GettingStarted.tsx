@@ -54,8 +54,7 @@ export default function GettingStarted() {
             {steps.map((step) => (
               <li key={step.n} className="flex items-start gap-4 px-4 py-5">
                 {/* Status circle */}
-                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors
-                  ${step.done ? 'bg-emerald-500' : 'border-2 border-slate-200 bg-white'}"
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors"
                   style={step.done
                     ? { background: '#10b981' }
                     : { border: '2px solid #e2e8f0', background: 'white' }

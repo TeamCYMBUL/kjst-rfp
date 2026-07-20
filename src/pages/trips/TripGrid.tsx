@@ -7,6 +7,7 @@ import { exportComparisonXlsx } from '../../lib/excelExport'
 import type { ConcessionItem } from '../../lib/rfpApi'
 import type { Trip, Client } from '../../lib/types'
 import { Badge, ErrorNote, Loading } from '../../components/ui'
+import { PageHint } from '../../components/PageHint'
 
 // ── Data types ────────────────────────────────────────────────────────────────
 
@@ -683,6 +684,14 @@ export default function TripGrid() {
           </div>
         )}
       </div>
+
+      {invitations.length > 0 && (
+        <PageHint id="comparison-grid">
+          Every submitted bid, side by side. <strong>Green</strong> highlights the lowest rate. Scroll for rates,
+          F&amp;B, and every concession. Use <strong>Pass</strong> to drop a hotel or <strong>Award</strong> to pick the
+          winner, then export this grid or print proposals from the trip's <strong>Send to client</strong> menu.
+        </PageHint>
+      )}
 
       {invitations.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">

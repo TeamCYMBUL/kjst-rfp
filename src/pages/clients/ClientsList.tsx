@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { formatDate } from '../../lib/format'
 import { Badge, ErrorNote, Loading } from '../../components/ui'
+import { PageHint } from '../../components/PageHint'
 import { useRole } from '../../lib/useRole'
 import ScheduleImportModal from '../trips/ScheduleImport'
 import { exportAllCitiesForClient } from '../../lib/exportAllCities'
@@ -201,6 +202,14 @@ export default function ClientsList() {
           </Link>
         )}
       </div>
+
+      {clients.length > 0 && (
+        <PageHint id="clients-overview">
+          Pick a team on the left to see its RFP details. From a team's panel you can <strong>create trips</strong>,
+          <strong> import a schedule</strong>, and <strong>print proposals</strong>. Set a team's questions and season
+          defaults under its <strong>Details</strong> tab.
+        </PageHint>
+      )}
 
       {clients.length === 0 ? (
         /* ── Empty state ── */
