@@ -470,6 +470,33 @@ function HotelDetail({
                   <dd className="text-sm text-slate-800 dark:text-slate-200">{hotel.contact_phone}</dd>
                 </div>
               )}
+              {(hotel as any).brand_cc_email && (
+                <div className="flex items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-700 pt-2">
+                  <dt className="shrink-0 text-xs font-medium text-slate-400 dark:text-slate-500">Always CC</dt>
+                  <dd className="text-sm text-slate-800 dark:text-slate-200 text-right">
+                    {(hotel as any).brand_cc_name && (
+                      <span className="mr-1 text-slate-500 dark:text-slate-400">{(hotel as any).brand_cc_name} ·</span>
+                    )}
+                    <a href={`mailto:${(hotel as any).brand_cc_email}`} className="text-[#1C1008] dark:text-amber-400 hover:underline">
+                      {(hotel as any).brand_cc_email}
+                    </a>
+                  </dd>
+                </div>
+              )}
+            </dl>
+          ) : (hotel as any).brand_cc_email ? (
+            <dl className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <dt className="shrink-0 text-xs font-medium text-slate-400 dark:text-slate-500">Always CC</dt>
+                <dd className="text-sm text-right">
+                  {(hotel as any).brand_cc_name && (
+                    <span className="mr-1 text-slate-500 dark:text-slate-400">{(hotel as any).brand_cc_name} ·</span>
+                  )}
+                  <a href={`mailto:${(hotel as any).brand_cc_email}`} className="text-[#1C1008] dark:text-amber-400 hover:underline">
+                    {(hotel as any).brand_cc_email}
+                  </a>
+                </dd>
+              </div>
             </dl>
           ) : (
             <p className="text-xs text-slate-400 dark:text-slate-500">No contact info on file.</p>
