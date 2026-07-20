@@ -114,6 +114,8 @@ function HotelForm({
     contact_name: initial?.contact_name ?? '',
     contact_email: initial?.contact_email ?? '',
     contact_phone: initial?.contact_phone ?? '',
+    brand_cc_name: (initial as any)?.brand_cc_name ?? '',
+    brand_cc_email: (initial as any)?.brand_cc_email ?? '',
     notes: initial?.notes ?? '',
   })
   const [logoUrl, setLogoUrl] = useState<string | null>(initial?.logo_url ?? null)
@@ -158,6 +160,8 @@ function HotelForm({
       contact_name: f.contact_name.trim() || null,
       contact_email: f.contact_email.trim() || null,
       contact_phone: f.contact_phone.trim() || null,
+      brand_cc_name: f.brand_cc_name.trim() || null,
+      brand_cc_email: f.brand_cc_email.trim() || null,
       notes: f.notes.trim() || null,
     }
     if (initial?.id) {
@@ -250,6 +254,19 @@ function HotelForm({
         <div>
           <label className={labelCls}>Contact phone</label>
           <input className={inputCls} value={f.contact_phone} onChange={set('contact_phone')} />
+        </div>
+      </div>
+      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3">
+        <p className="mb-2 text-xs font-semibold text-slate-600 dark:text-slate-300">Always CC on RFP emails <span className="font-normal text-slate-400">(optional — auto-added to every RFP email sent to this hotel)</span></p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>CC name</label>
+            <input className={inputCls} value={f.brand_cc_name} onChange={set('brand_cc_name')} placeholder="e.g. Tom Stafford" />
+          </div>
+          <div>
+            <label className={labelCls}>CC email</label>
+            <input type="email" className={inputCls} value={f.brand_cc_email} onChange={set('brand_cc_email')} placeholder="tom.stafford@fourseasons.com" />
+          </div>
         </div>
       </div>
       <div>
