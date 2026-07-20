@@ -1391,6 +1391,10 @@ export default function TripDetail() {
   const [declineToast, setDeclineToast] = useState<string | null>(null)
   const [confirmingScenario, setConfirmingScenario] = useState(false)
   const [confirmingScenarioSaving, setConfirmingScenarioSaving] = useState(false)
+  // F&B forecast plan for this trip: { concession_item_id: person_meals }
+  const [fnbPlan, setFnbPlan] = useState<Record<string, number>>({})
+  const [fnbOpen, setFnbOpen] = useState(false)
+  const [fnbSaving, setFnbSaving] = useState(false)
 
   const loadInvites = () => {
     supabase.from('rfp_invitations').select('*').eq('trip_id', id).order('created_at', { ascending: true })
@@ -1400,11 +1404,26 @@ export default function TripDetail() {
       })
   }
 
+  // Save the F&B plan (person-meals per meal-price item) to the trip. Zero/blank
+  // entries are dropped so only real meal inputs drive the forecast.
+  const saveFnbPlan = async (next: Record<string, number>) => {
+    setFnbPlan(next)
+    setFnbSaving(true)
+    const clean: Record<string, number> = {}
+    for (const [k, v] of Object.entries(next)) if (Number(v) > 0) clean[k] = Number(v)
+    await supabase.from('trips').update({ fnb_plan: clean }).eq('id', id!)
+    setFnbSaving(false)
+  }
+
   useEffect(() => {
     supabase.from('trips').select('*, clients(id, team_name, league)').eq('id', id!).single()
       .then(({ data, error }) => {
         if (error) setError(error.message)
-        else setTrip(data as Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league'> | null })
+        else {
+          setTrip(data as Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league'> | null })
+          const plan = (data as any)?.fnb_plan
+          if (plan && typeof plan === 'object') setFnbPlan(plan as Record<string, number>)
+        }
       })
     loadInvites()
     supabase.from('grid_versions').select('id, version_label, created_at').eq('trip_id', id).order('created_at', { ascending: false })
@@ -1949,6 +1968,57 @@ export default function TripDetail() {
           </button>
         </div>
       )}
+
+      {/* ── F&B forecast plan — only for teams whose RFP collects per-person meal prices ── */}
+      {!isViewer && concessionItems.some((c) => c.answer_type === 'currency' && /breakfast|lunch|brunch|dinner|\bmeal\b|menu|per person/i.test(c.label)) && (() => {
+        const currencyItems = concessionItems.filter((c) => c.answer_type === 'currency')
+        const activeCount = currencyItems.filter((c) => Number(fnbPlan[c.id]) > 0).length
+        return (
+          <div className="mx-6 mt-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+            <button
+              onClick={() => setFnbOpen((v) => !v)}
+              className="flex w-full items-center justify-between px-5 py-3 text-left"
+            >
+              <div>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">🍽️ F&amp;B forecast plan</p>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                  {activeCount > 0
+                    ? `${activeCount} meal${activeCount !== 1 ? 's' : ''} set — the grid auto-computes each hotel's Forecasted F&B`
+                    : 'Set person-meals per meal to auto-compute F&B totals on the grid'}
+                </p>
+              </div>
+              <span className="text-xs text-slate-400">{fnbSaving ? 'Saving…' : fnbOpen ? '▲' : '▼'}</span>
+            </button>
+            {fnbOpen && (
+              <div className="border-t border-slate-100 dark:border-slate-700 px-5 py-4">
+                <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+                  For each meal, enter <strong>person-meals</strong> = headcount × how many of that meal over the stay.
+                  Leave non-meal items (e.g. baggage) blank. The grid multiplies each hotel's entered price by this number.
+                </p>
+                <div className="space-y-2">
+                  {currencyItems.map((c) => (
+                    <div key={c.id} className="flex items-center gap-3">
+                      <label className="flex-1 text-xs text-slate-600 dark:text-slate-300">{c.label}</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={fnbPlan[c.id] ?? ''}
+                        onChange={(e) => {
+                          const v = e.target.value === '' ? 0 : Math.max(0, Number(e.target.value))
+                          setFnbPlan((p) => ({ ...p, [c.id]: v }))
+                        }}
+                        onBlur={() => saveFnbPlan(fnbPlan)}
+                        placeholder="—"
+                        className="w-28 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-right text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#1C1008]/30"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── Grid discovery banner (shown when ≥2 hotels submitted) ── */}
       {invites && invites.filter((i) => ['submitted', 'awarded'].includes(i.status)).length >= 2 && (

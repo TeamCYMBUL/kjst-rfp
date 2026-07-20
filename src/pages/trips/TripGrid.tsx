@@ -874,6 +874,59 @@ export default function TripGrid() {
                 />
               )}
 
+              {/* ── Food & Beverage forecast (auto-computed from the trip's F&B plan) ── */}
+              {(() => {
+                const plan = ((trip as any)?.fnb_plan ?? {}) as Record<string, number>
+                const entries = Object.entries(plan).filter(([, pm]) => Number(pm) > 0)
+                if (entries.length === 0) return null
+                const totalPersonMeals = entries.reduce((n, [, pm]) => n + Number(pm), 0)
+                const parsePrice = (v: unknown) => (v == null || v === '') ? NaN : parseFloat(String(v).replace(/[^0-9.]/g, ''))
+                const fnbFor = (invId: string): number | null => {
+                  let total = 0, any = false
+                  for (const [itemId, pm] of entries) {
+                    const price = parsePrice(answerMaps[invId]?.[itemId]?.answer_value)
+                    if (Number.isFinite(price)) { total += price * Number(pm); any = true }
+                  }
+                  return any ? total : null
+                }
+                const roomFor = (inv: typeof invitations[number]): number | null => {
+                  const r = inv.rfp_responses
+                  if (r?.best_king_rate == null || trip?.total_rooms_requested == null || trip?.nights == null) return null
+                  return r.best_king_rate * trip.total_rooms_requested * trip.nights
+                }
+                const money = (n: number | null) => n == null ? '—' : `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+                const cell = (content: string, inv: typeof invitations[number], strong = false) => {
+                  const isDimmed = inv.status === 'passed' || inv.status === 'unavailable'
+                  return (
+                    <td key={inv.id} className={`min-w-[200px] px-4 py-2 text-right text-sm ${isDimmed ? 'opacity-40 bg-slate-50' : ''} ${strong ? 'font-semibold text-slate-800' : 'text-slate-600'}`}>
+                      {content}
+                    </td>
+                  )
+                }
+                return (
+                  <>
+                    <SectionRow label="Food & Beverage (forecast)" colSpan={colSpan} />
+                    <tr className="border-b border-slate-100">
+                      <td className="sticky left-0 w-64 bg-white px-4 py-2 align-top text-xs font-medium text-slate-500">
+                        Forecasted F&amp;B Total
+                        <span className="text-slate-400"> ({totalPersonMeals} person-meals)</span>
+                      </td>
+                      {invitations.map((inv) => cell(money(fnbFor(inv.id)), inv, true))}
+                    </tr>
+                    <tr className="border-b border-slate-100 bg-amber-50/30">
+                      <td className="sticky left-0 w-64 bg-white px-4 py-2 text-xs font-semibold text-slate-700">
+                        Rooms + F&amp;B (est.)
+                      </td>
+                      {invitations.map((inv) => {
+                        const room = roomFor(inv), fnb = fnbFor(inv.id)
+                        const tot = (room == null && fnb == null) ? null : (room ?? 0) + (fnb ?? 0)
+                        return cell(money(tot), inv, true)
+                      })}
+                    </tr>
+                  </>
+                )
+              })()}
+
               {/* Stay 2 rows — only shown when trip has a second stay */}
               {trip?.stay2_arrival_date && (() => {
                 const stay2Nights = trip.stay2_arrival_date && trip.stay2_departure_date
