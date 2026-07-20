@@ -230,9 +230,9 @@ export default function ClientsList() {
         </div>
       ) : (
         /* ── Split panel ── */
-        <div className="flex overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" style={{ minHeight: 520 }}>
+        <div className="flex flex-col lg:flex-row overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 lg:min-h-[520px]">
           {/* Left — client list */}
-          <div className="flex w-72 shrink-0 flex-col border-r border-slate-200 dark:border-slate-700">
+          <div className="flex w-full lg:w-72 shrink-0 flex-col border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-700">
             {/* Search */}
             <div className="border-b border-slate-200 dark:border-slate-700 px-4 py-3 space-y-2">
               <input
