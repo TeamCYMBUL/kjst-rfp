@@ -484,6 +484,7 @@ export type ConsolidatedCity = {
     game_date: string | null
     game_dates?: string[] | null
     total_rooms_requested?: number | null
+    fnb_plan?: Record<string, number> | null
     stay2_arrival_date?: string | null
     stay2_departure_date?: string | null
     stay2_game_dates?: string[] | null
@@ -547,6 +548,16 @@ export async function exportMultiCityConsolidatedXlsx(
     { header: 'Postseason Guaranteed', width: 14 },
     { header: 'Notes', width: 55 },
   ]
+  // F&B forecast columns appear only for teams whose trips carry an F&B plan
+  // (per-person meal prices × person-meals). Appended after Notes so existing
+  // column indices are untouched.
+  const fnbActive = cities.some(
+    (c) => c.trip.fnb_plan && Object.values(c.trip.fnb_plan).some((v) => Number(v) > 0),
+  )
+  const FNB_COL_FORECAST = COLS.length // 0-based index of first appended col
+  if (fnbActive) {
+    COLS.push({ header: 'Forecasted F&B', width: 13 }, { header: 'Rooms + F&B', width: 14 })
+  }
   const NCOL = COLS.length
 
   const wb = new ExcelJS.Workbook()
@@ -612,6 +623,7 @@ export async function exportMultiCityConsolidatedXlsx(
     return y && m && d ? new Date(y, m - 1, d, 12) : null
   }
   const CENTER_COLS = new Set([0, 1, 3, 4, 5, 6, 8, 9, 10, 11])
+  if (fnbActive) { CENTER_COLS.add(FNB_COL_FORECAST); CENTER_COLS.add(FNB_COL_FORECAST + 1) }
 
   let rowIdx = 4
   let counter = 0
@@ -691,6 +703,26 @@ export async function exportMultiCityConsolidatedXlsx(
           bid ? postGte : '',
           noteFrags.join('\n'),
         ]
+
+        // F&B forecast (Stay 1 only; per-person price × person-meals per meal item)
+        if (fnbActive) {
+          const plan = trip.fnb_plan ?? {}
+          const planEntries = Object.entries(plan).filter(([, pm]) => Number(pm) > 0)
+          let fnb: number | null = null
+          if (bid && visit.index === 1 && planEntries.length > 0) {
+            let sum = 0, any = false
+            for (const [itemId, pm] of planEntries) {
+              const raw = h.answers[itemId]?.answer_value
+              const price = raw ? parseFloat(String(raw).replace(/[^0-9.]/g, '')) : NaN
+              if (Number.isFinite(price)) { sum += price * Number(pm); any = true }
+            }
+            fnb = any ? sum : null
+          }
+          const roomCost = (bid && visit.index === 1 && kingRate != null && trip.total_rooms_requested != null)
+            ? kingRate * trip.total_rooms_requested * nights : null
+          const roomsPlusFnb = (fnb != null || roomCost != null) ? (fnb ?? 0) + (roomCost ?? 0) : null
+          vals.push(fnb, roomsPlusFnb)
+        }
         first = false
 
         vals.forEach((v, i) => {
@@ -705,6 +737,10 @@ export async function exportMultiCityConsolidatedXlsx(
         row.getCell(5).numFmt = 'm/d/yy'
         row.getCell(6).numFmt = 'm/d/yy'
         row.getCell(9).numFmt = '$#,##0'
+        if (fnbActive) {
+          row.getCell(FNB_COL_FORECAST + 1).numFmt = '$#,##0'
+          row.getCell(FNB_COL_FORECAST + 2).numFmt = '$#,##0'
+        }
       }
     }
   }

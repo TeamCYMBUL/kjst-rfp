@@ -28,7 +28,7 @@ export async function exportAllCitiesForClient(
   const { data: trips } = await supabase
     .from('trips')
     .select(
-      'id, opponent_label, city, arrival_date, departure_date, game_date, game_dates, total_rooms_requested, stay2_arrival_date, stay2_departure_date, stay2_game_date, stay2_game_dates, status',
+      'id, opponent_label, city, arrival_date, departure_date, game_date, game_dates, total_rooms_requested, stay2_arrival_date, stay2_departure_date, stay2_game_date, stay2_game_dates, status, fnb_plan',
     )
     .eq('client_id', clientId)
     .order('city', { ascending: true, nullsFirst: false })
@@ -94,6 +94,7 @@ export async function exportAllCitiesForClient(
         game_date: trip.game_date,
         game_dates: trip.game_dates ?? null,
         total_rooms_requested: trip.total_rooms_requested,
+        fnb_plan: trip.fnb_plan ?? null,
         stay2_arrival_date: trip.stay2_arrival_date,
         stay2_departure_date: trip.stay2_departure_date,
         stay2_game_dates: trip.stay2_game_dates ?? null,
