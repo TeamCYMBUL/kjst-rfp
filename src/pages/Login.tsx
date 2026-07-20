@@ -12,7 +12,12 @@ const inputCls =
 export default function Login() {
   const { session } = useAuth()
   const navigate = useNavigate()
-  const [mode, setMode] = useState<Mode>('signin')
+  // A Supabase recovery link lands here with `type=recovery` in the URL hash and
+  // also establishes a session. Detect it synchronously so we open the
+  // "set a new password" form instead of the auto-redirect (line below) winning
+  // the race and bouncing the user to the dashboard without ever resetting.
+  const isRecovery = typeof window !== 'undefined' && window.location.hash.includes('type=recovery')
+  const [mode, setMode] = useState<Mode>(isRecovery ? 'reset' : 'signin')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -29,8 +34,9 @@ export default function Login() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Already signed in and not in reset flow → go to the dashboard
-  if (session && mode !== 'reset') return <Navigate to="/" replace />
+  // Already signed in and not in reset flow → go to the dashboard.
+  // Stay put during a recovery so the new-password form can render.
+  if (session && mode !== 'reset' && !isRecovery) return <Navigate to="/" replace />
 
   const clear = () => { setError(null); setNotice(null) }
 
