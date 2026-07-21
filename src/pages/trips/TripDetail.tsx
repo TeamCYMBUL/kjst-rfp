@@ -689,7 +689,8 @@ function BidSummaryTable({
                             <button
                               onClick={() => onPass(inv)}
                               disabled={passingId === inv.id}
-                              className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1 text-xs font-medium text-slate-500 dark:text-slate-400 hover:border-red-300 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400 disabled:opacity-40 transition-colors"
+                              title="Turn this hotel down. Their bid is kept and shows as 'Not available' on the exported grid. Use Undo to reverse."
+                              className="rounded-lg border border-red-300 bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30 disabled:opacity-40 transition-colors"
                             >
                               {passingId === inv.id ? '…' : 'Pass'}
                             </button>
@@ -952,11 +953,10 @@ function HotelPanel({
                 {sendingReminder === inv.id ? 'Sending…' : reminderFlash === inv.id ? '✓ Reminder sent!' : 'Send reminder'}
               </button>
             )}
-            {['sent', 'opened', 'submitted', 'awarded'].includes(inv.status) && (
+            {['sent', 'opened'].includes(inv.status) && (
               <button
                 onClick={() => onMarkUnavailable(inv)}
                 className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                title="Turn this hotel down as not available. Their bid is kept and shows as 'Not available' on the exported grid."
               >
                 Not available
               </button>
@@ -1579,7 +1579,7 @@ export default function TripDetail() {
   }
 
   const markUnavailable = async (inv: Invitation) => {
-    if (!confirm(`Mark "${inv.hotel_name}" as Not Available?\n\nTheir bid is kept (not deleted) and the hotel still appears on the exported grid as "Not available." Use Undo to bring it back.`)) return
+    if (!confirm(`Mark "${inv.hotel_name}" as unavailable?\nThey'll be grayed out on the grid.`)) return
     await supabase.from('rfp_invitations').update({ status: 'unavailable' }).eq('id', inv.id)
     loadInvites()
   }
