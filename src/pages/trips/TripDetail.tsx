@@ -241,9 +241,9 @@ function StatusDot({ status, sentAt }: { status: string; sentAt?: string | null 
       : status === 'opened'
         ? 'bg-amber-400'
         : status === 'passed'
-          ? 'bg-slate-300'
+          ? 'bg-red-500'
           : status === 'unavailable'
-            ? 'bg-slate-200'
+            ? 'bg-red-400'
             : 'bg-slate-300'
   return <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${color}`} />
 }
@@ -2163,12 +2163,16 @@ export default function TripDetail() {
                   >
                     <StatusDot status={inv.status} sentAt={inv.sent_at} />
                     <div className="min-w-0 flex-1">
-                      <div className={`truncate text-sm font-medium ${isAwarded ? 'text-amber-700' : 'text-slate-800 dark:text-slate-200'}`}>
+                      <div className={`truncate text-sm font-medium ${isAwarded ? 'text-amber-700' : inv.status === 'passed' || inv.status === 'unavailable' ? 'text-slate-400 line-through' : 'text-slate-800 dark:text-slate-200'}`}>
                         {isAwarded && '🏆 '}{inv.hotel_name}
                       </div>
-                      {inv.hotel_contact_name && (
+                      {(inv.status === 'passed' || inv.status === 'unavailable') ? (
+                        <span className="mt-0.5 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-600 dark:bg-red-900/30 dark:text-red-400">
+                          {inv.status === 'passed' ? 'Passed' : 'Not available'}
+                        </span>
+                      ) : inv.hotel_contact_name ? (
                         <div className="truncate text-xs text-slate-400 dark:text-slate-500">{inv.hotel_contact_name}</div>
-                      )}
+                      ) : null}
                     </div>
                     {isSelected && <span className="text-slate-300 dark:text-slate-600">›</span>}
                   </button>
