@@ -48,7 +48,7 @@ export async function sendSingleReminderEmail(
  */
 export async function reopenRfp(
   invitation_id: string,
-  opts?: { notify?: boolean; note?: string },
+  opts?: { notify?: boolean; message?: string },
 ): Promise<{ ok: true; reopened: true; emailed: boolean; sent_to?: string; warning?: string } | { error: string }> {
   const res = await fetch(`${FN_BASE}/rfp-reopen`, {
     method: 'POST',
@@ -57,7 +57,7 @@ export async function reopenRfp(
       invitation_id,
       base_url: PUBLIC_APP_URL,
       notify: opts?.notify ?? true,
-      note: opts?.note ?? null,
+      message: opts?.message ?? null,
     }),
   })
   return res.json()

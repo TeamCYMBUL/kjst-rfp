@@ -878,7 +878,14 @@ export default function RfpForm() {
     getRfp(token)
       .then((d) => {
         setData(d)
-        if (d.invitation.status === 'submitted') setSubmitted(true)
+        // A submitted bid is locked EXCEPT when staff reopened it for edits
+        // (reopened_at is newer than submitted_at). Then it opens back up so the
+        // hotel can revise and resubmit — their answers pre-load either way.
+        const reopenedForEdit =
+          !!d.invitation.reopened_at &&
+          (!d.invitation.submitted_at ||
+            new Date(d.invitation.reopened_at).getTime() > new Date(d.invitation.submitted_at).getTime())
+        if (d.invitation.status === 'submitted' && !reopenedForEdit) setSubmitted(true)
         if (d.invitation.status === 'declined') setDeclined(true)
         if (d.invitation.visit1_declined) setVisit1Declined(true)
         if (d.invitation.visit2_declined) setVisit2Declined(true)
@@ -1374,7 +1381,13 @@ export default function RfpForm() {
   const otherConcessionItems = remainingItems.filter((i) => i.section === 'concessions')
   const facilitiesItems = remainingItems.filter((i) => i.section === 'facilities')
 
-  const isReadOnly = data.invitation.status === 'submitted'
+  // Editable again after a staff reopen (reopened_at newer than submitted_at),
+  // even though the bid stays "submitted" on the grid.
+  const reopenedForEdit =
+    !!data.invitation.reopened_at &&
+    (!data.invitation.submitted_at ||
+      new Date(data.invitation.reopened_at).getTime() > new Date(data.invitation.submitted_at).getTime())
+  const isReadOnly = data.invitation.status === 'submitted' && !reopenedForEdit
   const hasStay2 = Boolean(data.invitation.trips.stay2_arrival_date)
 
   // Substitute [TEAM NAME], [ROOMS], [SUITES], [KINGS] placeholders with real trip data
@@ -1416,12 +1429,12 @@ export default function RfpForm() {
           visit2Declined={visit2Declined}
         />
 
-        {/* ── Reopened notice: trip details changed after this hotel submitted ── */}
-        {data.invitation.reopened_at && !isReadOnly && (
+        {/* ── Reopened notice: KJST reopened this bid so the hotel can revise ── */}
+        {reopenedForEdit && (
           <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
-            <p className="text-sm font-semibold text-amber-900">This RFP was reopened — trip details have changed.</p>
+            <p className="text-sm font-semibold text-amber-900">This RFP was reopened for edits.</p>
             <p className="mt-1 text-sm text-amber-800">
-              Your previous answers are saved below. Please review the updated details, adjust anything affected, and resubmit. You do not need to start over.
+              Your previous answers are saved below. Please review the details in the email from KJ Sports Travel, update anything affected, and resubmit. You do not need to start over.
             </p>
           </div>
         )}

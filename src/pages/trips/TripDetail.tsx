@@ -900,8 +900,10 @@ function HotelPanel({
             ) : (
               <Badge status={inv.status} />
             )}
-            {/* Reopened-for-revision indicator (status is back to sent/opened after a reopen) */}
-            {inv.reopened_at && ['sent', 'opened'].includes(inv.status) && (
+            {/* Reopened-for-revision indicator. The bid keeps its submitted status
+                (so it stays on the grid); it's "awaiting a revised bid" while
+                reopened_at is newer than the last submitted_at. */}
+            {inv.reopened_at && (!inv.submitted_at || new Date(inv.reopened_at).getTime() > new Date(inv.submitted_at).getTime()) && (
               <span className="inline-flex rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-300">
                 ↺ Reopened — awaiting revised bid
               </span>
@@ -1603,10 +1605,13 @@ export default function TripDetail() {
   // Clicking Reopen opens a small dialog with an explicit email / no-email choice.
   const [reopeningId, setReopeningId] = useState<string | null>(null)
   const [reopenTarget, setReopenTarget] = useState<Invitation | null>(null)
+  const [reopenMessage, setReopenMessage] = useState('')
   const confirmReopen = async (inv: Invitation, notify: boolean) => {
+    const message = reopenMessage.trim()
     setReopenTarget(null)
+    setReopenMessage('')
     setReopeningId(inv.id)
-    const res = await reopenRfp(inv.id, { notify })
+    const res = await reopenRfp(inv.id, { notify, message: message || undefined })
     setReopeningId(null)
     if ('error' in res) {
       alert(`Could not reopen: ${res.error}`)
@@ -2436,16 +2441,32 @@ export default function TripDetail() {
         </div>
       )}
 
-      {/* Reopen dialog — explicit email / no-email choice (kept dead simple) */}
+      {/* Reopen dialog — personalized message + explicit email / no-email choice */}
       {reopenTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setReopenTarget(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => { setReopenTarget(null); setReopenMessage('') }}>
           <div className="w-full max-w-md rounded-xl bg-white dark:bg-slate-800 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
               Reopen {reopenTarget.hotel_name}'s proposal?
             </h3>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-              Their proposal unlocks so they can revise it. <strong>All their previous answers are saved</strong> — they only adjust what changed, then resubmit.
+              Their bid stays on your grid and <strong>all their previous answers are saved</strong> — reopening just lets them go back in, adjust what changed, and resubmit.
             </p>
+
+            {/* Personalized message — dates, a late checkout, a check-in change, anything */}
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Message to the hotel (optional)
+            </label>
+            <textarea
+              value={reopenMessage}
+              onChange={(e) => setReopenMessage(e.target.value)}
+              rows={4}
+              placeholder="e.g. The check-out dates moved to March 27–29, and we now need a 1pm late checkout on game day. Please review and resubmit."
+              className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008]"
+            />
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+              This becomes the body of the email. Leave blank for a generic "please review and resubmit" note.
+            </p>
+
             <div className="mt-5 flex flex-col gap-2">
               <button
                 onClick={() => confirmReopen(reopenTarget, true)}
@@ -2460,7 +2481,7 @@ export default function TripDetail() {
                 Reopen — I'll contact them myself
               </button>
               <button
-                onClick={() => setReopenTarget(null)}
+                onClick={() => { setReopenTarget(null); setReopenMessage('') }}
                 className="mt-1 px-4 py-2 text-sm font-medium text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
               >
                 Cancel
