@@ -1767,7 +1767,7 @@ export default function TripDetail() {
   const awarded = invites.find((i) => i.status === 'awarded')
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col -mx-8 -my-8">
+    <div className="flex h-[calc(100dvh-3.5rem)] lg:h-[calc(100vh-4rem)] flex-col -mx-4 -my-6 sm:-mx-6 lg:-mx-8 lg:-my-8">
       {/* ── Top bar ── */}
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-3">
         <div>
