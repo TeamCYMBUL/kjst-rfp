@@ -1,16 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { getRfp, respondRfp, declineRfp } from '../../lib/rfpApi'
+import { supabase } from '../../lib/supabase'
 import { formatDate } from '../../lib/format'
 import type {
   AnswerPayload,
   ConcessionItem,
   ExistingAnswer,
+  MenuAttachment,
   ResponseFields,
   RfpData,
   ScenarioRate,
 } from '../../lib/rfpApi'
 import type { DateScenario } from '../../lib/types'
+
+const MENU_BUCKET = 'rfp-menus'
+const MAX_MENU_BYTES = 15 * 1024 * 1024
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
 
 // ── Types for local form state ────────────────────────────────────────────────
 
@@ -863,14 +874,20 @@ export default function RfpForm() {
     scenario_rates: {},
   })
   const [answers, setAnswers] = useState<Record<string, AnswerState>>({})
+  // Hotel-uploaded menus / F&B pricing files (kept separate from the string-only RespState).
+  const [menuAttachments, setMenuAttachments] = useState<MenuAttachment[]>([])
+  const [menuUploading, setMenuUploading] = useState(false)
+  const [menuError, setMenuError] = useState<string | null>(null)
 
   // Track whether we need to save
   const dirty = useRef(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const respRef = useRef(resp)
   const answersRef = useRef(answers)
+  const menuAttachmentsRef = useRef(menuAttachments)
   respRef.current = resp
   answersRef.current = answers
+  menuAttachmentsRef.current = menuAttachments
 
   // --- Load ---
   useEffect(() => {
@@ -930,6 +947,9 @@ export default function RfpForm() {
             general_comments: r.general_comments ?? '',
             scenario_rates: savedScenarioRates,
           })
+
+          // Restore any previously uploaded menus / F&B pricing files
+          setMenuAttachments(Array.isArray(r.menu_attachments) ? r.menu_attachments : [])
 
           // Restore date scenario availability
           if (r.scenario_availability) {
@@ -1015,6 +1035,7 @@ export default function RfpForm() {
         general_comments: r.general_comments,
         scenario_rates: scenarioRatesPayload,
         scenario_availability: Object.keys(scenarioAvailability).length > 0 ? scenarioAvailability : null,
+        menu_attachments: menuAttachmentsRef.current,
       }
 
       try {
@@ -1073,6 +1094,51 @@ export default function RfpForm() {
       dirty.current = false
     }, 1500)
   }, [doSave, submitted])
+
+  // Upload menu / F&B pricing files straight to the private rfp-menus bucket,
+  // then autosave the paths onto the response. Anon can upload but not read, so
+  // one hotel can never see another's file.
+  const handleMenuUpload = useCallback(
+    async (files: FileList | null) => {
+      if (!files || files.length === 0 || !token) return
+      setMenuError(null)
+      setMenuUploading(true)
+      try {
+        const added: MenuAttachment[] = []
+        for (const file of Array.from(files)) {
+          if (file.size > MAX_MENU_BYTES) {
+            setMenuError(`"${file.name}" is larger than 15 MB — please upload a smaller file.`)
+            continue
+          }
+          const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, '_')
+          const path = `${token}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`
+          const { error } = await supabase.storage
+            .from(MENU_BUCKET)
+            .upload(path, file, { contentType: file.type || undefined, upsert: false })
+          if (error) {
+            setMenuError(`Could not upload "${file.name}": ${error.message}`)
+            continue
+          }
+          added.push({ path, name: file.name, size: file.size, type: file.type || undefined })
+        }
+        if (added.length > 0) {
+          setMenuAttachments((prev) => [...prev, ...added])
+          scheduleAutosave()
+        }
+      } finally {
+        setMenuUploading(false)
+      }
+    },
+    [token, scheduleAutosave],
+  )
+
+  const removeMenuAttachment = useCallback(
+    (path: string) => {
+      setMenuAttachments((prev) => prev.filter((m) => m.path !== path))
+      scheduleAutosave()
+    },
+    [scheduleAutosave],
+  )
 
   // Trigger autosave whenever resp or answers change (but not on initial load)
   const isFirstRender = useRef(true)
@@ -1367,6 +1433,14 @@ export default function RfpForm() {
   const namedFunctionSpaceItems = allConcessionItems.filter(isNamedFunctionSpaceItem)
   const postseasonItems = data.items.filter((i) => i.section === 'postseason')
   const inSeasonItems = data.items.filter((i) => i.section === 'in_season_tournament')
+
+  // Show the menu / F&B pricing upload only where the RFP actually asks for F&B
+  // pricing (a currency question about meals/food/beverage/per-person pricing).
+  const hasFnbPricing = data.items.some(
+    (i) =>
+      i.answer_type === 'currency' &&
+      /breakfast|lunch|dinner|brunch|per\s*-?\s*person|f\s*&\s*b|food|beverage|menu|meal|banquet|cater/i.test(i.label),
+  )
 
   // "Other" = concessions/facilities not in any of the above special groups
   // Suites stay in the main list (sort_order 9-10) to match the real RFP order
@@ -2010,6 +2084,57 @@ export default function RfpForm() {
               </div>
             </div>
           </div>
+
+          {/* ── Menu / F&B pricing attachments — only when the RFP asks for F&B pricing ─── */}
+          {hasFnbPricing && (
+            <div className="rounded-xl border border-slate-200 bg-white p-6">
+              <SectionHeading>Menu &amp; F&amp;B Pricing</SectionHeading>
+              <p className="mb-3 text-sm text-slate-500">
+                Attach your banquet / catering menu or F&amp;B pricing sheet (PDF, image, Word, or Excel). You can add more than one file.
+              </p>
+
+              {menuAttachments.length > 0 && (
+                <ul className="mb-3 space-y-2">
+                  {menuAttachments.map((m) => (
+                    <li
+                      key={m.path}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-sm text-slate-700">
+                        📎 {m.name}{m.size ? ` · ${formatBytes(m.size)}` : ''}
+                      </span>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          onClick={() => removeMenuAttachment(m.path)}
+                          className="shrink-0 text-xs font-medium text-red-500 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {!isReadOnly && (
+                <div>
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                    <input
+                      type="file"
+                      multiple
+                      accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt,application/pdf,image/*"
+                      className="hidden"
+                      disabled={menuUploading}
+                      onChange={(e) => { handleMenuUpload(e.target.files); e.target.value = '' }}
+                    />
+                    {menuUploading ? 'Uploading…' : '+ Attach menu / pricing'}
+                  </label>
+                  {menuError && <p className="mt-2 text-sm text-red-600">{menuError}</p>}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Section 9: General comments ─── */}
           <div className="rounded-xl border border-slate-200 bg-white p-6">

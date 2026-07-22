@@ -88,6 +88,10 @@ export type ConcessionItem = {
 
 export type ScenarioRate = { rate: number | null; available: boolean }
 
+// A hotel-uploaded menu / F&B pricing file. `path` is the object key in the
+// private `rfp-menus` storage bucket; staff fetch a signed URL to view it.
+export type MenuAttachment = { path: string; name: string; size?: number; type?: string }
+
 export type ExistingResponse = {
   id: string
   completed_by_name: string | null
@@ -110,6 +114,7 @@ export type ExistingResponse = {
   // Date scenario availability: {"A": true, "B": false, "C": true}
   scenario_availability: Record<string, boolean> | null
   resort_fee: string | null
+  menu_attachments: MenuAttachment[] | null
 }
 
 export type ExistingAnswer = {
@@ -151,6 +156,7 @@ export type ResponseFields = {
   // Date scenario availability (null when trip has no date scenarios)
   scenario_availability: Record<string, boolean> | null
   resort_fee: string
+  menu_attachments: MenuAttachment[]
 }
 
 export type AnswerPayload = {

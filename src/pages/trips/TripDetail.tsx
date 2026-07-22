@@ -29,6 +29,7 @@ type HotelResponse = {
   scenario_availability: Record<string, boolean> | null
   completed_by_name: string | null
   completed_date: string | null
+  menu_attachments: { path: string; name: string; size?: number; type?: string }[] | null
 }
 
 type ConcessionItem = {
@@ -54,6 +55,17 @@ type Answer = {
 // never off a specific number or room name — so scoring works the same
 // regardless of which client's template a trip uses. Shared by calcScores,
 // BidSummaryTable, and the hotel detail panel so all three stay in sync.
+
+// Open a hotel-uploaded menu from the private rfp-menus bucket. Staff are
+// authenticated, so a short-lived signed URL is generated on demand.
+async function openMenuAttachment(path: string): Promise<void> {
+  const { data, error } = await supabase.storage.from('rfp-menus').createSignedUrl(path, 3600)
+  if (error || !data?.signedUrl) {
+    alert('Could not open the file: ' + (error?.message ?? 'unknown error'))
+    return
+  }
+  window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+}
 
 // Hyphens vary ("One-Bedroom" vs "One Bedroom") across templates — normalize before matching.
 function normLabel(label: string): string {
@@ -1180,6 +1192,26 @@ function HotelPanel({
                 {response.general_comments && (
                   <p className="text-xs text-slate-500 dark:text-slate-400"><span className="font-medium text-slate-600 dark:text-slate-300">General comments:</span> {response.general_comments}</p>
                 )}
+              </div>
+            )}
+
+            {/* Menu / F&B pricing attachments uploaded by the hotel */}
+            {Array.isArray(response.menu_attachments) && response.menu_attachments.length > 0 && (
+              <div className="px-6 py-5">
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Menus &amp; F&amp;B Pricing</h3>
+                <div className="space-y-2">
+                  {response.menu_attachments.map((m) => (
+                    <button
+                      key={m.path}
+                      onClick={() => openMenuAttachment(m.path)}
+                      className="flex w-full items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                    >
+                      <span className="shrink-0">📎</span>
+                      <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                      <span className="shrink-0 text-xs text-[#1C1008] dark:text-amber-400">Open ↗</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
