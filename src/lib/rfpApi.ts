@@ -45,6 +45,8 @@ export type RfpClient = {
   primary_contact_phone: string | null
   primary_contact_email: string | null
   default_terms?: { default_meeting_spaces?: string } | null
+  // Sample menus KJST shares with hotels (public bucket): [{path, name, size, type}]
+  sample_menus?: MenuAttachment[] | null
 }
 
 export type RfpOrg = {

@@ -49,6 +49,19 @@ function numOrNull(v: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+// Sample menus KJST shares WITH hotels (public bucket). Stored on clients.sample_menus.
+type SampleMenu = { path: string; name: string; size?: number; type?: string }
+const SAMPLE_MENU_BUCKET = 'client-sample-menus'
+const MAX_SAMPLE_MENU_BYTES = 25 * 1024 * 1024
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+function sampleMenuUrl(path: string): string {
+  return supabase.storage.from(SAMPLE_MENU_BUCKET).getPublicUrl(path).data.publicUrl
+}
+
 export default function ClientForm() {
   const { id } = useParams()
   const editing = Boolean(id)
@@ -59,6 +72,9 @@ export default function ClientForm() {
   const [alwaysCc, setAlwaysCc] = useState({ enabled: false, name: '', email: '' })
   const [showTerms, setShowTerms] = useState(editing)
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [sampleMenus, setSampleMenus] = useState<SampleMenu[]>([])
+  const [menuUploading, setMenuUploading] = useState(false)
+  const [menuError, setMenuError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(editing)
   const [staffProfiles, setStaffProfiles] = useState<StaffProfile[]>([])
@@ -96,6 +112,7 @@ export default function ClientForm() {
             assigned_to: c.assigned_to ?? '',
           })
           setLogoUrl(c.logo_url ?? null)
+          setSampleMenus(Array.isArray((c as any).sample_menus) ? (c as any).sample_menus : [])
           setTerms({ ...blankTerms, ...(c.default_terms ?? {}) })
           setAlwaysCc({
             enabled: c.always_cc_enabled ?? false,
@@ -129,6 +146,35 @@ export default function ClientForm() {
     e.target.value = ''
   }
 
+  const handleSampleMenuUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    setMenuError(null)
+    setMenuUploading(true)
+    try {
+      const added: SampleMenu[] = []
+      for (const file of Array.from(files)) {
+        if (file.size > MAX_SAMPLE_MENU_BYTES) {
+          setMenuError(`"${file.name}" is larger than 25 MB — please upload a smaller file.`)
+          continue
+        }
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, '_')
+        const path = `${id ?? 'new'}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`
+        const { error: upErr } = await supabase.storage
+          .from(SAMPLE_MENU_BUCKET)
+          .upload(path, file, { contentType: file.type || undefined, upsert: false })
+        if (upErr) { setMenuError(`Could not upload "${file.name}": ${upErr.message}`); continue }
+        added.push({ path, name: file.name, size: file.size, type: file.type || undefined })
+      }
+      if (added.length > 0) setSampleMenus((prev) => [...prev, ...added])
+    } finally {
+      setMenuUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  const removeSampleMenu = (path: string) => setSampleMenus((prev) => prev.filter((m) => m.path !== path))
+
   const set = (k: keyof typeof blank) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setFields((f) => ({ ...f, [k]: e.target.value }))
 
@@ -155,6 +201,7 @@ export default function ClientForm() {
       primary_contact_phone: clean(fields.primary_contact_phone),
       primary_contact_email: clean(fields.primary_contact_email),
       logo_url: logoUrl ?? null,
+      sample_menus: sampleMenus,
       assigned_to: fields.assigned_to || null,
       always_cc_enabled: alwaysCc.enabled,
       always_cc_name: clean(alwaysCc.name) ?? null,
@@ -469,8 +516,58 @@ export default function ClientForm() {
           )}
         </Card>
 
+        {/* Sample menus KJST shares with hotels (F&B teams) */}
+        <Card className="p-6">
+          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Sample Menus for Hotels
+          </h2>
+          <p className="mb-4 text-xs text-slate-400 dark:text-slate-500">
+            Upload your example menus / F&amp;B pricing sheets for this team. Hotels see them on the RFP form and in the invitation email, so they know the format you expect. Leave empty for teams that don't need F&amp;B.
+          </p>
+
+          {sampleMenus.length > 0 && (
+            <ul className="mb-3 space-y-2">
+              {sampleMenus.map((m) => (
+                <li
+                  key={m.path}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/40 px-3 py-2"
+                >
+                  <a
+                    href={sampleMenuUrl(m.path)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="min-w-0 flex-1 truncate text-sm text-slate-700 dark:text-slate-200 hover:underline"
+                  >
+                    📎 {m.name}{m.size ? ` · ${formatBytes(m.size)}` : ''}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => removeSampleMenu(m.path)}
+                    className="shrink-0 text-xs font-medium text-red-500 hover:underline"
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <label className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700 ${menuUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            {menuUploading ? 'Uploading…' : '+ Add sample menu'}
+            <input
+              type="file"
+              multiple
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt,application/pdf,image/*"
+              className="hidden"
+              onChange={handleSampleMenuUpload}
+              disabled={menuUploading}
+            />
+          </label>
+          {menuError && <p className="mt-2 text-sm text-red-600">{menuError}</p>}
+        </Card>
+
         <div className="flex items-center gap-3">
-          <Button type="submit" disabled={saving}>
+          <Button type="submit" disabled={saving || menuUploading}>
             {saving ? 'Saving…' : editing ? 'Save changes' : 'Create client'}
           </Button>
           <Button

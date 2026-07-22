@@ -23,6 +23,11 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`
 }
 
+// Public URL for a KJST-provided sample menu (client-sample-menus is a public bucket).
+function clientSampleMenuUrl(path: string): string {
+  return supabase.storage.from('client-sample-menus').getPublicUrl(path).data.publicUrl
+}
+
 // ── Types for local form state ────────────────────────────────────────────────
 
 type AnswerState = {
@@ -2084,6 +2089,32 @@ export default function RfpForm() {
               </div>
             </div>
           </div>
+
+          {/* ── Sample menus from KJST (reference files the team provides) ─── */}
+          {(data.invitation.trips.clients.sample_menus ?? []).length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-6">
+              <SectionHeading>Sample Menus from KJ Sports Travel</SectionHeading>
+              <p className="mb-3 text-sm text-slate-500">
+                Reference menus / pricing examples from KJ Sports Travel for this team. Please use these as a guide when entering your F&amp;B pricing.
+              </p>
+              <ul className="space-y-2">
+                {(data.invitation.trips.clients.sample_menus ?? []).map((m) => (
+                  <li key={m.path}>
+                    <a
+                      href={clientSampleMenuUrl(m.path)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      <span>📎</span>
+                      <span>{m.name}</span>
+                      <span className="text-[#1C1008]">↗</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* ── Menu / F&B pricing attachments — only when the RFP asks for F&B pricing ─── */}
           {hasFnbPricing && (
