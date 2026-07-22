@@ -166,14 +166,24 @@ export default function ClientForm() {
         if (upErr) { setMenuError(`Could not upload "${file.name}": ${upErr.message}`); continue }
         added.push({ path, name: file.name, size: file.size, type: file.type || undefined })
       }
-      if (added.length > 0) setSampleMenus((prev) => [...prev, ...added])
+      if (added.length > 0) {
+        const next = [...sampleMenus, ...added]
+        setSampleMenus(next)
+        // On an existing team, persist right away so the upload sticks even if
+        // the user never clicks "Save changes" (a new team saves on create).
+        if (editing && id) await supabase.from('clients').update({ sample_menus: next }).eq('id', id)
+      }
     } finally {
       setMenuUploading(false)
       e.target.value = ''
     }
   }
 
-  const removeSampleMenu = (path: string) => setSampleMenus((prev) => prev.filter((m) => m.path !== path))
+  const removeSampleMenu = async (path: string) => {
+    const next = sampleMenus.filter((m) => m.path !== path)
+    setSampleMenus(next)
+    if (editing && id) await supabase.from('clients').update({ sample_menus: next }).eq('id', id)
+  }
 
   const set = (k: keyof typeof blank) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setFields((f) => ({ ...f, [k]: e.target.value }))
