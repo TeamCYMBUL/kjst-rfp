@@ -170,8 +170,15 @@ function calcScores(
     // 1. Flex cancel — 20 pts
     const flexScore = flexAns === true ? 20 : 0
 
-    // 2. Commission > 0% — 15 pts
-    const commScore = (!noCommission && commValue != null && commValue.trim() !== '') ? 15 : 0
+    // 2. Commission — tiered (15 pts). Books almost always come in at 0 / 7 / 10,
+    //    so reward the tier rather than giving full marks for any commission at all:
+    //    0% → 0 pts · 1–9% → 7.5 pts · 10%+ → 15 pts.
+    const commNum = commValue != null ? parseFloat(commValue.replace(/[^0-9.]/g, '')) : NaN
+    const commScore = !Number.isFinite(commNum) || commNum <= 0
+      ? 0
+      : commNum >= 10
+        ? 15
+        : 7.5
 
     // 3. Rate competitiveness — 25 pts (averaged across both stays when the trip has two)
     const scoreForStay = (minRate: number | null, rate: number | null | undefined) => {
@@ -463,7 +470,7 @@ function ScoreInfoModal({ onClose }: { onClose: () => void }) {
     { pts: 25, label: 'Rate competitiveness', note: 'Lowest bid = 25 pts. Other hotels are scored proportionally (e.g. a rate 10% higher than the lowest = ~22.5 pts).' },
     { pts: 20, label: 'Flexible cancellation', note: 'Full 20 pts if the hotel answers Yes. Zero if No — this also triggers a red dealbreaker flag.' },
     { pts: 20, label: 'Suite concessions', note: 'Split equally: comp suites (up to 10 pts) + suite upgrades at king rate (up to 10 pts). Each is scaled vs the best offer across all hotels.' },
-    { pts: 15, label: 'Commission > 0%', note: 'Full 15 pts if any commission is offered. Zero if commission is 0% — this also triggers an orange dealbreaker flag.' },
+    { pts: 15, label: 'Commission', note: 'Tiered by rate: 10%+ = 15 pts · 1–9% = 7.5 pts · 0% = 0 pts (0% also triggers an orange dealbreaker flag).' },
     { pts: 10, label: 'Playoff / postseason clause', note: 'Full 10 pts if the hotel answers Yes. Zero if No.' },
     { pts: 10, label: 'Meeting space available', note: 'Full 10 pts if the hotel confirms meeting space. Zero if No.' },
   ]
