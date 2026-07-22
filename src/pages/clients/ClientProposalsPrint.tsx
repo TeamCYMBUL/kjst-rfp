@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import {
-  PRIMARY,
+  PRIMARY, includeAnsweredItems,
   TripHeader, ProposalFooter, PrintStyles, HotelFull,
   type ProposalTrip as Trip,
   type ProposalInvitation as Invitation,
@@ -83,7 +83,7 @@ export default function ClientProposalsPrint() {
         .or(`client_id.is.null,client_id.eq.${clientId}`)
         .eq('archived', false)
         .order('sort_order')
-      setConcessionItems((itemsData as unknown as ConcessionItem[]) ?? [])
+      let items = (itemsData as unknown as ConcessionItem[]) ?? []
 
       if (invs.length > 0) {
         const invIds = invs.map((i) => i.id)
@@ -99,9 +99,17 @@ export default function ClientProposalsPrint() {
             .from('concession_answers')
             .select('response_id, concession_item_id, answer_yes_no, answer_value, comment')
             .in('response_id', resps.map((r) => r.id))
-          setAnswers((ansData as unknown as Answer[]) ?? [])
+          const ansRows = (ansData as unknown as Answer[]) ?? []
+          setAnswers(ansRows)
+
+          // Include any question a bid actually answered that isn't in the scoped
+          // list — e.g. a question later archived or replaced during a template
+          // rework. Without this, an already-submitted bid's PDF would silently
+          // print a dash for those rows even though the hotel answered them.
+          items = await includeAnsweredItems(items, ansRows)
         }
       }
+      setConcessionItems(items)
       setLoading(false)
     }
     load()

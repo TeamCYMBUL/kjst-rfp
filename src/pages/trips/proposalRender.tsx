@@ -1,6 +1,7 @@
 // Shared proposal print/render pieces, used by both the per-trip ProposalPrint
 // and the client-wide ClientProposalsPrint so the two always look identical.
 import { formatMeetingSpaceNotes } from '../../lib/format'
+import { supabase } from '../../lib/supabase'
 
 export const PRIMARY = '#1C1008'
 
@@ -85,6 +86,28 @@ export const SECTION_LABELS: Record<string, string> = {
   postseason: 'Postseason Guarantee',
 }
 export const SECTION_ORDER = ['concessions', 'facilities', 'in_season_tournament', 'postseason']
+
+// Ensure every question a bid actually answered is present in the item list the
+// proposal renders — even questions later archived or replaced during a template
+// rework, which the scoped (archived = false) query would otherwise drop. Without
+// this, an already-submitted bid's printed proposal silently shows a dash for
+// those rows instead of the Yes/No the hotel gave. Returns the list merged and
+// re-sorted; a no-op when nothing is missing.
+export async function includeAnsweredItems(
+  items: ProposalConcessionItem[],
+  answers: ProposalAnswer[],
+): Promise<ProposalConcessionItem[]> {
+  const have = new Set(items.map((i) => i.id))
+  const missingIds = [...new Set(answers.map((a) => a.concession_item_id))].filter((id) => !have.has(id))
+  if (missingIds.length === 0) return items
+  const { data: extra } = await supabase
+    .from('concession_items')
+    .select('id, section, label, answer_type, sort_order')
+    .in('id', missingIds)
+  const extraItems = (extra as unknown as ProposalConcessionItem[]) ?? []
+  if (extraItems.length === 0) return items
+  return [...items, ...extraItems].sort((a, b) => a.sort_order - b.sort_order)
+}
 
 export function answerText(ans: ProposalAnswer | undefined): string {
   if (!ans || (ans.answer_yes_no == null && !ans.answer_value)) return '—'

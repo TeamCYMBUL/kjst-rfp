@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import {
-  PRIMARY, fmtMoney, normLabel,
+  PRIMARY, fmtMoney, normLabel, includeAnsweredItems,
   TripHeader, ProposalFooter, PrintStyles, HotelFull,
   type ProposalTrip as Trip,
   type ProposalInvitation as Invitation,
@@ -75,7 +75,7 @@ export default function ProposalPrint() {
         .or(`client_id.is.null,client_id.eq.${t.client_id}`)
         .eq('archived', false)
         .order('sort_order')
-      setConcessionItems((itemsData as unknown as ConcessionItem[]) ?? [])
+      let items = (itemsData as unknown as ConcessionItem[]) ?? []
 
       if (invs.length > 0) {
         const invIds = invs.map((i) => i.id)
@@ -92,9 +92,16 @@ export default function ProposalPrint() {
             .from('concession_answers')
             .select('response_id, concession_item_id, answer_yes_no, answer_value, comment')
             .in('response_id', respIds)
-          setAnswers((ansData as unknown as Answer[]) ?? [])
+          const ansRows = (ansData as unknown as Answer[]) ?? []
+          setAnswers(ansRows)
+
+          // Include any answered question missing from the scoped list (archived
+          // or replaced after this bid was submitted), so the proposal never
+          // silently prints a dash where the hotel actually answered.
+          items = await includeAnsweredItems(items, ansRows)
         }
       }
+      setConcessionItems(items)
       setLoading(false)
     }
     load()
