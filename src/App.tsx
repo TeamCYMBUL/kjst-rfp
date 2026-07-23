@@ -16,6 +16,7 @@ import RfpForm from './pages/rfp/RfpForm'
 import TemplateEditor from './pages/settings/TemplateEditor'
 import SettingsPage from './pages/settings/Settings'
 import Dashboard from './pages/Dashboard'
+import Playbook from './pages/Playbook'
 import HotelsList from './pages/hotels/HotelsList'
 import Tickets from './pages/tickets/Tickets'
 import TeamPage from './pages/team/TeamPage'
@@ -39,6 +40,7 @@ export default function App() {
 
         <Route element={<DashboardLayout />}>
           <Route index element={<Dashboard />} />
+          <Route path="playbook" element={<Playbook />} />
 
           <Route path="clients" element={<ClientsList />} />
           <Route path="clients/new" element={<ClientForm />} />

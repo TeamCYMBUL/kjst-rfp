@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activity'
@@ -7,7 +7,6 @@ import { formatDate, generateToken, formatMeetingSpaceNotes, passedLabel } from 
 import { PUBLIC_APP_URL } from '../../lib/config'
 import { sendInvitationEmail, sendReminderEmails, sendSingleReminderEmail, reopenRfp, sendContractRequest } from '../../lib/emailApi'
 import { Badge, ErrorNote, LinkButton, Loading } from '../../components/ui'
-import { PageHint } from '../../components/PageHint'
 import { exportTeamGrid, exportSingleHotelXlsx } from '../../lib/excelExport'
 import { useRole } from '../../lib/useRole'
 
@@ -2141,16 +2140,9 @@ export default function TripDetail() {
 
       {/* ── Banners ── */}
       {error && <div className="border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-6 py-2 text-xs text-red-700 dark:text-red-400">{error}</div>}
-      {!awarded && noEmailSent > 0 && (
-        <div className="border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-6 py-2 text-xs text-amber-800 dark:text-amber-300">
-          📧 <strong>{noEmailSent} hotel{noEmailSent > 1 ? 's' : ''}</strong> {noEmailSent > 1 ? "haven't" : "hasn't"} been emailed yet — select them on the left and hit <strong>Send email</strong>.
-        </div>
-      )}
-      {!awarded && allResponded && invites.length > 0 && (
-        <div className="border-b border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-6 py-2 text-xs text-emerald-800 dark:text-emerald-300">
-          ✅ All hotels have responded — select a winner below or open the <Link to={`/trips/${id}/grid`} className="font-semibold underline">full comparison grid</Link>.
-        </div>
-      )}
+      {/* The "not emailed yet" and "all responded" states are now owned by the
+          Next step strip below, so those standalone banners were removed to keep
+          one clear source of guidance. */}
       {!isViewer && passedUnavailable.length > 0 && (
         <div className="border-b border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 px-6 py-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-indigo-800 dark:text-indigo-300">
           <span>
@@ -2188,16 +2180,77 @@ export default function TripDetail() {
         </div>
       )}
 
-      {/* ── What-to-do-here hint ── */}
-      {!isViewer && (
-        <div className="mx-6 mt-4">
-          <PageHint id="trip-workspace">
-            This is a trip's workspace. <strong>Invite hotels</strong>, then their bids land here as they submit.
-            Once bids are in, open the <strong>comparison grid</strong> to review side by side, mark a winner, and use
-            <strong> Send to client</strong> to export the grid or print proposals.
-          </PageHint>
-        </div>
-      )}
+      {/* ── Next step — a live "you are here / do this next" guide. It reads the
+          trip's state and always shows the single most useful action, including
+          the detours (no bids, everyone declined, winner picked). This replaces
+          the old static hint so a manager never has to guess what to do next. ── */}
+      {(() => {
+        const bidCount = invites.filter((i) => i.submitted_at).length
+        const btn = 'inline-flex items-center gap-1.5 rounded-lg bg-[#1C1008] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#2d1e0e] transition-colors'
+        const btnGhost = 'inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-600 px-3.5 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors'
+        const gridLink = <Link to={`/trips/${id}/grid`} className={btn}>Compare bids →</Link>
+
+        let title = ''
+        let body: ReactNode = null
+        let actions: ReactNode = null
+
+        if (awarded) {
+          title = `Winner selected: ${awarded.hotel_name}`
+          body = <>Send the awarded hotel their contract request, then share the proposal with the client from <strong>Send to client</strong>. Plans change? You can undo the award on the grid.</>
+          actions = !isViewer ? (
+            <>
+              <button onClick={() => openContractDialog(awarded)} className={btn}>Send contract request</button>
+              <Link to={`/trips/${id}/grid`} className={btnGhost}>Open grid</Link>
+            </>
+          ) : null
+        } else if (invites.length === 0) {
+          title = 'Start by adding hotels to this RFP'
+          body = <>Add the hotels you want to bid. Each one gets its own secure link and never sees another hotel's numbers. No email is sent until you choose to send it.</>
+          actions = !isViewer ? <button onClick={() => setShowInvite(true)} className={btn}>+ Add a hotel</button> : null
+        } else if (noEmailSent > 0) {
+          title = `${noEmailSent} hotel${noEmailSent > 1 ? 's' : ''} added but not emailed yet`
+          body = <>Select {noEmailSent > 1 ? 'them' : 'it'} in the list on the left and hit <strong>Send email</strong> so {noEmailSent > 1 ? 'they get their' : 'it gets its'} bid link.</>
+        } else if (!hasLiveBid && outstanding > 0) {
+          title = 'Invites are out — waiting on bids'
+          body = <>Bids will land here as hotels submit. Nudge anyone who's gone quiet. Closed a deal by phone or email instead? Open that hotel on the left and use <strong>Enter bid for them</strong>.</>
+          actions = !isViewer ? <button onClick={doSendReminders} disabled={sendingReminders} className={btn}>{sendingReminders ? 'Sending…' : 'Send reminders'}</button> : null
+        } else if (hasLiveBid && outstanding > 0) {
+          title = `${bidCount} bid${bidCount !== 1 ? 's' : ''} in, ${outstanding} still out`
+          body = <>Nudge the hotels that haven't replied. When you have what you need, export the bids and send them to your client rep to review.</>
+          actions = !isViewer ? (
+            <>
+              <button onClick={doSendReminders} disabled={sendingReminders} className={btn}>{sendingReminders ? 'Sending…' : 'Send reminders'}</button>
+              <Link to={`/trips/${id}/grid`} className={btnGhost}>Compare bids</Link>
+            </>
+          ) : gridLink
+        } else if (allResponded) {
+          title = 'All bids are in — send them to your client'
+          body = <>Export the bids and send them to your client rep to choose from. Once the client picks a hotel, open the grid and <strong>award their choice</strong> (that passes the other bids and closes the trip, and you can undo it anytime).</>
+          actions = !isViewer ? (
+            <>
+              <button onClick={() => setExportOpen(true)} className={btn}>Send to client</button>
+              <Link to={`/trips/${id}/grid`} className={btnGhost}>Compare bids</Link>
+            </>
+          ) : <Link to={`/trips/${id}/grid`} className={btn}>Compare bids →</Link>
+        } else {
+          // Invited, none pending, no live bid: everyone declined / unavailable / passed.
+          title = 'No bids came in'
+          body = <>Every hotel declined or is unavailable for these dates. Re-invite once the dates firm up, or if you signed a hotel off the RFP, open it and use <strong>Enter bid for them</strong>, then award.</>
+        }
+
+        return (
+          <div className="mx-6 mt-4 rounded-xl border border-[#1C1008]/20 bg-[#1C1008]/[0.04] dark:border-amber-800/40 dark:bg-amber-900/10 px-5 py-4">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 shrink-0 rounded bg-[#1C1008] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Next step</span>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{body}</p>
+                {actions && <div className="mt-3 flex flex-wrap gap-2">{actions}</div>}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── F&B forecast plan — only for teams whose RFP collects per-person meal prices ── */}
       {!isViewer && concessionItems.some((c) => c.answer_type === 'currency' && /breakfast|lunch|brunch|dinner|\bmeal\b|menu|per person/i.test(c.label)) && (() => {
@@ -2249,26 +2302,6 @@ export default function TripDetail() {
           </div>
         )
       })()}
-
-      {/* ── Grid discovery banner (shown when ≥2 hotels submitted) ── */}
-      {invites && invites.filter((i) => ['submitted', 'awarded'].includes(i.status)).length >= 2 && (
-        <div className="mx-6 mb-0 mt-4 flex items-center justify-between rounded-xl border border-[#1C1008]/20 bg-[#1C1008]/5 px-5 py-3.5">
-          <div>
-            <p className="text-sm font-semibold text-[#1C1008]">
-              {invites.filter((i) => ['submitted', 'awarded'].includes(i.status)).length} bids in — ready to compare
-            </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              View all bids side by side on the comparison grid
-            </p>
-          </div>
-          <Link
-            to={`/trips/${id}/grid`}
-            className="shrink-0 rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2d1e0e] transition-colors"
-          >
-            View Comparison Grid →
-          </Link>
-        </div>
-      )}
 
       {/* ── Bid summary table (shown when ≥1 hotel submitted) ── */}
       {invites && invites.some((i) => ['submitted', 'awarded'].includes(i.status)) && (
