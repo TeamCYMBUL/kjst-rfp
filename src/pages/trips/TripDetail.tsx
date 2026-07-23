@@ -715,8 +715,10 @@ function BidSummaryTable({
                             </button>
                           )}
                           {/* Reopen for edits — lets the hotel revise a locked
-                              submission (e.g. after a date change). Preserves answers. */}
-                          {(inv.status === 'submitted' || inv.status === 'awarded') && (
+                              submission (e.g. after a date change). Preserves answers.
+                              Hidden once already reopened (awaiting the revised bid). */}
+                          {(inv.status === 'submitted' || inv.status === 'awarded') &&
+                            !(inv.submitted_at && inv.reopened_at && new Date(inv.reopened_at).getTime() > new Date(inv.submitted_at).getTime()) && (
                             <button
                               onClick={() => onReopen(inv)}
                               disabled={reopeningId === inv.id}
@@ -847,6 +849,12 @@ function HotelPanel({
   const isSubmitted = ['submitted', 'awarded'].includes(inv.status)
   const isPassed = inv.status === 'passed'
   const isUnavailable = inv.status === 'unavailable'
+  // Bid submitted, then reopened (awaiting a possible revision). While in this
+  // state the "Reopen for edits" button is hidden — it's already reopened.
+  const isReopenedForEdit = Boolean(
+    inv.submitted_at && inv.reopened_at &&
+    new Date(inv.reopened_at).getTime() > new Date(inv.submitted_at).getTime(),
+  )
 
   const answerMap = new Map(answers.map((a) => [a.concession_item_id, a]))
 
@@ -923,13 +931,14 @@ function HotelPanel({
                 submitted a bid that was then reopened (reopened_at newer than
                 submitted_at). A hotel that never bid is just awaiting its first
                 response, not a "revised" bid. */}
-            {inv.submitted_at && inv.reopened_at && new Date(inv.reopened_at).getTime() > new Date(inv.submitted_at).getTime() && (
+            {isReopenedForEdit && (
               <span className="inline-flex rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-300">
-                ↺ Reopened for edits
+                ↺ Reopened — awaiting revised bid
               </span>
             )}
-            {/* Reopen a submitted/awarded proposal so the hotel can revise it */}
-            {(inv.status === 'submitted' || inv.status === 'awarded') && (
+            {/* Reopen a submitted/awarded proposal so the hotel can revise it.
+                Hidden once it's already reopened (the flag above covers that state). */}
+            {(inv.status === 'submitted' || inv.status === 'awarded') && !isReopenedForEdit && (
               <button
                 onClick={() => onReopen(inv)}
                 disabled={reopeningId === inv.id}
