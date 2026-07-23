@@ -928,6 +928,10 @@ export default function HotelsList() {
   const [leagueFilter, setLeagueFilter] = useState<string>('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [mode, setMode] = useState<'view' | 'add' | 'edit'>('view')
+  // On mobile the list and detail can't sit side by side, so we show one at a
+  // time: the list until the user opens a hotel, then the detail with a Back
+  // button. On lg+ both panes are always visible and this is ignored.
+  const [mobileView, setMobileView] = useState<'list' | 'detail'>('list')
   const [sortBy, setSortBy] = useState<SortBy>('brand')
   const [showImport, setShowImport] = useState(false)
 
@@ -976,7 +980,7 @@ export default function HotelsList() {
   return (
     <div className="flex h-[calc(100dvh-3.5rem)] lg:h-[calc(100vh-4rem)] flex-col -mx-4 -my-6 sm:-mx-6 lg:-mx-8 lg:-my-8">
       {/* Top bar */}
-      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-3">
         <div>
           <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Hotels</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -995,7 +999,7 @@ export default function HotelsList() {
               ↑ Import CSV
             </button>
             <button
-              onClick={() => { setMode('add'); setSelectedId(null) }}
+              onClick={() => { setMode('add'); setSelectedId(null); setMobileView('detail') }}
               className="rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2d1e0e] transition-colors"
             >
               + New hotel
@@ -1015,7 +1019,7 @@ export default function HotelsList() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left: hotel list */}
-        <div className="flex w-72 shrink-0 flex-col border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+        <div className={`${mobileView === 'detail' ? 'hidden lg:flex' : 'flex'} w-full shrink-0 flex-col border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 lg:w-72`}>
           {/* Search */}
           <div className="border-b border-slate-100 dark:border-slate-700 p-3">
             <input
@@ -1087,7 +1091,7 @@ export default function HotelsList() {
                     return (
                       <button
                         key={hotel.id}
-                        onClick={() => { setSelectedId(hotel.id); setMode('view') }}
+                        onClick={() => { setSelectedId(hotel.id); setMode('view'); setMobileView('detail') }}
                         className={`flex w-full items-center gap-3 border-b border-slate-50 dark:border-slate-700 px-4 py-3 text-left transition-colors ${
                           isSelected ? 'bg-slate-100 dark:bg-slate-700' : 'hover:bg-slate-50 dark:hover:bg-slate-700'
                         }`}
@@ -1139,7 +1143,15 @@ export default function HotelsList() {
         </div>
 
         {/* Right: detail / form */}
-        <div className="flex-1 overflow-hidden bg-slate-50 dark:bg-slate-900">
+        <div className={`${mobileView === 'detail' ? 'flex' : 'hidden lg:flex'} flex-1 flex-col overflow-hidden bg-slate-50 dark:bg-slate-900`}>
+          {/* Mobile-only back to list */}
+          <button
+            onClick={() => { setMobileView('list'); setMode('view') }}
+            className="flex shrink-0 items-center gap-1 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 lg:hidden"
+          >
+            ← All hotels
+          </button>
+          <div className="flex-1 overflow-y-auto">
           {mode === 'add' && (
             <div className="mx-auto max-w-lg pt-8">
               <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
@@ -1174,6 +1186,7 @@ export default function HotelsList() {
               Select a hotel to view details
             </div>
           )}
+          </div>
         </div>
       </div>
 

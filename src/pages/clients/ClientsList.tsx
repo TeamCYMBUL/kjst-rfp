@@ -326,7 +326,7 @@ export default function ClientsList() {
             <div className="flex-1 overflow-y-auto">
               {/* Header */}
               <div className="border-b border-slate-200 dark:border-slate-700 px-6 py-5">
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex items-center gap-4">
                     <TeamAvatar name={selected.team_name} logoUrl={selected.logo_url} size="lg" />
                     <div>
@@ -346,7 +346,7 @@ export default function ClientsList() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={async () => {
                         if (!selected) return
@@ -388,7 +388,7 @@ export default function ClientsList() {
                 </div>
 
                 {/* Stats */}
-                <div className="mt-4 grid grid-cols-3 gap-3">
+                <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
                   {[
                     { label: 'Total trips', value: countVisits(selTrips), highlight: false },
                     {

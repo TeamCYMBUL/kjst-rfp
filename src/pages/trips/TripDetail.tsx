@@ -1962,7 +1962,7 @@ export default function TripDetail() {
   return (
     <div className="flex min-h-[calc(100dvh-3.5rem)] lg:min-h-[calc(100vh-4rem)] flex-col -mx-4 -my-6 sm:-mx-6 lg:-mx-8 lg:-my-8">
       {/* ── Top bar ── */}
-      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-3">
+      <div className="flex flex-col gap-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -2012,7 +2012,7 @@ export default function TripDetail() {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           {reminderResult && (
             <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">✓ {reminderResult.sent} reminder{reminderResult.sent !== 1 ? 's' : ''} sent</span>
           )}
@@ -2048,7 +2048,7 @@ export default function TripDetail() {
                 <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" /></svg>
               </button>
               {exportOpen && (
-                <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg overflow-hidden">
+                <div className="absolute right-0 top-full z-20 mt-1 w-[calc(100vw-2rem)] max-w-72 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg overflow-hidden">
                   {/* Batch-print the full write-ups. "New" prints only bids not yet
                       printed, so the team never re-prints the same batch. */}
                   <Link
@@ -2324,11 +2324,11 @@ export default function TripDetail() {
       )}
 
       {/* ── Body: trip info slide + split panel ── */}
-      <div className="flex flex-1">
+      <div className="flex flex-1 flex-col lg:flex-row">
 
         {/* Trip info slide-over */}
         {showTripInfo && (
-          <div className="w-72 shrink-0 overflow-y-auto border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+          <div className="w-full shrink-0 overflow-y-auto border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 lg:w-72 lg:border-b-0 lg:border-r">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 px-4 py-3">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Trip info</span>
               <div className="flex items-center gap-2">
@@ -2341,7 +2341,7 @@ export default function TripDetail() {
         )}
 
         {/* Left: hotel list */}
-        <div className="flex w-64 shrink-0 flex-col border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+        <div className="flex w-full shrink-0 flex-col border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 lg:w-64 lg:border-b-0 lg:border-r">
           {invites.length > 0 && <ResponseProgress invites={invites} />}
 
           <div className="flex items-center justify-between px-4 py-2.5">

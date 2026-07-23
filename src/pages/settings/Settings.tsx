@@ -156,7 +156,7 @@ export default function Settings() {
         title="Appearance"
         description="Choose how KJST RFP looks to you."
       >
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {THEME_OPTIONS.map(({ key, label, icon, description, Preview }) => {
             const isSelected = theme === key
             return (

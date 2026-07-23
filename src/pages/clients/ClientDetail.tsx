@@ -257,7 +257,7 @@ export default function ClientDetail() {
         title={client.team_name}
         subtitle={[client.league, client.season].filter(Boolean).join(' · ') || undefined}
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {canEditClient(id!) && (
               <LinkButton to={`/clients/${id}/edit`} variant="secondary">
                 Edit
@@ -309,7 +309,8 @@ export default function ClientDetail() {
                 <LinkButton to={`/trips/new?client=${id}`}>Create the first trip</LinkButton>
               </EmptyState>
             ) : (
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[520px] text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-700 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     <th className="py-2 pr-4 font-medium">Opponent</th>
@@ -358,6 +359,7 @@ export default function ClientDetail() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </Card>
 

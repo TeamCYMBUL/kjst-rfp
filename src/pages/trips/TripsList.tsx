@@ -71,7 +71,8 @@ export default function TripsList() {
         </EmptyState>
       ) : (
         <Card>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-700 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 <th className="px-5 py-3 font-medium">Trip / Client</th>
@@ -177,6 +178,7 @@ export default function TripsList() {
               })}
             </tbody>
           </table>
+          </div>
         </Card>
       )}
     </div>

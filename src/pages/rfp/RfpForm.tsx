@@ -547,7 +547,8 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
             <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
               <strong>Multiple night scenarios requested.</strong> Please provide a King rate for each scenario below.
             </div>
-            <table className="w-full border-collapse text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[600px] border-collapse text-sm">
               <thead>
                 <tr>
                   <th className={th}>Scenario</th>
@@ -603,6 +604,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         ) : (
           /* Single scenario: horizontal rate row matching Word doc */
@@ -613,7 +615,8 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
                 Visit 1 — Declined, no King/Suite/Selling rate required.
               </div>
             )}
-            <table className="w-full border-collapse text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] border-collapse text-sm">
               <thead>
                 <tr>
                   {!visit1Declined && (
@@ -667,6 +670,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
                 </tr>
               </tbody>
             </table>
+            </div>
             {/* Visit 2 rates row */}
             {hasStay2 && (
               visit2Declined ? (
@@ -674,7 +678,8 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
                   Visit 2 — Declined, no rates required.
                 </div>
               ) : (
-              <table className="mt-1 w-full border-collapse text-sm">
+              <div className="mt-1 overflow-x-auto">
+              <table className="w-full min-w-[520px] border-collapse text-sm">
                 <thead>
                   <tr>
                     <th className={th}>King Rate — Visit 2 ({formatDate(trip.stay2_arrival_date)} – {formatDate(trip.stay2_departure_date)})</th>
@@ -713,6 +718,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
                   </tr>
                 </tbody>
               </table>
+              </div>
               )
             )}
           </div>
@@ -727,7 +733,8 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
             <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
               The team's travel dates are not yet confirmed. Please indicate which of the following date windows you can accommodate.
             </div>
-            <table className="w-full border-collapse text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] border-collapse text-sm">
               <thead>
                 <tr>
                   <th className={th}>Scenario</th>
@@ -765,6 +772,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 

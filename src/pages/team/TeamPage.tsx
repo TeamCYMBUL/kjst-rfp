@@ -197,7 +197,7 @@ export default function TeamPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Team</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
@@ -222,11 +222,11 @@ export default function TeamPage() {
         </div>
       ) : (
         <div
-          className="flex overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
+          className="flex flex-col rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 lg:flex-row lg:overflow-hidden"
           style={{ minHeight: 500 }}
         >
           {/* ── Left: staff list ── */}
-          <div className="flex w-64 shrink-0 flex-col border-r border-slate-200 dark:border-slate-700">
+          <div className="flex w-full shrink-0 flex-col border-b border-slate-200 dark:border-slate-700 lg:w-64 lg:border-b-0 lg:border-r">
             <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-700">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                 Team members

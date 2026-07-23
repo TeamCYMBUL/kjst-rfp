@@ -385,7 +385,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Dashboard</h1>
         <div className="flex items-center gap-2">
           <LinkButton to="/clients/new" variant="secondary">
