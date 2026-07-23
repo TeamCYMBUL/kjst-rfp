@@ -127,3 +127,12 @@ export function generateToken(): string {
   bytes.forEach((b) => (bin += String.fromCharCode(b)))
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
+
+// Count trips as the number of VISITS: a trip with a second visit (stay2) counts
+// as 2, so a team's "trips" total reflects the real schedule even though same-city
+// visits are merged into one trip row. Used everywhere a trip count is shown.
+export function countVisits(
+  trips: { stay2_arrival_date?: string | null }[] | null | undefined,
+): number {
+  return (trips ?? []).reduce((n, t) => n + (t.stay2_arrival_date ? 2 : 1), 0)
+}

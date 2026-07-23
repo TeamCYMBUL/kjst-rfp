@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { formatDate } from '../lib/format'
+import { formatDate, countVisits } from '../lib/format'
 import { Badge, ErrorNote, LinkButton, Loading } from '../components/ui'
 import { useOnboardingProgress } from '../hooks/useOnboardingProgress'
 
@@ -240,9 +240,9 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
                 )}
               </div>
               <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
-                <span>
-                  <strong className="text-slate-700 dark:text-slate-300">{group.trips.length}</strong> trip
-                  {group.trips.length !== 1 ? 's' : ''}
+                <span title={`${group.trips.length} trip${group.trips.length !== 1 ? 's' : ''}, counting each 2-visit trip twice`}>
+                  <strong className="text-slate-700 dark:text-slate-300">{countVisits(group.trips)}</strong> trip
+                  {countVisits(group.trips) !== 1 ? 's' : ''}
                 </span>
                 {allInvited > 0 && (
                   <span>

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { formatDate } from '../../lib/format'
+import { formatDate, countVisits } from '../../lib/format'
 import { Badge, ErrorNote, Loading } from '../../components/ui'
 import { PageHint } from '../../components/PageHint'
 import { useRole } from '../../lib/useRole'
@@ -177,7 +177,7 @@ export default function ClientsList() {
         (c.league ?? '').toLowerCase().includes(search.toLowerCase())),
   )
 
-  const totalTrips = clients.reduce((n, c) => n + c.trips.length, 0)
+  const totalTrips = clients.reduce((n, c) => n + countVisits(c.trips), 0)
 
   const selTrips = selected?.trips ?? []
   const selActive = selTrips.filter((t) => !['closed', 'draft'].includes(t.status))
@@ -309,7 +309,7 @@ export default function ClientsList() {
                           </span>
                         ) : (
                           <span className="text-xs text-slate-300 dark:text-slate-600">
-                            {c.trips.length} trip{c.trips.length !== 1 ? 's' : ''}
+                            {countVisits(c.trips)} trip{countVisits(c.trips) !== 1 ? 's' : ''}
                           </span>
                         )}
                       </div>
@@ -389,13 +389,13 @@ export default function ClientsList() {
                 {/* Stats */}
                 <div className="mt-4 grid grid-cols-3 gap-3">
                   {[
-                    { label: 'Total trips', value: selTrips.length, highlight: false },
+                    { label: 'Total trips', value: countVisits(selTrips), highlight: false },
                     {
                       label: 'Active trips',
-                      value: selActive.length,
+                      value: countVisits(selActive),
                       highlight: selActive.length > 0,
                     },
-                    { label: 'Closed trips', value: selClosed.length, highlight: false },
+                    { label: 'Closed trips', value: countVisits(selClosed), highlight: false },
                   ].map((s) => (
                     <div key={s.label} className="rounded-lg bg-slate-50 dark:bg-slate-700 px-4 py-3">
                       <div
