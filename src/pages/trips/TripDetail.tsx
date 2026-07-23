@@ -1995,8 +1995,19 @@ export default function TripDetail() {
               {sendingDeclines ? 'Sending…' : 'Send Declines'}
             </button>
           )}
-          {/* Per-trip client exports removed — the client-level "Hotel Options"
-              grid (client page + Dashboard) is the single client deliverable. */}
+          {/* Per-trip client grid export removed (the client-level "Hotel Options"
+              grid is the deliverable). The proposal PDF stays as a slim link. */}
+          {!isViewer && (
+            <Link
+              to={`/trips/${id}/proposal?hotel=all`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open the printable proposal (full write-up for every submitted bid) in a new tab."
+              className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+            >
+              Print proposal
+            </Link>
+          )}
           {!isViewer && (
             <button
               onClick={saveVersion}
