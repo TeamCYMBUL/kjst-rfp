@@ -822,6 +822,9 @@ export default function RfpForm() {
   // Decline flow — auto-open if email link included ?decline=1
   const [declined, setDeclined] = useState(false)
   const [showDeclinePanel, setShowDeclinePanel] = useState(searchParams.get('decline') === '1')
+  // KJST staff filling the bid on the hotel's behalf (?entry=staff): suppresses
+  // the hotel's confirmation email on submit and shows an internal banner.
+  const staffEntry = searchParams.get('entry') === 'staff'
   const [declineReason, setDeclineReason] = useState('')
   const [declineNotes, setDeclineNotes] = useState('')
   const [declining, setDeclining] = useState(false)
@@ -1044,7 +1047,7 @@ export default function RfpForm() {
       }
 
       try {
-        await respondRfp({ token, response: responsePayload, answers: answerPayload, submit })
+        await respondRfp({ token, response: responsePayload, answers: answerPayload, submit, staffEntry })
         return true
       } catch (e: unknown) {
         if (!submit) {
@@ -1507,6 +1510,16 @@ export default function RfpForm() {
           visit1Declined={visit1Declined}
           visit2Declined={visit2Declined}
         />
+
+        {/* ── KJST staff-entry banner: filling the bid on the hotel's behalf ── */}
+        {staffEntry && (
+          <div className="mb-6 rounded-xl border border-indigo-300 bg-indigo-50 px-4 py-3">
+            <p className="text-sm font-semibold text-indigo-900">KJST entry mode — entering this bid on the hotel's behalf.</p>
+            <p className="mt-1 text-sm text-indigo-800">
+              Fill in the hotel's terms and submit. The hotel will NOT receive a confirmation email. When you're done, award them and send the contract request from the trip page.
+            </p>
+          </div>
+        )}
 
         {/* ── Reopened notice: KJST reopened this bid so the hotel can revise ── */}
         {reopenedForEdit && (

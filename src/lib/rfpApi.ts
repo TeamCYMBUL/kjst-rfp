@@ -182,11 +182,14 @@ export async function respondRfp(args: {
   response: ResponseFields
   answers: AnswerPayload[]
   submit: boolean
+  staffEntry?: boolean
 }): Promise<{ ok: boolean; response_id: string; submitted: boolean }> {
   const res = await fetch(`${BASE}/rfp-respond`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(args),
+    // When a KJST staff member fills the bid on the hotel's behalf, flag it so
+    // the backend skips the hotel-facing confirmation email.
+    body: JSON.stringify({ ...args, staff_entry: args.staffEntry === true }),
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error ?? 'Failed to save')

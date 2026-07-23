@@ -973,6 +973,19 @@ function HotelPanel({
             >
               {copied === inv.token ? '✓ Copied' : 'Copy link'}
             </button>
+            {/* Enter the bid on the hotel's behalf (e.g. an award made off-platform).
+                Opens the RFP form in KJST entry mode; the hotel gets no email. */}
+            {(inv.status === 'sent' || inv.status === 'opened') && (
+              <a
+                href={`${PUBLIC_APP_URL}/rfp/${inv.token}?entry=staff`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Fill in this hotel's bid yourself (e.g. a selection made outside the RFP). The hotel is not emailed."
+                className="rounded-lg border border-indigo-200 dark:border-indigo-700 px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+              >
+                ✎ Enter bid for them
+              </a>
+            )}
             {canEmailStatus(inv.status) && (
               <button
                 onClick={() => onSendEmail(inv)}
