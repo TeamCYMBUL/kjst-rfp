@@ -397,8 +397,12 @@ function InviteForm({
       hotel_contact_email: contactEmail.trim() || null,
       token: generateToken(), status: 'sent',
     })
+    if (error) { setSaving(false); setError(error.message); return }
+    // Adding a hotel to the RFP means the trip is actively collecting bids, not a
+    // draft. Advance it here so the dashboard stats + filters reflect reality.
+    // Guarded on status='draft' so it never overwrites a later stage (closed, etc.).
+    await supabase.from('trips').update({ status: 'collecting' }).eq('id', tripId).eq('status', 'draft')
     setSaving(false)
-    if (error) { setError(error.message); return }
     onDone()
   }
 
