@@ -120,7 +120,7 @@ const badgeColors: Record<string, string> = {
   collecting: 'bg-amber-100 text-amber-700',
   submitted: 'bg-emerald-100 text-emerald-700',
   declined: 'bg-red-100 text-red-700',
-  closed: 'bg-slate-200 text-slate-700',
+  closed: 'bg-emerald-100 text-emerald-700',
   awarded: 'bg-amber-100 text-amber-800',
   passed: 'bg-slate-100 text-slate-400',
   unavailable: 'bg-slate-100 text-slate-400',

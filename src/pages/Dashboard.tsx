@@ -74,6 +74,7 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
   ).length
   const opened = trip.rfp_invitations.filter((i) => i.status === 'opened').length
   const delinquent = delinquentCount(trip)
+  const awardedHotel = trip.rfp_invitations.find((i) => i.status === 'awarded')?.hotel_name ?? null
   return (
     <Link
       to={`/trips/${trip.id}`}
@@ -96,6 +97,11 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
               </span>
             )}
             <Badge status={trip.status} />
+            {trip.status === 'closed' && awardedHotel && (
+              <span className="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                🏆 {awardedHotel}
+              </span>
+            )}
             <DeadlineChip deadline={trip.response_deadline} />
             {delinquent > 0 && (
               <span
@@ -371,8 +377,10 @@ export default function Dashboard() {
   const totalOutstanding = totalInvited - totalSubmitted
   const closedCount = trips.filter((t) => t.status === 'closed').length
 
-  // What the list actually shows
-  const displayedTrips = showClosed ? trips : openTrips
+  // What the list actually shows. "Show closed" flips to ONLY closed trips, so
+  // open and closed are never mixed together.
+  const closedTrips = trips.filter((t) => t.status === 'closed')
+  const displayedTrips = showClosed ? closedTrips : openTrips
 
   // Distinct clients present in the fetched trips — no separate query needed
   const clientOptions = [...new Map(trips.filter((t) => t.clients).map((t) => [t.clients!.id, t.clients!.team_name])).entries()]
@@ -490,7 +498,7 @@ export default function Dashboard() {
       <div>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-            {showClosed ? 'All trips' : 'Active & draft trips'} · by client
+            {showClosed ? 'Closed trips (hotel selected)' : 'Active & draft trips'} · by client
           </h2>
           <div className="flex flex-wrap items-center gap-2">
             {clientOptions.length > 0 && (
