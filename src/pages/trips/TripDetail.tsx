@@ -7,7 +7,7 @@ import { formatDate, generateToken, formatMeetingSpaceNotes, passedLabel } from 
 import { PUBLIC_APP_URL } from '../../lib/config'
 import { sendInvitationEmail, sendReminderEmails, sendSingleReminderEmail, reopenRfp, sendContractRequest } from '../../lib/emailApi'
 import { Badge, ErrorNote, LinkButton, Loading } from '../../components/ui'
-import { exportTeamGrid, exportSingleHotelXlsx } from '../../lib/excelExport'
+import { exportSingleHotelXlsx } from '../../lib/excelExport'
 import { useRole } from '../../lib/useRole'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -656,7 +656,7 @@ function BidSummaryTable({
                     <td className="py-2.5 pr-6">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`font-medium ${isSelected ? 'text-[#1C1008] dark:text-amber-400' : 'text-slate-800 dark:text-slate-200'} ${isPassed || isDeclined ? 'line-through' : ''}`}>
-                          {isAwarded && '🏆'}{isPassed && '✗'}{inv.hotel_name}
+                          {isAwarded && '🏆 '}{isPassed && '✗ '}{inv.hotel_name}
                         </span>
                         {isDeclined && (
                           <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400">Declined</span>
@@ -1508,9 +1508,6 @@ export default function TripDetail() {
   const [versions, setVersions] = useState<{id: string; version_label: string; created_at: string}[]>([])
   const [viewingVersion, setViewingVersion] = useState<{label: string; snapshot: any} | null>(null)
   const [savingVersion, setSavingVersion] = useState(false)
-  const [exportOpen, setExportOpen] = useState(false)
-  const [proposalSentMarked, setProposalSentMarked] = useState(false)
-  const exportRef = useRef<HTMLDivElement>(null)
   const [showDeclineModal, setShowDeclineModal] = useState(false)
   const [sendingDeclines, setSendingDeclines] = useState(false)
   const [declineToast, setDeclineToast] = useState<string | null>(null)
@@ -1824,17 +1821,6 @@ export default function TripDetail() {
     loadInvites()
   }
 
-  // Close export dropdown on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
-        setExportOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
-
   const doSendReminders = async () => {
     if (!id) return
     setSendingReminders(true); setReminderResult(null); setError(null)
@@ -1912,35 +1898,6 @@ export default function TripDetail() {
     if (data) setViewingVersion({ label: data.version_label as string, snapshot: data.snapshot })
   }
 
-  const exportForTeam = () => {
-    if (!trip || !invites) return
-    const tripData = trip as any
-    exportTeamGrid(
-      {
-        city: trip.city,
-        arrival_date: trip.arrival_date,
-        departure_date: trip.departure_date,
-        opponent_label: trip.opponent_label,
-        clients: tripData.clients ? { team_name: tripData.clients.team_name } : null,
-      },
-      invites.map((inv) => ({ ...inv, staff_notes: inv.staff_notes ?? null })),
-      allResponses as Map<string, any>,
-      allAnswers as Map<string, any[]>,
-      concessionItems,
-    )
-    markProposalSent()
-  }
-
-  // Records the "proposal delivered" moment for the lifecycle pipeline. Fires
-  // automatically whenever a manager generates a client-facing deliverable
-  // (grid or PDF) — that's the last in-app step before everything moves to
-  // email. Deduped server-side, so re-exporting a trip never double-logs.
-  const markProposalSent = () => {
-    if (!id) return
-    void supabase.rpc('mark_proposal_sent', { p_trip_id: id, p_client_id: trip?.client_id ?? null })
-    setProposalSentMarked(true)
-  }
-
   if (error && !trip) return <ErrorNote message={error} />
   if (!trip || !invites) return <Loading />
 
@@ -1948,8 +1905,6 @@ export default function TripDetail() {
   const prevTrip = sibIndex > 0 ? siblings[sibIndex - 1] : null
   const nextTrip = sibIndex >= 0 && sibIndex < siblings.length - 1 ? siblings[sibIndex + 1] : null
 
-  const submittedInvites = invites.filter((i) => ['submitted', 'awarded'].includes(i.status))
-  const unprintedCount = submittedInvites.filter((i) => !i.printed_at).length
 
   const noEmailSent = invites.filter((i) => !i.sent_at && i.hotel_contact_email).length
   // Hotels passed without ever bidding (unavailable for the proposed dates) —
@@ -2040,78 +1995,8 @@ export default function TripDetail() {
               {sendingDeclines ? 'Sending…' : 'Send Declines'}
             </button>
           )}
-          {/* Send to client — one home for the two client-facing deliverables.
-              (The internal comparison lives on the grid page via "Full grid".) */}
-          {!isViewer && (
-            <div className="relative" ref={exportRef}>
-              <button
-                onClick={() => setExportOpen(v => !v)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-              >
-                Send to client
-                <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" /></svg>
-              </button>
-              {exportOpen && (
-                <div className="absolute right-0 top-full z-20 mt-1 w-[calc(100vw-2rem)] max-w-72 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg overflow-hidden">
-                  {/* Batch-print the full write-ups. "New" prints only bids not yet
-                      printed, so the team never re-prints the same batch. */}
-                  <Link
-                    to={`/trips/${id}/proposal?hotel=all`}
-                    target="_blank"
-                    onClick={() => setExportOpen(false)}
-                    className={`flex w-full flex-col border-b border-slate-100 dark:border-slate-700 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${submittedInvites.length === 0 ? 'pointer-events-none opacity-40' : ''}`}
-                  >
-                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200">Print all proposals ({submittedInvites.length})</span>
-                    <span className="text-xs text-slate-400 dark:text-slate-500">Full write-up for every bid received</span>
-                  </Link>
-                  <Link
-                    to={`/trips/${id}/proposal?hotel=new`}
-                    target="_blank"
-                    onClick={() => setExportOpen(false)}
-                    className={`flex w-full flex-col border-b border-slate-100 dark:border-slate-700 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${unprintedCount === 0 ? 'pointer-events-none opacity-40' : ''}`}
-                  >
-                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200">Print new proposals ({unprintedCount})</span>
-                    <span className="text-xs text-slate-400 dark:text-slate-500">
-                      {unprintedCount === 0 ? 'Nothing new since last print' : 'Only bids not yet printed'}
-                    </span>
-                  </Link>
-                  <button
-                    onClick={() => { exportForTeam(); setExportOpen(false) }}
-                    disabled={!invites || invites.filter((i) => ['submitted', 'awarded'].includes(i.status)).length === 0}
-                    className="flex w-full flex-col border-b border-slate-100 dark:border-slate-700 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors"
-                  >
-                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200">↓ Client grid (.xlsx)</span>
-                    <span className="text-xs text-slate-400 dark:text-slate-500">Hotel options for this trip, client-ready</span>
-                  </button>
-                  <Link
-                    to={`/trips/${id}/proposal`}
-                    target="_blank"
-                    onClick={() => { markProposalSent(); setExportOpen(false) }}
-                    className="flex w-full flex-col border-b border-slate-100 dark:border-slate-700 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                  >
-                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200">Proposal PDF</span>
-                    <span className="text-xs text-slate-400 dark:text-slate-500">Clean proposal to email the client</span>
-                  </Link>
-                  {/* Backstop: generating either deliverable above already records
-                      the proposal as delivered (markProposalSent, deduped server-side).
-                      This stays as a manual confirm for the rare case a proposal went
-                      out without exporting from here. Copy stays workflow-oriented. */}
-                  <button
-                    onClick={() => { markProposalSent(); setExportOpen(false) }}
-                    title="Usually recorded automatically when you generate the grid or PDF above. Use this only if a proposal went out another way."
-                    className="flex w-full flex-col px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                  >
-                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                      {proposalSentMarked ? 'Marked as sent ✓' : 'Mark proposal sent'}
-                    </span>
-                    <span className="text-xs text-slate-400 dark:text-slate-500">
-                      {proposalSentMarked ? 'Recorded' : 'Only if you sent it without exporting here'}
-                    </span>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Per-trip client exports removed — the client-level "Hotel Options"
+              grid (client page + Dashboard) is the single client deliverable. */}
           {!isViewer && (
             <button
               onClick={saveVersion}
@@ -2200,7 +2085,7 @@ export default function TripDetail() {
 
         if (awarded) {
           title = `Winner selected: ${awarded.hotel_name}`
-          body = <>Send the awarded hotel their contract request, then share the proposal with the client from <strong>Send to client</strong>. Plans change? You can undo the award on the grid.</>
+          body = <>Send the awarded hotel their contract request to lock it in. Plans change? You can undo the award on the grid.</>
           actions = !isViewer ? (
             <>
               <button onClick={() => openContractDialog(awarded)} className={btn}>Send contract request</button>
@@ -2220,7 +2105,7 @@ export default function TripDetail() {
           actions = !isViewer ? <button onClick={doSendReminders} disabled={sendingReminders} className={btn}>{sendingReminders ? 'Sending…' : 'Send reminders'}</button> : null
         } else if (hasLiveBid && outstanding > 0) {
           title = `${bidCount} bid${bidCount !== 1 ? 's' : ''} in, ${outstanding} still out`
-          body = <>Nudge the hotels that haven't replied. When you have what you need, export the bids and send them to your client rep to review.</>
+          body = <>Nudge the hotels that haven't replied. When you have what you need, present the client their <strong>Hotel Options</strong> grid (all this team's trips) from the client page.</>
           actions = !isViewer ? (
             <>
               <button onClick={doSendReminders} disabled={sendingReminders} className={btn}>{sendingReminders ? 'Sending…' : 'Send reminders'}</button>
@@ -2228,11 +2113,11 @@ export default function TripDetail() {
             </>
           ) : gridLink
         } else if (allResponded) {
-          title = 'All bids are in — send them to your client'
-          body = <>Export the bids and send them to your client rep to choose from. Once the client picks a hotel, open the grid and <strong>award their choice</strong> (that passes the other bids and closes the trip, and you can undo it anytime).</>
+          title = 'All bids are in — present them to your client'
+          body = <>Compare the bids, then send the client their full <strong>Hotel Options</strong> grid (every trip for this team) to choose from. When they pick a hotel, open the grid and <strong>award their choice</strong> (passes the other bids and closes the trip; you can undo it anytime).</>
           actions = !isViewer ? (
             <>
-              <button onClick={() => setExportOpen(true)} className={btn}>Send to client</button>
+              <Link to={`/clients/${trip.client_id}`} className={btn}>Client hotel options</Link>
               <Link to={`/trips/${id}/grid`} className={btnGhost}>Compare bids</Link>
             </>
           ) : <Link to={`/trips/${id}/grid`} className={btn}>Compare bids →</Link>
@@ -2418,7 +2303,7 @@ export default function TripDetail() {
                     <StatusDot status={inv.status} sentAt={inv.sent_at} />
                     <div className="min-w-0 flex-1">
                       <div className={`truncate text-sm font-medium ${isAwarded ? 'text-amber-700' : inv.status === 'passed' || inv.status === 'unavailable' || inv.status === 'declined' ? 'text-slate-400 line-through' : 'text-slate-800 dark:text-slate-200'}`}>
-                        {isAwarded && '🏆'}{inv.hotel_name}
+                        {isAwarded && '🏆 '}{inv.hotel_name}
                       </div>
                       {(inv.status === 'passed' || inv.status === 'unavailable' || inv.status === 'declined') ? (
                         <span className="mt-0.5 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-600 dark:bg-red-900/30 dark:text-red-400">

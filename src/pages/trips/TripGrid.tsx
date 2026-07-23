@@ -786,7 +786,7 @@ export default function TripGrid() {
                               title="Use this when the team picks this hotel, even if you've also confirmed by phone or email. It marks the winner, passes the rest, and closes the trip."
                               className="rounded px-2 py-1 text-xs font-medium bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-40 transition-colors"
                             >
-                              🏆Award
+                              🏆 Award
                             </button>
                           )}
                           {canEnterBidAndAward && (

@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { formatDate, countVisits } from '../lib/format'
 import { Badge, ErrorNote, LinkButton, Loading } from '../components/ui'
 import { PageHint } from '../components/PageHint'
+import { exportAllCitiesForClient } from '../lib/exportAllCities'
 
 
 type DashTrip = {
@@ -148,6 +149,7 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
 
 /** By Client — trips grouped under collapsible team sections */
 function ClientView({ trips }: { trips: DashTrip[] }) {
+  const [exportingClient, setExportingClient] = useState<string | null>(null)
   // Group by client id
   const groups = new Map<string, { name: string; trips: DashTrip[] }>()
   for (const trip of trips) {
@@ -258,6 +260,22 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
             </button>
             {isOpen && (
               <div className="space-y-3 border-t border-slate-100 dark:border-slate-700 p-4">
+                {key !== '__none__' && (
+                  <div className="flex justify-end">
+                    <button
+                      onClick={async () => {
+                        setExportingClient(key)
+                        try { await exportAllCitiesForClient(key, group.name) }
+                        finally { setExportingClient(null) }
+                      }}
+                      disabled={exportingClient === key}
+                      title="Download the full Hotel Options grid — every trip and hotel choice for this client, ready to send."
+                      className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors"
+                    >
+                      {exportingClient === key ? 'Exporting…' : '↓ Export hotel options'}
+                    </button>
+                  </div>
+                )}
                 {[...group.trips]
                   .sort((a, b) =>
                     (a.city ?? a.opponent_label ?? '').localeCompare(
@@ -441,7 +459,7 @@ export default function Dashboard() {
               onClick={() => setAwardOpen(true)}
               className="rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 px-3.5 py-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
             >
-              🏆Log an award
+              🏆 Log an award
             </button>
             {clientOptions.length > 0 && (
               <select
