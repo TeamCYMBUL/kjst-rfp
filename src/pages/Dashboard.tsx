@@ -248,9 +248,17 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
             </button>
             {isOpen && (
               <div className="space-y-3 border-t border-slate-100 dark:border-slate-700 p-4">
-                {group.trips.map((trip) => (
-                  <TripCard key={trip.id} trip={trip} showClient={false} />
-                ))}
+                {[...group.trips]
+                  .sort((a, b) =>
+                    (a.city ?? a.opponent_label ?? '').localeCompare(
+                      b.city ?? b.opponent_label ?? '',
+                      undefined,
+                      { sensitivity: 'base' },
+                    ),
+                  )
+                  .map((trip) => (
+                    <TripCard key={trip.id} trip={trip} showClient={false} />
+                  ))}
               </div>
             )}
           </div>
