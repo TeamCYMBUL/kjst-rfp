@@ -2005,6 +2005,9 @@ export default function TripDetail() {
         </div>
       </div>
 
+      {/* Summary region (banners, hints, F&B plan, submitted-bids table) scrolls
+          and is height-capped so it can never crush the hotel list below it. */}
+      <div className="flex-none overflow-y-auto max-h-[50vh]">
       {/* ── Banners ── */}
       {error && <div className="border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-6 py-2 text-xs text-red-700 dark:text-red-400">{error}</div>}
       {!awarded && noEmailSent > 0 && (
@@ -2156,8 +2159,10 @@ export default function TripDetail() {
         />
       )}
 
+      </div>{/* /summary region */}
+
       {/* ── Body: trip info slide + split panel ── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
 
         {/* Trip info slide-over */}
         {showTripInfo && (
