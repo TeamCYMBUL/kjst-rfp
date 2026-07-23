@@ -863,7 +863,7 @@ function HotelPanel({
   const fmtRate = (n: number | null) => n != null ? `$${n.toLocaleString()}` : '—'
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex flex-col">
       {/* Hotel header */}
       <div className="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -991,7 +991,7 @@ function HotelPanel({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1">
         {isUnavailable && (
           <div className="m-6 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 p-6 text-center text-sm text-slate-500 dark:text-slate-400">
             This hotel marked as unavailable for these dates.
@@ -1827,7 +1827,7 @@ export default function TripDetail() {
   const awarded = invites.find((i) => i.status === 'awarded')
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] lg:h-[calc(100vh-4rem)] flex-col -mx-4 -my-6 sm:-mx-6 lg:-mx-8 lg:-my-8">
+    <div className="flex min-h-[calc(100dvh-3.5rem)] lg:min-h-[calc(100vh-4rem)] flex-col -mx-4 -my-6 sm:-mx-6 lg:-mx-8 lg:-my-8">
       {/* ── Top bar ── */}
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-3">
         <div>
@@ -2005,9 +2005,6 @@ export default function TripDetail() {
         </div>
       </div>
 
-      {/* Summary region (banners, hints, F&B plan, submitted-bids table) scrolls
-          and is height-capped so it can never crush the hotel list below it. */}
-      <div className="flex-none overflow-y-auto max-h-[50vh]">
       {/* ── Banners ── */}
       {error && <div className="border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-6 py-2 text-xs text-red-700 dark:text-red-400">{error}</div>}
       {!awarded && noEmailSent > 0 && (
@@ -2159,10 +2156,8 @@ export default function TripDetail() {
         />
       )}
 
-      </div>{/* /summary region */}
-
       {/* ── Body: trip info slide + split panel ── */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="flex flex-1">
 
         {/* Trip info slide-over */}
         {showTripInfo && (
@@ -2217,8 +2212,8 @@ export default function TripDetail() {
             </div>
           )}
 
-          {/* Hotel list — flex-1 + min-h-0 lets it shrink when invite form is open */}
-          <div className="flex-1 min-h-0 overflow-y-auto">
+          {/* Hotel list — flows with the page (whole workspace scrolls) */}
+          <div className="flex-1">
             {invites.length === 0 && !showInvite && (
               <div className="px-4 py-6 text-center text-xs text-slate-400 dark:text-slate-500">
                 No hotels added to RFP yet.<br />Add one below to get started.
@@ -2330,7 +2325,7 @@ export default function TripDetail() {
         </div>
 
         {/* Right: hotel detail or empty state */}
-        <div className="flex-1 overflow-hidden bg-slate-50 dark:bg-slate-700/50">
+        <div className="flex-1 bg-slate-50 dark:bg-slate-700/50">
           {selectedInvite ? (
             <HotelPanel
               inv={selectedInvite}
