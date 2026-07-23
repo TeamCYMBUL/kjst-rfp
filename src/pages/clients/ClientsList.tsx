@@ -14,6 +14,7 @@ type ClientTrip = {
   id: string
   opponent_label: string | null
   arrival_date: string | null
+  stay2_arrival_date: string | null
   city: string | null
   status: string
 }
@@ -123,7 +124,7 @@ export default function ClientsList() {
     supabase
       .from('clients')
       .select(
-        'id, team_name, league, season, logo_url, primary_contact_name, primary_contact_title, primary_contact_email, primary_contact_phone, assigned_to, profiles(full_name, email), trips(id, opponent_label, arrival_date, city, status)',
+        'id, team_name, league, season, logo_url, primary_contact_name, primary_contact_title, primary_contact_email, primary_contact_phone, assigned_to, profiles(full_name, email), trips(id, opponent_label, arrival_date, stay2_arrival_date, city, status)',
       )
       .order('team_name')
       .then(({ data, error }) => {
@@ -547,8 +548,13 @@ export default function ClientsList() {
                           className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-3 transition-colors hover:border-[#1C1008]/20 hover:bg-slate-50 dark:hover:bg-slate-700"
                         >
                           <div>
-                            <div className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                              {t.opponent_label || 'Untitled trip'}
+                            <div className="flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-200">
+                              <span>{t.opponent_label || 'Untitled trip'}</span>
+                              {t.stay2_arrival_date && (
+                                <span title="This RFP covers 2 visits to this city (Visit 1 + Visit 2)" className="inline-flex items-center rounded-full bg-indigo-100 dark:bg-indigo-900/40 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 dark:text-indigo-300">
+                                  2 visits
+                                </span>
+                              )}
                             </div>
                             {(t.city || t.arrival_date) && (
                               <div className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">

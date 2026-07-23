@@ -13,6 +13,7 @@ type DashTrip = {
   city: string | null
   status: string
   arrival_date: string | null
+  stay2_arrival_date: string | null
   response_deadline: string | null
   clients: { id: string; team_name: string } | null
   rfp_invitations: { id: string; status: string; hotel_name: string; sent_at: string | null }[]
@@ -89,6 +90,11 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
               {trip.opponent_label || 'Untitled trip'}
             </span>
             {trip.city && <span className="text-slate-400 dark:text-slate-500">· {trip.city}</span>}
+            {trip.stay2_arrival_date && (
+              <span title="This RFP covers 2 visits to this city (Visit 1 + Visit 2)" className="inline-flex items-center rounded-full bg-indigo-100 dark:bg-indigo-900/40 px-2 py-0.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+                2 visits
+              </span>
+            )}
             <Badge status={trip.status} />
             <DeadlineChip deadline={trip.response_deadline} />
             {delinquent > 0 && (
@@ -334,7 +340,7 @@ export default function Dashboard() {
         supabase
           .from('trips')
           .select(
-            'id, opponent_label, city, status, arrival_date, response_deadline, clients(id, team_name), rfp_invitations(id, status, hotel_name, sent_at)',
+            'id, opponent_label, city, status, arrival_date, stay2_arrival_date, response_deadline, clients(id, team_name), rfp_invitations(id, status, hotel_name, sent_at)',
           )
           .order('response_deadline', { ascending: true }),
         supabase.from('clients').select('id').limit(1),

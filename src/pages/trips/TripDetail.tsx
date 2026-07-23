@@ -1820,6 +1820,11 @@ export default function TripDetail() {
             <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
               {trip.opponent_label || 'Untitled trip'}
             </h1>
+            {trip.stay2_arrival_date && (
+              <span title="This RFP covers 2 visits to this city (Visit 1 + Visit 2)" className="rounded-full bg-indigo-100 dark:bg-indigo-900/40 px-2 py-0.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+                2 visits
+              </span>
+            )}
             <Badge status={trip.status} />
             {awarded && <span className="rounded-full bg-amber-100 dark:bg-amber-900/20 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">🏆 {awarded.hotel_name}</span>}
             {isViewer && (
