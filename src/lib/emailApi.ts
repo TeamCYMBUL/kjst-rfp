@@ -63,6 +63,19 @@ export async function reopenRfp(
   return res.json()
 }
 
+/** Send the awarded hotel a contract-request email (staff compose subject + body). */
+export async function sendContractRequest(
+  invitation_id: string,
+  opts: { subject?: string; message: string },
+): Promise<{ ok: true; sent_to: string; cc: string[] } | { error: string }> {
+  const res = await fetch(`${FN_BASE}/send-contract-request`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ invitation_id, subject: opts.subject, message: opts.message }),
+  })
+  return res.json()
+}
+
 /** Send reminder emails to all non-submitted hotels for a trip. */
 export async function sendReminderEmails(
   trip_id: string,

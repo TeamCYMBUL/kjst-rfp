@@ -5,7 +5,7 @@ import { logActivity } from '../../lib/activity'
 import type { Client, DateScenario, Invitation, Trip } from '../../lib/types'
 import { formatDate, generateToken, formatMeetingSpaceNotes, passedLabel } from '../../lib/format'
 import { PUBLIC_APP_URL } from '../../lib/config'
-import { sendInvitationEmail, sendReminderEmails, sendSingleReminderEmail, reopenRfp } from '../../lib/emailApi'
+import { sendInvitationEmail, sendReminderEmails, sendSingleReminderEmail, reopenRfp, sendContractRequest } from '../../lib/emailApi'
 import { Badge, ErrorNote, LinkButton, Loading } from '../../components/ui'
 import { PageHint } from '../../components/PageHint'
 import { exportTeamGrid, exportSingleHotelXlsx } from '../../lib/excelExport'
@@ -776,6 +776,7 @@ function HotelPanel({
   onPass,
   onResetStatus,
   onReopen,
+  onContractRequest,
   reopeningId,
   onCopyLink,
   onContactUpdated,
@@ -795,6 +796,7 @@ function HotelPanel({
   onPass: (inv: Invitation) => void
   onResetStatus: (inv: Invitation) => void
   onReopen: (inv: Invitation) => void
+  onContractRequest: (inv: Invitation) => void
   reopeningId: string | null
   onCopyLink: (token: string) => void
   onContactUpdated: (id: string, name: string | null, email: string | null) => void
@@ -955,6 +957,17 @@ function HotelPanel({
                 className="rounded-lg border border-amber-200 dark:border-amber-700 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-40 transition-colors"
               >
                 {reopeningId === inv.id ? 'Reopening…' : '↺ Reopen for edits'}
+              </button>
+            )}
+            {/* Send the contract request to the awarded hotel */}
+            {inv.status === 'awarded' && (
+              <button
+                onClick={() => onContractRequest(inv)}
+                disabled={!inv.hotel_contact_email}
+                title={!inv.hotel_contact_email ? 'No email address on file' : 'Send the room-agreement / contract request to this hotel'}
+                className="rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 disabled:opacity-40 transition-colors"
+              >
+                📄 Send contract request
               </button>
             )}
             {/* Undo awarded / passed / unavailable */}
@@ -1717,6 +1730,47 @@ export default function TripDetail() {
     loadInvites()
   }
 
+  // Contract-request email to the awarded hotel — prefilled from the standard
+  // template, fully editable per case (signing date, direct billing, points).
+  const [contractTarget, setContractTarget] = useState<Invitation | null>(null)
+  const [contractSubject, setContractSubject] = useState('')
+  const [contractMessage, setContractMessage] = useState('')
+  const [contractSending, setContractSending] = useState(false)
+  const openContractDialog = (inv: Invitation) => {
+    const team = trip?.clients?.team_name ?? 'the team'
+    const cityName = trip?.city ?? 'the city'
+    const cutoff = trip?.arrival_date
+      ? formatDate(new Date(new Date(trip.arrival_date).getTime() - 21 * 86400000).toISOString().slice(0, 10))
+      : '[21 days prior to arrival]'
+    setContractSubject(`Room Agreement Request: ${inv.hotel_name} · ${team} @ ${cityName}`)
+    setContractMessage(
+      `Hi ${inv.hotel_contact_name || 'there'},\n\n` +
+      `Great news — the ${team} have finalized their hotel selection for ${cityName} and have selected your property for their stay. Please send over the room agreement in a WORD document with the ability to track changes.\n\n` +
+      `Please include the approved concessions on the room agreement and date the contract to be signed by [SIGNING DATE]. We're not shopping — we just need time to get through all the agreements.\n\n` +
+      `Items to include on the room agreement:\n` +
+      `- The itemized list of approved concessions\n` +
+      `- Signing date: [SIGNING DATE]\n` +
+      `- The name of the function spaces + square footage\n` +
+      `- 3-week cutoff date (21 days prior to arrival: ${cutoff})\n` +
+      `- Direct billing specified as the method of payment (no deposits required). If a new direct-billing application is required, please send it over with the room agreement.\n\n` +
+      `Please have KJ Sports Travel as the signee, but the loyalty points go to:\n` +
+      `  Member Name: [MEMBER NAME]\n` +
+      `  [Loyalty Program] Membership Number: [NUMBER]\n\n` +
+      `Thank you!`,
+    )
+    setContractTarget(inv)
+  }
+  const confirmSendContract = async () => {
+    if (!contractTarget) return
+    const inv = contractTarget
+    setContractSending(true)
+    const res = await sendContractRequest(inv.id, { subject: contractSubject.trim(), message: contractMessage })
+    setContractSending(false)
+    if ('error' in res) { alert(`Could not send: ${res.error}`); return }
+    setContractTarget(null)
+    alert(`Contract request sent to ${res.sent_to}.`)
+  }
+
   // Remove a hotel from this RFP entirely (sidebar — receives MouseEvent to stop propagation)
   const removeInvite = async (inv: Invitation, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -2380,6 +2434,7 @@ export default function TripDetail() {
               onPass={passHotel}
               onResetStatus={resetHotelStatus}
               onReopen={setReopenTarget}
+              onContractRequest={openContractDialog}
               reopeningId={reopeningId}
               onCopyLink={copyLink}
               onContactUpdated={(id, name, email) => {
@@ -2556,6 +2611,51 @@ export default function TripDetail() {
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Contract-request dialog — prefilled from the standard template, fully editable */}
+      {contractTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setContractTarget(null)}>
+          <div className="w-full max-w-2xl rounded-xl bg-white dark:bg-slate-800 p-6 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Send contract request to {contractTarget.hotel_name}
+            </h3>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+              Prefilled from the standard template. Edit anything — fill in the signing date, direct-billing details, and the loyalty member/points — then send.
+            </p>
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Subject</label>
+            <input
+              value={contractSubject}
+              onChange={(e) => setContractSubject(e.target.value)}
+              className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008]"
+            />
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Message</label>
+            <textarea
+              value={contractMessage}
+              onChange={(e) => setContractMessage(e.target.value)}
+              rows={16}
+              className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008]"
+            />
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+              Sends to {contractTarget.hotel_contact_email || 'the hotel'}, CC'ing the assigned managers.
+            </p>
+            <div className="mt-5 flex items-center gap-2">
+              <button
+                onClick={confirmSendContract}
+                disabled={contractSending || !contractMessage.trim()}
+                className="rounded-lg bg-[#1C1008] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#2d1e0e] disabled:opacity-50"
+              >
+                {contractSending ? 'Sending…' : 'Send contract request'}
+              </button>
+              <button
+                onClick={() => setContractTarget(null)}
+                className="px-4 py-2 text-sm font-medium text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
