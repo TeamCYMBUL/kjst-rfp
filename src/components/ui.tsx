@@ -1,4 +1,5 @@
 import type { ReactNode, InputHTMLAttributes, TextareaHTMLAttributes, SelectHTMLAttributes } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
 export function PageHeader({
@@ -155,6 +156,62 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
     <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center dark:border-slate-600 dark:bg-slate-800">
       <p className="text-sm font-medium text-slate-600 dark:text-slate-300">{title}</p>
       {children && <div className="mt-3">{children}</div>}
+    </div>
+  )
+}
+
+// A small, dismissible "how to use this page" tip. Each unique `id` remembers its
+// own dismissal in localStorage, so it reads as a helpful hint, not clutter — once
+// someone clicks it away it stays gone on that browser.
+export function PageTip({
+  id,
+  title = 'Quick tips',
+  children,
+  className = '',
+}: {
+  id: string
+  title?: string
+  children: ReactNode
+  className?: string
+}) {
+  const storageKey = `kjst_tip_${id}`
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(storageKey) === '1'
+    } catch {
+      return false
+    }
+  })
+  if (dismissed) return null
+  const dismiss = () => {
+    try {
+      localStorage.setItem(storageKey, '1')
+    } catch {
+      /* private mode / storage disabled — just hide for this view */
+    }
+    setDismissed(true)
+  }
+  return (
+    <div
+      className={`relative rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/15 px-5 py-4 pr-9 text-sm text-amber-900 dark:text-amber-100 ${className}`}
+    >
+      <button
+        onClick={dismiss}
+        title="Got it — hide this tip"
+        aria-label="Dismiss tip"
+        className="absolute right-2.5 top-2.5 flex h-6 w-6 items-center justify-center rounded-md text-base leading-none text-amber-500 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/40 transition-colors"
+      >
+        &times;
+      </button>
+      <p className="mb-2 flex items-center gap-2 font-semibold">
+        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M9 18h6" />
+          <path d="M10 22h4" />
+          <path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z" />
+        </svg>
+        {title}
+      </p>
+      <div className="space-y-1.5 text-amber-800/90 dark:text-amber-100/80 leading-relaxed">{children}</div>
     </div>
   )
 }

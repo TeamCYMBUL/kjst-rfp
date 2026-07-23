@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { formatDate, countVisits } from '../lib/format'
-import { Badge, ErrorNote, LinkButton, Loading } from '../components/ui'
+import { Badge, ErrorNote, LinkButton, Loading, PageTip } from '../components/ui'
 
 
 type DashTrip = {
@@ -396,6 +396,12 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <PageTip id="dashboard" title="Getting around the dashboard">
+        <p>&bull; Click any trip to open its workspace: invite hotels, compare bids side by side, pick a winner, and export the grid or proposal.</p>
+        <p>&bull; <strong>+ New trip</strong> starts one (add the team first with <strong>+ New client</strong>). Each card shows bids in vs. hotels invited, and flags hotels still awaiting a reply.</p>
+        <p>&bull; Use the <strong>client filter</strong> and the <strong>Show closed</strong> toggle to narrow the list or review trips where a hotel has already been selected.</p>
+        <p>&bull; Signed a hotel outside the RFP flow? <strong>Log an award</strong> records it and lets you send the contract request.</p>
+      </PageTip>
 
       {/* Stats bar */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
