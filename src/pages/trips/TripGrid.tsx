@@ -66,9 +66,9 @@ function YesNoCell({ value, comment }: { value: boolean | null; comment?: string
     <div>
       <div className="flex items-center gap-1">
         {value ? (
-          <span className="font-semibold text-emerald-600">✓ Yes</span>
+          <span className="font-semibold text-emerald-600">✓Yes</span>
         ) : (
-          <span className="font-semibold text-red-500">✗ No</span>
+          <span className="font-semibold text-red-500">✗No</span>
         )}
         {comment && (
           <button
@@ -282,8 +282,8 @@ function meetingSpaceLabel(type: string | null | undefined, count: number | null
   const labels: Record<string, string> = {
     function_room: 'Function Room',
     ballroom: 'Ballroom',
-    restaurant: '⚠️ Restaurant',
-    suite_converted: '⚠️ Suite (converted)',
+    restaurant: 'Restaurant',
+    suite_converted: 'Suite (converted)',
     none: 'None',
   }
   const base = labels[type] ?? type
@@ -645,7 +645,7 @@ export default function TripGrid() {
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
             title="Save a snapshot of the current grid state"
           >
-            {versionSaving ? 'Saving…' : '💾 Save Version'}
+            {versionSaving ? 'Saving…' : 'Save Version'}
           </button>
           <button
             onClick={handleExport}
@@ -786,7 +786,7 @@ export default function TripGrid() {
                               title="Use this when the team picks this hotel, even if you've also confirmed by phone or email. It marks the winner, passes the rest, and closes the trip."
                               className="rounded px-2 py-1 text-xs font-medium bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-40 transition-colors"
                             >
-                              🏆 Award
+                              🏆Award
                             </button>
                           )}
                           {canEnterBidAndAward && (
@@ -797,7 +797,7 @@ export default function TripGrid() {
                               title="This hotel has no bid on file. If the deal was closed off the RFP (phone/email), enter their agreed terms here for the record, then award. The hotel is not emailed."
                               className="rounded px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-800 hover:bg-indigo-200 disabled:opacity-40 transition-colors"
                             >
-                              ✎ Enter bid &amp; award
+                              Enter bid &amp; award
                             </a>
                           )}
                           {canUndoAward && (

@@ -216,7 +216,6 @@ export default function ClientsList() {
       {clients.length === 0 ? (
         /* ── Empty state ── */
         <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-16 text-center">
-          <div className="mb-3 text-4xl">🏀</div>
           <h2 className="text-base font-semibold text-slate-700 dark:text-slate-300">No clients yet</h2>
           <p className="mt-1 text-sm text-slate-400 dark:text-slate-500">
             Add your first sports team to get started.
@@ -429,7 +428,7 @@ export default function ClientsList() {
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#2d1e0e]"
                     >
-                      🖨️ Print all proposals
+                      Print all proposals
                       <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{proposalCounts.total}</span>
                     </a>
                     <a
@@ -442,7 +441,7 @@ export default function ClientsList() {
                           : 'pointer-events-none border-slate-200 text-slate-400 dark:border-slate-700 dark:text-slate-600'
                       }`}
                     >
-                      🖨️ Print new proposals
+                      Print new proposals
                       <span className={`rounded-full px-2 py-0.5 text-xs ${proposalCounts.unprinted > 0 ? 'bg-[#1C1008]/10 dark:bg-white/10' : 'bg-slate-100 dark:bg-slate-800'}`}>
                         {proposalCounts.unprinted}
                       </span>
@@ -487,7 +486,7 @@ export default function ClientsList() {
                             href={`mailto:${selected.primary_contact_email}`}
                             className="flex items-center gap-1.5 text-xs text-[#1C1008] hover:underline"
                           >
-                            <span>✉</span>
+                            <span></span>
                             {selected.primary_contact_email}
                           </a>
                         )}
@@ -496,7 +495,7 @@ export default function ClientsList() {
                             href={`tel:${selected.primary_contact_phone}`}
                             className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 hover:underline"
                           >
-                            <span>📞</span>
+                            <span></span>
                             {selected.primary_contact_phone}
                           </a>
                         )}
@@ -508,7 +507,7 @@ export default function ClientsList() {
                         className="shrink-0 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                         title="Edit contact info"
                       >
-                        ✎
+                        
                       </Link>
                     )}
                   </div>
@@ -574,7 +573,7 @@ export default function ClientsList() {
                               const winner = t.rfp_invitations?.find((i) => i.status === 'awarded')?.hotel_name
                               return winner ? (
                                 <span className="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
-                                  🏆 {winner}
+                                  🏆{winner}
                                 </span>
                               ) : null
                             })()}

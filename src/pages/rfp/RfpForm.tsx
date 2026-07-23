@@ -1366,7 +1366,7 @@ export default function RfpForm() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <div className="max-w-sm rounded-xl border border-red-200 bg-white p-8 text-center shadow-sm">
-          <div className="mb-2 text-3xl">🔗</div>
+          <div className="mb-2 text-3xl"></div>
           <h1 className="text-lg font-semibold text-slate-800">Link not found</h1>
           <p className="mt-2 text-sm text-slate-500">{loadError}</p>
         </div>
@@ -1387,7 +1387,6 @@ export default function RfpForm() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <div className="max-w-md rounded-xl border border-emerald-200 bg-white p-10 text-center shadow-sm">
-          <div className="mb-3 text-4xl">✅</div>
           <h1 className="text-xl font-bold text-slate-900">Thank you!</h1>
           <p className="mt-2 text-sm text-slate-600">
             Your bid for <strong>{data.invitation.hotel_name}</strong> on the{' '}
@@ -1407,7 +1406,7 @@ export default function RfpForm() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <div className="max-w-md rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-          <div className="mb-3 text-3xl">📋</div>
+          <div className="mb-3 text-3xl"></div>
           <h1 className="text-xl font-bold text-slate-900">Response Recorded</h1>
           <p className="mt-2 text-sm text-slate-600">
             Thank you for letting us know. We've noted that{' '}
@@ -1665,9 +1664,9 @@ export default function RfpForm() {
                   : 'bg-red-50 text-red-600'
             }`}
           >
-            {saveStatus === 'saving' && '💾 Saving draft…'}
-            {saveStatus === 'saved' && '✓ Draft saved — you can return to this link to finish later.'}
-            {saveStatus === 'error' && `⚠ Couldn't auto-save: ${saveError}`}
+            {saveStatus === 'saving' && 'Saving draft…'}
+            {saveStatus === 'saved' && '✓Draft saved — you can return to this link to finish later.'}
+            {saveStatus === 'error' && `Couldn't auto-save: ${saveError}`}
           </div>
         )}
 
@@ -2127,7 +2126,7 @@ export default function RfpForm() {
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                     >
-                      <span>📎</span>
+                      <span></span>
                       <span>{m.name}</span>
                       <span className="text-[#1C1008]">↗</span>
                     </a>
@@ -2153,7 +2152,7 @@ export default function RfpForm() {
                       className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
                     >
                       <span className="min-w-0 flex-1 truncate text-sm text-slate-700">
-                        📎 {m.name}{m.size ? ` · ${formatBytes(m.size)}` : ''}
+                        {m.name}{m.size ? ` · ${formatBytes(m.size)}` : ''}
                       </span>
                       {!isReadOnly && (
                         <button

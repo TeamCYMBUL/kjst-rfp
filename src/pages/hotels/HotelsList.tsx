@@ -188,7 +188,7 @@ function HotelForm({
           {logoUrl ? (
             <img src={logoUrl} alt="Hotel logo" className="h-full w-full object-contain p-1" />
           ) : (
-            <span className="text-xl">🏨</span>
+            <span className="text-xl"></span>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -845,7 +845,7 @@ function HotelImportModal({ onClose, onImported }: ImportModalProps) {
           {/* File upload */}
           <div>
             <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-600 px-6 py-8 text-center hover:border-[#1C1008]/30 transition-colors">
-              <span className="text-2xl mb-2">📁</span>
+              <span className="text-2xl mb-2"></span>
               <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Click to upload CSV or Excel file</span>
               <span className="mt-1 text-xs text-slate-400 dark:text-slate-500">Columns: name (required), chain, city, league, contact_name, contact_email, contact_phone</span>
               <input
@@ -892,7 +892,7 @@ function HotelImportModal({ onClose, onImported }: ImportModalProps) {
 
           {success !== null && (
             <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3 text-sm font-medium text-emerald-700 dark:text-emerald-300">
-              ✅ {success} hotel{success !== 1 ? 's' : ''} imported successfully!
+              {success} hotel{success !== 1 ? 's' : ''} imported successfully!
             </div>
           )}
 

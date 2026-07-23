@@ -227,7 +227,7 @@ export default function Tickets() {
                     className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/40 px-3 py-2"
                   >
                     <span className="min-w-0 flex-1 truncate text-sm text-slate-700 dark:text-slate-200">
-                      📎 {a.name}{a.size ? ` · ${formatBytes(a.size)}` : ''}
+                      {a.name}{a.size ? ` · ${formatBytes(a.size)}` : ''}
                     </span>
                     <button
                       type="button"
@@ -258,7 +258,7 @@ export default function Tickets() {
             <Button type="submit" disabled={submitting || uploading || !title.trim() || !description.trim()}>
               {submitting ? 'Submitting…' : 'Submit ticket'}
             </Button>
-            {justSubmitted && <span className="text-sm text-emerald-600">✓ Sent — thanks!</span>}
+            {justSubmitted && <span className="text-sm text-emerald-600">✓Sent — thanks!</span>}
           </div>
         </form>
       </Card>
@@ -290,7 +290,7 @@ export default function Tickets() {
                           onClick={() => openTicketAttachment(a.path)}
                           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-600 px-2.5 py-1 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                         >
-                          <span>📎</span>
+                          <span></span>
                           <span className="max-w-[200px] truncate">{a.name}</span>
                           <span className="text-[#1C1008] dark:text-amber-400">↗</span>
                         </button>

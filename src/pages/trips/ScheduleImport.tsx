@@ -516,7 +516,7 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
                   </>
                 ) : (
                   <>
-                    <div className="text-3xl mb-3">📁</div>
+                    <div className="text-3xl mb-3"></div>
                     <p className="text-sm font-medium text-slate-700">Drop a file here, or click to browse</p>
                     <p className="mt-1 text-xs text-slate-400">Excel, PDF, Word, CSV — any format</p>
                   </>
@@ -651,7 +651,7 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
           {/* Step 4: Success */}
           {step === 4 && (
             <div className="text-center py-8">
-              <div className="text-4xl mb-3">✅</div>
+              <div className="text-4xl mb-3"></div>
               <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">Import complete!</h3>
               <p className="mt-1 text-sm text-slate-500">{createdCount} draft trip{createdCount !== 1 ? 's' : ''} created successfully.</p>
               <button onClick={onClose} className="mt-4 rounded-lg bg-[#1C1008] px-5 py-2 text-sm font-semibold text-white hover:bg-[#2d1e0e]">

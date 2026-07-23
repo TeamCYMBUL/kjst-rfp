@@ -31,15 +31,15 @@ type TimelineEvent = {
 }
 
 const EVENT_META: Record<TimelineEvent['event_type'], { icon: string; label: string }> = {
-  schedule_imported: { icon: '📥', label: 'Schedule imported' },
-  trip_created: { icon: '➕', label: 'Trip created' },
-  invite_sent: { icon: '📨', label: 'Hotel invited' },
-  bid_received: { icon: '✅', label: 'Bid received' },
-  bid_declined: { icon: '🚫', label: 'Hotel declined' },
-  build_saved: { icon: '💾', label: 'Build saved' },
-  reminder_sent: { icon: '🔔', label: 'Reminder sent' },
+  schedule_imported: { icon: '', label: 'Schedule imported' },
+  trip_created: { icon: '', label: 'Trip created' },
+  invite_sent: { icon: '', label: 'Hotel invited' },
+  bid_received: { icon: '', label: 'Bid received' },
+  bid_declined: { icon: '', label: 'Hotel declined' },
+  build_saved: { icon: '', label: 'Build saved' },
+  reminder_sent: { icon: '', label: 'Reminder sent' },
   awarded: { icon: '🏆', label: 'Awarded' },
-  proposal_sent: { icon: '📤', label: 'Proposal sent to client' },
+  proposal_sent: { icon: '', label: 'Proposal sent to client' },
 }
 
 function median(nums: number[]): number | null {
@@ -287,7 +287,7 @@ export default function TimelinePage() {
   if (!allowed) {
     return (
       <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-12 text-center">
-        <div className="text-3xl mb-2">🔒</div>
+        <div className="text-3xl mb-2"></div>
         <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Restricted</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           The lifecycle timeline is limited to the KJST operations account.

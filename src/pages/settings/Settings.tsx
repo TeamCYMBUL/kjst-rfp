@@ -105,21 +105,21 @@ const THEME_OPTIONS: { key: Theme; label: string; icon: string; description: str
   {
     key: 'light',
     label: 'Light',
-    icon: '☀️',
+    icon: '',
     description: 'Default light interface',
     Preview: LightPreview,
   },
   {
     key: 'dark',
     label: 'Dark',
-    icon: '🌙',
+    icon: '',
     description: 'Easier on the eyes at night',
     Preview: DarkPreview,
   },
   {
     key: 'system',
     label: 'System',
-    icon: '🖥️',
+    icon: '',
     description: 'Matches your device setting',
     Preview: SystemPreview,
   },
@@ -157,7 +157,7 @@ export default function Settings() {
         description="Choose how KJST RFP looks to you."
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {THEME_OPTIONS.map(({ key, label, icon, description, Preview }) => {
+          {THEME_OPTIONS.map(({ key, label, description, Preview }) => {
             const isSelected = theme === key
             return (
               <button
@@ -185,7 +185,6 @@ export default function Settings() {
 
                 {/* Label */}
                 <div className="flex items-center gap-1.5">
-                  <span className="text-base">{icon}</span>
                   <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
                     {label}
                   </span>
@@ -253,7 +252,7 @@ export default function Settings() {
               onClick={handleSavePrefs}
               className="rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#2d1e0e] dark:bg-amber-500 dark:hover:bg-amber-400 dark:text-slate-900"
             >
-              {saved ? '✓ Saved' : 'Save preferences'}
+              {saved ? '✓Saved' : 'Save preferences'}
             </button>
           </div>
         </div>

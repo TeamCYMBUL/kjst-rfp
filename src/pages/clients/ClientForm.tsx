@@ -288,7 +288,7 @@ export default function ClientForm() {
               {logoUrl ? (
                 <img src={logoUrl} alt="Team logo" className="h-full w-full object-contain p-1" />
               ) : (
-                <span className="text-2xl">🏀</span>
+                <span className="text-2xl"></span>
               )}
             </div>
             <div>
@@ -548,7 +548,7 @@ export default function ClientForm() {
                     rel="noopener noreferrer"
                     className="min-w-0 flex-1 truncate text-sm text-slate-700 dark:text-slate-200 hover:underline"
                   >
-                    📎 {m.name}{m.size ? ` · ${formatBytes(m.size)}` : ''}
+                    {m.name}{m.size ? ` · ${formatBytes(m.size)}` : ''}
                   </a>
                   <button
                     type="button"

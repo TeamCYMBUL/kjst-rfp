@@ -137,14 +137,14 @@ export default function ProposalPrint() {
         onClick={() => window.print()}
         style={{ background: PRIMARY, color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
       >
-        🖨️ Print / Save as PDF
+        Print / Save as PDF
       </button>
       {!fullDetailMode && (
         <Link
           to={`/trips/${tripId}/proposal?hotel=all`}
           style={{ background: 'white', color: PRIMARY, border: `1px solid #e2e8f0`, borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 500, textDecoration: 'none' }}
         >
-          🖨️ Print All Full Proposals
+          Print All Full Proposals
         </Link>
       )}
       <Link

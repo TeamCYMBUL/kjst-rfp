@@ -454,7 +454,7 @@ function InviteForm({
                   <span className="flex items-center gap-1.5 font-medium text-slate-800 dark:text-slate-200">
                     {s.hotel_name}
                     {s.fromDatabase && (
-                      <span className="rounded px-1 py-0.5 text-[10px] bg-blue-50 text-blue-500 font-semibold">📋 DB</span>
+                      <span className="rounded px-1 py-0.5 text-[10px] bg-blue-50 text-blue-500 font-semibold">DB</span>
                     )}
                     {s.league && (
                       <span className="rounded px-1 py-0.5 text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-semibold">{s.league}</span>
@@ -656,7 +656,7 @@ function BidSummaryTable({
                     <td className="py-2.5 pr-6">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`font-medium ${isSelected ? 'text-[#1C1008] dark:text-amber-400' : 'text-slate-800 dark:text-slate-200'} ${isPassed || isDeclined ? 'line-through' : ''}`}>
-                          {isAwarded && '🏆 '}{isPassed && '✗ '}{inv.hotel_name}
+                          {isAwarded && '🏆'}{isPassed && '✗'}{inv.hotel_name}
                         </span>
                         {isDeclined && (
                           <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400">Declined</span>
@@ -936,7 +936,7 @@ function HotelPanel({
                 <button onClick={() => setEditingContact(true)}
                   className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 transition-colors"
                   title="Edit contact">
-                  ✎
+                  
                 </button>
               </div>
             )}
@@ -981,7 +981,7 @@ function HotelPanel({
                 title={!inv.hotel_contact_email ? 'No email address on file' : 'Send the room-agreement / contract request to this hotel'}
                 className="rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 disabled:opacity-40 transition-colors"
               >
-                📄 Send contract request
+                Send contract request
               </button>
             )}
             {/* Undo awarded / passed / unavailable */}
@@ -998,7 +998,7 @@ function HotelPanel({
               onClick={() => onCopyLink(inv.token)}
               className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
             >
-              {copied === inv.token ? '✓ Copied' : 'Copy link'}
+              {copied === inv.token ? '✓Copied' : 'Copy link'}
             </button>
             {/* Enter the bid on the hotel's behalf (e.g. an award made off-platform).
                 Opens the RFP form in KJST entry mode; the hotel gets no email. */}
@@ -1010,7 +1010,7 @@ function HotelPanel({
                 title="Fill in this hotel's bid yourself (e.g. a selection made outside the RFP). The hotel is not emailed."
                 className="rounded-lg border border-indigo-200 dark:border-indigo-700 px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
               >
-                ✎ Enter bid for them
+                Enter bid for them
               </a>
             )}
             {canEmailStatus(inv.status) && (
@@ -1020,7 +1020,7 @@ function HotelPanel({
                 title={!inv.hotel_contact_email ? 'No email address on file' : undefined}
                 className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors"
               >
-                {sendingEmail === inv.id ? 'Sending…' : emailFlash === inv.id ? '✓ Sent!' : inv.sent_at ? 'Resend email' : 'Send email'}
+                {sendingEmail === inv.id ? 'Sending…' : emailFlash === inv.id ? '✓Sent!' : inv.sent_at ? 'Resend email' : 'Send email'}
               </button>
             )}
             {inv.sent_at && (inv.status === 'sent' || inv.status === 'opened') && (
@@ -1030,7 +1030,7 @@ function HotelPanel({
                 title={!inv.hotel_contact_email ? 'No email address on file' : 'Send a short follow-up nudge (not the full proposal)'}
                 className="rounded-lg border border-amber-200 dark:border-amber-700 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-40 transition-colors"
               >
-                {sendingReminder === inv.id ? 'Sending…' : reminderFlash === inv.id ? '✓ Reminder sent!' : 'Send reminder'}
+                {sendingReminder === inv.id ? 'Sending…' : reminderFlash === inv.id ? '✓Reminder sent!' : 'Send reminder'}
               </button>
             )}
             {/* Pass — turn a hotel down even before they've submitted (e.g. they
@@ -1118,11 +1118,11 @@ function HotelPanel({
 
               type Chip = { label: string; value: string; ok?: boolean | null; warn?: boolean }
               const chips: Chip[] = []
-              if (flexAns)  chips.push({ label: 'Flex cancel',      value: flexAns.answer_yes_no  === true ? '✓ Yes' : '✗ No',  ok: flexAns.answer_yes_no,  warn: noFlex })
+              if (flexAns)  chips.push({ label: 'Flex cancel',      value: flexAns.answer_yes_no  === true ? '✓Yes' : '✗No',  ok: flexAns.answer_yes_no,  warn: noFlex })
               if (commAns)  chips.push({ label: 'Commission',        value: commAns.answer_value ?? '—',                          warn: noComm })
               if (compAns)  { const v = suiteAnswerView(compAns); chips.push({ label: 'Free suites',    value: v.display, ok: v.positive }) }
               if (upgAns)   { const v = suiteAnswerView(upgAns);  chips.push({ label: 'Suite upgrades', value: v.display, ok: v.positive }) }
-              if (postAns)  chips.push({ label: 'Playoff clause',    value: postAns.answer_yes_no === true ? '✓ Yes' : '✗ No',  ok: postAns.answer_yes_no })
+              if (postAns)  chips.push({ label: 'Playoff clause',    value: postAns.answer_yes_no === true ? '✓Yes' : '✗No',  ok: postAns.answer_yes_no })
               if (score != null) chips.push({ label: 'Score', value: String(score) })
 
               if (chips.length === 0) return null
@@ -1284,7 +1284,7 @@ function HotelPanel({
                       onClick={() => openMenuAttachment(m.path)}
                       className="flex w-full items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                     >
-                      <span className="shrink-0">📎</span>
+                      <span className="shrink-0"></span>
                       <span className="min-w-0 flex-1 truncate">{m.name}</span>
                       <span className="shrink-0 text-xs text-[#1C1008] dark:text-amber-400">Open ↗</span>
                     </button>
@@ -1341,7 +1341,7 @@ function HotelPanel({
                 rel="noopener noreferrer"
                 className="mt-2 block w-full rounded-lg border border-slate-200 dark:border-slate-600 px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-center"
               >
-                🖨️ Print full proposal (PDF)
+                Print full proposal (PDF)
               </a>
             </div>
 
@@ -1367,7 +1367,7 @@ function HotelPanel({
                                 the entered number. Keeps this panel in sync with the summary. */}
                             {ans.answer_yes_no != null ? (
                               <span className={`font-medium ${isYes ? 'text-emerald-600' : 'text-red-500'}`}>
-                                {isYes ? '✓ Yes' : '✗ No'}
+                                {isYes ? '✓Yes' : '✗No'}
                               </span>
                             ) : (
                               <span className="font-medium text-slate-700 dark:text-slate-300">{ans.answer_value || '—'}</span>
@@ -1481,6 +1481,10 @@ export default function TripDetail() {
   const [invites, setInvites] = useState<Invitation[] | null>(null)
   const [concessionItems, setConcessionItems] = useState<ConcessionItem[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // On mobile the hotel list and the bid detail can't sit side by side, so we
+  // show one at a time: the list until a hotel is tapped, then its bid with a
+  // Back button. On lg+ both are always visible and this is ignored.
+  const [mobileView, setMobileView] = useState<'list' | 'detail'>('list')
   const [showInvite, setShowInvite] = useState(false)
   const [showTripInfo, setShowTripInfo] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -1974,10 +1978,10 @@ export default function TripDetail() {
               </span>
             )}
             <Badge status={trip.status} />
-            {awarded && <span className="rounded-full bg-amber-100 dark:bg-amber-900/20 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">🏆 {awarded.hotel_name}</span>}
+            {awarded && <span className="rounded-full bg-amber-100 dark:bg-amber-900/20 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">🏆{awarded.hotel_name}</span>}
             {isViewer && (
               <span className="rounded-full border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 px-2 py-0.5 text-xs text-slate-400 dark:text-slate-500">
-                👁 View only
+                View only
               </span>
             )}
           </div>
@@ -2014,7 +2018,7 @@ export default function TripDetail() {
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           {reminderResult && (
-            <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">✓ {reminderResult.sent} reminder{reminderResult.sent !== 1 ? 's' : ''} sent</span>
+            <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">✓{reminderResult.sent} reminder{reminderResult.sent !== 1 ? 's' : ''} sent</span>
           )}
           <button
             onClick={() => setShowTripInfo((s) => !s)}
@@ -2057,7 +2061,7 @@ export default function TripDetail() {
                     onClick={() => setExportOpen(false)}
                     className={`flex w-full flex-col border-b border-slate-100 dark:border-slate-700 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${submittedInvites.length === 0 ? 'pointer-events-none opacity-40' : ''}`}
                   >
-                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200">🖨️ Print all proposals ({submittedInvites.length})</span>
+                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200">Print all proposals ({submittedInvites.length})</span>
                     <span className="text-xs text-slate-400 dark:text-slate-500">Full write-up for every bid received</span>
                   </Link>
                   <Link
@@ -2066,7 +2070,7 @@ export default function TripDetail() {
                     onClick={() => setExportOpen(false)}
                     className={`flex w-full flex-col border-b border-slate-100 dark:border-slate-700 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${unprintedCount === 0 ? 'pointer-events-none opacity-40' : ''}`}
                   >
-                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200">🖨️ Print new proposals ({unprintedCount})</span>
+                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200">Print new proposals ({unprintedCount})</span>
                     <span className="text-xs text-slate-400 dark:text-slate-500">
                       {unprintedCount === 0 ? 'Nothing new since last print' : 'Only bids not yet printed'}
                     </span>
@@ -2115,7 +2119,7 @@ export default function TripDetail() {
               title="Save a snapshot when you finalize a build, so you can point back to what the client saw."
               className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors"
             >
-              {savingVersion ? 'Saving…' : '💾 Save Version'}
+              {savingVersion ? 'Saving…' : 'Save Version'}
             </button>
           )}
           <LinkButton to={`/trips/${id}/grid`} variant="secondary">
@@ -2263,7 +2267,7 @@ export default function TripDetail() {
               className="flex w-full items-center justify-between px-5 py-3 text-left"
             >
               <div>
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">🍽️ F&amp;B forecast plan</p>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">F&amp;B forecast plan</p>
                 <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                   {activeCount > 0
                     ? `${activeCount} meal${activeCount !== 1 ? 's' : ''} set — the grid auto-computes each hotel's Forecasted F&B`
@@ -2341,7 +2345,7 @@ export default function TripDetail() {
         )}
 
         {/* Left: hotel list */}
-        <div className="flex w-full shrink-0 flex-col border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 lg:w-64 lg:border-b-0 lg:border-r">
+        <div className={`${mobileView === 'detail' ? 'hidden lg:flex' : 'flex'} w-full shrink-0 flex-col border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 lg:w-64 lg:border-b-0 lg:border-r`}>
           {invites.length > 0 && <ResponseProgress invites={invites} />}
 
           <div className="flex items-center justify-between px-4 py-2.5">
@@ -2408,13 +2412,13 @@ export default function TripDetail() {
                     />
                   )}
                   <button
-                    onClick={() => setSelectedId(inv.id)}
+                    onClick={() => { setSelectedId(inv.id); setMobileView('detail') }}
                     className={`flex flex-1 min-w-0 items-center gap-3 py-3 pr-4 text-left ${isViewer ? 'pl-4' : 'pl-3'}`}
                   >
                     <StatusDot status={inv.status} sentAt={inv.sent_at} />
                     <div className="min-w-0 flex-1">
                       <div className={`truncate text-sm font-medium ${isAwarded ? 'text-amber-700' : inv.status === 'passed' || inv.status === 'unavailable' || inv.status === 'declined' ? 'text-slate-400 line-through' : 'text-slate-800 dark:text-slate-200'}`}>
-                        {isAwarded && '🏆 '}{inv.hotel_name}
+                        {isAwarded && '🏆'}{inv.hotel_name}
                       </div>
                       {(inv.status === 'passed' || inv.status === 'unavailable' || inv.status === 'declined') ? (
                         <span className="mt-0.5 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-600 dark:bg-red-900/30 dark:text-red-400">
@@ -2460,7 +2464,7 @@ export default function TripDetail() {
               <div className="space-y-1">
                 {versions.map((v) => (
                   <div key={v.id} className="flex items-center justify-between gap-2">
-                    <span className="truncate text-xs text-slate-600 dark:text-slate-300">📌 {v.version_label}</span>
+                    <span className="truncate text-xs text-slate-600 dark:text-slate-300">{v.version_label}</span>
                     <button
                       onClick={() => viewVersion(v.id)}
                       className="shrink-0 rounded px-2 py-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
@@ -2492,7 +2496,14 @@ export default function TripDetail() {
         </div>
 
         {/* Right: hotel detail or empty state */}
-        <div className="flex-1 bg-slate-50 dark:bg-slate-700/50">
+        <div className={`${mobileView === 'detail' ? 'flex' : 'hidden lg:flex'} flex-1 flex-col bg-slate-50 dark:bg-slate-700/50`}>
+          {/* Mobile-only back to hotel list */}
+          <button
+            onClick={() => setMobileView('list')}
+            className="flex shrink-0 items-center gap-1 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 lg:hidden"
+          >
+            ← All hotels
+          </button>
           {selectedInvite ? (
             <HotelPanel
               inv={selectedInvite}
@@ -2566,7 +2577,7 @@ export default function TripDetail() {
       {/* ── Decline toast ── */}
       {declineToast && (
         <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-slate-800 dark:bg-slate-100 px-5 py-3 text-sm font-medium text-white dark:text-slate-800 shadow-lg">
-          ✓ {declineToast}
+          ✓{declineToast}
         </div>
       )}
 

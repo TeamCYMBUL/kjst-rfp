@@ -258,7 +258,7 @@ function HeaderTab({ orgId, isViewer }: { orgId: string | null; isViewer: boolea
           <Button onClick={save} disabled={saving}>
             {saving ? 'Saving…' : 'Save changes'}
           </Button>
-          {saved && <span className="text-sm text-emerald-600">✓ Saved</span>}
+          {saved && <span className="text-sm text-emerald-600">✓Saved</span>}
         </div>
       )}
     </div>

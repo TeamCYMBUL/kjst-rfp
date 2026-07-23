@@ -147,7 +147,7 @@ export default function ClientProposalsPrint() {
         onClick={() => window.print()}
         style={{ background: PRIMARY, color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
       >
-        🖨️ Print / Save as PDF
+        Print / Save as PDF
       </button>
       <Link
         to={`/clients/${clientId}`}

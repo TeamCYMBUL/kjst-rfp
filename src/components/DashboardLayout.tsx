@@ -89,21 +89,7 @@ export default function DashboardLayout() {
               }`
             }
           >
-            <span className="mr-2">📊</span>Dashboard
-          </NavLink>
-
-          {/* Playbook — always-available "how to run an RFP" guide */}
-          <NavLink
-            to="/playbook"
-            className={({ isActive }) =>
-              `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-white/15 text-white'
-                  : 'text-white/60 hover:bg-white/10 hover:text-white'
-              }`
-            }
-          >
-            <span className="mr-2">📖</span>Playbook
+            Dashboard
           </NavLink>
 
           {/* Clients */}
@@ -117,7 +103,7 @@ export default function DashboardLayout() {
               }`
             }
           >
-            <span className="mr-2">🏀</span>Clients
+            Clients
           </NavLink>
 
           {/* Trips */}
@@ -131,7 +117,7 @@ export default function DashboardLayout() {
               }`
             }
           >
-            <span className="mr-2">✈️</span>Trips
+            Trips
           </NavLink>
 
           {/* Hotels */}
@@ -145,7 +131,7 @@ export default function DashboardLayout() {
               }`
             }
           >
-            <span className="mr-2">🏨</span>Hotels
+            Hotels
           </NavLink>
 
           {/* RFP Template */}
@@ -159,7 +145,7 @@ export default function DashboardLayout() {
               }`
             }
           >
-            <span className="mr-2">📋</span>RFP Template
+            RFP Template
           </NavLink>
 
           {/* Timeline — restricted to the single timeline-admin account (not all
@@ -175,7 +161,7 @@ export default function DashboardLayout() {
                 }`
               }
             >
-              <span className="mr-2">🕓</span>Timeline
+              Timeline
             </NavLink>
           )}
 
@@ -191,7 +177,7 @@ export default function DashboardLayout() {
                 }`
               }
             >
-              <span className="mr-2">👥</span>Team
+              Team
             </NavLink>
           )}
 
@@ -204,10 +190,22 @@ export default function DashboardLayout() {
           {isViewer && (
             <div className="px-3 pb-2">
               <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white/50">
-                👁 View only
+                View only
               </span>
             </div>
           )}
+          <NavLink
+            to="/playbook"
+            className={({ isActive }) =>
+              `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-white/15 text-white'
+                  : 'text-white/60 hover:bg-white/10 hover:text-white'
+              }`
+            }
+          >
+            Playbook
+          </NavLink>
           <NavLink
             to="/tickets"
             className={({ isActive }) =>
@@ -218,7 +216,7 @@ export default function DashboardLayout() {
               }`
             }
           >
-            <span className="mr-2">🎫</span>Submit a Ticket
+            Submit a Ticket
           </NavLink>
           <NavLink
             to="/settings"
@@ -230,7 +228,7 @@ export default function DashboardLayout() {
               }`
             }
           >
-            <span className="mr-2">⚙️</span>Settings
+            Settings
           </NavLink>
           <button
             onClick={signOut}

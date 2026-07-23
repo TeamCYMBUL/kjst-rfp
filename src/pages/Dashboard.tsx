@@ -99,7 +99,7 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
             <Badge status={trip.status} />
             {trip.status === 'closed' && awardedHotel && (
               <span className="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                🏆 {awardedHotel}
+                🏆{awardedHotel}
               </span>
             )}
             <DeadlineChip deadline={trip.response_deadline} />
@@ -108,7 +108,7 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
                 title={`${delinquent} hotel${delinquent !== 1 ? 's' : ''} invited with no reply yet — consider a reminder`}
                 className="inline-flex items-center gap-1 rounded-full bg-red-100 dark:bg-red-900/40 px-2 py-0.5 text-xs font-semibold text-red-700 dark:text-red-300"
               >
-                ⚑ {delinquent} awaiting reply
+                {delinquent} awaiting reply
               </span>
             )}
           </div>
@@ -239,7 +239,7 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
                     title={`${groupDelinquent} hotel${groupDelinquent !== 1 ? 's' : ''} across this client with no reply yet`}
                     className="inline-flex items-center gap-1 rounded-full bg-red-100 dark:bg-red-900/40 px-2 py-0.5 text-xs font-semibold text-red-700 dark:text-red-300"
                   >
-                    ⚑ {groupDelinquent} awaiting reply
+                    {groupDelinquent} awaiting reply
                   </span>
                 )}
               </div>
@@ -345,7 +345,6 @@ export default function Dashboard() {
     return (
       <div className="mx-auto max-w-2xl space-y-8">
         <div className="text-center">
-          <div className="mb-2 text-4xl">🏀</div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
             Welcome to the KJST RFP Platform
           </h1>
@@ -442,7 +441,7 @@ export default function Dashboard() {
               onClick={() => setAwardOpen(true)}
               className="rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 px-3.5 py-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
             >
-              🏆 Log an award
+              🏆Log an award
             </button>
             {clientOptions.length > 0 && (
               <select
