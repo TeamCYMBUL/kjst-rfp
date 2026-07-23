@@ -763,7 +763,7 @@ function HotelPanel({
   score,
   onSendEmail,
   onSendReminder,
-  onMarkUnavailable,
+  onPass,
   onResetStatus,
   onReopen,
   reopeningId,
@@ -782,7 +782,7 @@ function HotelPanel({
   score: number | undefined
   onSendEmail: (inv: Invitation) => void
   onSendReminder: (inv: Invitation) => void
-  onMarkUnavailable: (inv: Invitation) => void
+  onPass: (inv: Invitation) => void
   onResetStatus: (inv: Invitation) => void
   onReopen: (inv: Invitation) => void
   reopeningId: string | null
@@ -974,12 +974,16 @@ function HotelPanel({
                 {sendingReminder === inv.id ? 'Sending…' : reminderFlash === inv.id ? '✓ Reminder sent!' : 'Send reminder'}
               </button>
             )}
+            {/* Pass — turn a hotel down even before they've submitted (e.g. they
+                emailed that the dates don't work, no RFP needed). Same red action
+                as on submitted bids; shows as "Not available" on the exported grid. */}
             {['sent', 'opened'].includes(inv.status) && (
               <button
-                onClick={() => onMarkUnavailable(inv)}
-                className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                onClick={() => onPass(inv)}
+                title="Turn this hotel down — e.g. they replied the dates don't work, no bid needed. Shows as 'Not available' on the exported grid. Use Undo to reverse."
+                className="rounded-lg border border-red-200 dark:border-red-800 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
               >
-                Not available
+                Pass
               </button>
             )}
           </div>
@@ -1619,12 +1623,6 @@ export default function TripDetail() {
     }
   }
 
-  const markUnavailable = async (inv: Invitation) => {
-    if (!confirm(`Mark "${inv.hotel_name}" as unavailable?\nThey'll be grayed out on the grid.`)) return
-    await supabase.from('rfp_invitations').update({ status: 'unavailable' }).eq('id', inv.id)
-    loadInvites()
-  }
-
   // Pass a single hotel — KJST knocks it off the list. Does NOT affect other hotels.
   const passHotel = async (inv: Invitation) => {
     setAwardingId(inv.id)
@@ -1633,9 +1631,12 @@ export default function TripDetail() {
     loadInvites()
   }
 
-  // Reset a single hotel back to 'submitted' — does NOT touch any other hotels
+  // Undo a pass / unavailable / award for a single hotel. Reset to 'submitted'
+  // only if they actually bid; a hotel passed before bidding goes back to 'sent'
+  // (never falsely shows as having submitted a bid). Does NOT touch other hotels.
   const resetHotelStatus = async (inv: Invitation) => {
-    await supabase.from('rfp_invitations').update({ status: 'submitted' }).eq('id', inv.id)
+    const backTo = inv.submitted_at ? 'submitted' : 'sent'
+    await supabase.from('rfp_invitations').update({ status: backTo }).eq('id', inv.id)
     loadInvites()
   }
 
@@ -2296,7 +2297,7 @@ export default function TripDetail() {
               score={scores.get(selectedInvite.id)?.score}
               onSendEmail={sendEmail}
               onSendReminder={sendReminder}
-              onMarkUnavailable={markUnavailable}
+              onPass={passHotel}
               onResetStatus={resetHotelStatus}
               onReopen={setReopenTarget}
               reopeningId={reopeningId}
