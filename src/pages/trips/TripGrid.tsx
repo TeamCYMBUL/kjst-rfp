@@ -473,7 +473,7 @@ export default function TripGrid() {
   const handleAward = async (invitationId: string, hotelName: string) => {
     if (
       !confirm(
-        `Award "${hotelName}"?\n\nThis will:\n• Mark this hotel as Awarded\n• Mark all other bids as Passed\n• Close the trip\n\nYou can undo this at any time.`,
+        `Award "${hotelName}"?\n\nThis will:\n• Mark this hotel as Awarded\n• Mark the other submitted bids as Passed\n• Close the trip\n\nHotels that declined or are unavailable keep their status. You can undo this at any time.`,
       )
     )
       return
@@ -483,12 +483,14 @@ export default function TripGrid() {
         .from('rfp_invitations')
         .update({ status: 'awarded' })
         .eq('id', invitationId)
+      // Only turn the losing SUBMITTED bids into "Passed" — never overwrite a
+      // hotel that declined, is unavailable, was already passed, or never responded.
       await supabase
         .from('rfp_invitations')
         .update({ status: 'passed' })
         .eq('trip_id', id!)
         .neq('id', invitationId)
-        .neq('status', 'awarded')
+        .eq('status', 'submitted')
       await supabase.from('trips').update({ status: 'closed' }).eq('id', id!)
       // Snapshot with updated statuses before re-render
       const awardedInvitations = invitations.map((inv) => ({
