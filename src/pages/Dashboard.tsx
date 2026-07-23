@@ -270,7 +270,7 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
                       }}
                       disabled={exportingClient === key}
                       title="Download the full Hotel Options grid — every trip and hotel choice for this client, ready to send."
-                      className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors"
+                      className="rounded-lg border border-[#1C1008]/25 dark:border-amber-700/50 bg-[#1C1008]/[0.07] dark:bg-amber-900/20 px-3 py-1.5 text-xs font-semibold text-[#1C1008] dark:text-amber-200 hover:bg-[#1C1008]/[0.13] dark:hover:bg-amber-900/40 disabled:opacity-40 transition-colors"
                     >
                       {exportingClient === key ? 'Exporting…' : '↓ Export hotel options'}
                     </button>
