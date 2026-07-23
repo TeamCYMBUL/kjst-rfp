@@ -181,15 +181,20 @@ export function HotelFull({
   const hotelAnswers = resp ? answers.filter((a) => a.response_id === resp.id) : []
   const ansByItemId = new Map(hotelAnswers.map((a) => [a.concession_item_id, a]))
 
+  // When the bid also carries a second visit (same city twice), label the
+  // first-visit rates "— Stay 1" so they read clearly against the "— Stay 2"
+  // rows below. Single-visit trips keep the plain "King Rate" / "Suite Rate".
+  const hasStay2Rows = inv.visit2_declined || resp?.stay2_king_rate != null || resp?.stay2_suite_rate != null
+  const s1 = hasStay2Rows ? ' — Stay 1' : ''
   const rateRows: [string, string][] = inv.visit1_declined
     ? [
-      ['King/Suite/Selling Rate', 'Visit 1 declined'],
+      [`King/Suite/Selling Rate${s1}`, 'Visit 1 declined'],
       ['Occupancy Tax', resp?.occupancy_tax || '—'],
       ['Resort Fee', resp?.resort_fee || '—'],
     ]
     : [
-      ['King Rate', fmtMoney(resp?.best_king_rate ?? null)],
-      ['Suite Rate', fmtMoney(resp?.best_suite_rate ?? null)],
+      [`King Rate${s1}`, fmtMoney(resp?.best_king_rate ?? null)],
+      [`Suite Rate${s1}`, fmtMoney(resp?.best_suite_rate ?? null)],
       ['Selling Rate', resp?.current_selling_rate || '—'],
       ['Occupancy Tax', resp?.occupancy_tax || '—'],
       ['Resort Fee', resp?.resort_fee || '—'],
