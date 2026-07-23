@@ -17,6 +17,7 @@ type ClientTrip = {
   stay2_arrival_date: string | null
   city: string | null
   status: string
+  rfp_invitations: { status: string; hotel_name: string }[] | null
 }
 
 type Client = {
@@ -124,7 +125,7 @@ export default function ClientsList() {
     supabase
       .from('clients')
       .select(
-        'id, team_name, league, season, logo_url, primary_contact_name, primary_contact_title, primary_contact_email, primary_contact_phone, assigned_to, profiles(full_name, email), trips(id, opponent_label, arrival_date, stay2_arrival_date, city, status)',
+        'id, team_name, league, season, logo_url, primary_contact_name, primary_contact_title, primary_contact_email, primary_contact_phone, assigned_to, profiles(full_name, email), trips(id, opponent_label, arrival_date, stay2_arrival_date, city, status, rfp_invitations(status, hotel_name))',
       )
       .order('team_name')
       .then(({ data, error }) => {
@@ -568,7 +569,17 @@ export default function ClientsList() {
                               </div>
                             )}
                           </div>
-                          <Badge status={t.status} />
+                          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                            {t.status === 'closed' && (() => {
+                              const winner = t.rfp_invitations?.find((i) => i.status === 'awarded')?.hotel_name
+                              return winner ? (
+                                <span className="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                                  🏆 {winner}
+                                </span>
+                              ) : null
+                            })()}
+                            <Badge status={t.status} />
+                          </div>
                         </Link>
                       ))}
                   </div>

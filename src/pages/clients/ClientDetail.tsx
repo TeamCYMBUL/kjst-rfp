@@ -49,7 +49,7 @@ type TripRow = Pick<
   Trip,
   'id' | 'opponent_label' | 'city' | 'arrival_date' | 'departure_date' | 'game_date' | 'status'
   | 'total_rooms_requested' | 'stay2_arrival_date' | 'stay2_departure_date' | 'stay2_game_date'
->
+> & { rfp_invitations?: { status: string; hotel_name: string }[] | null }
 
 type HistoryRow = {
   invitation_id: string
@@ -110,7 +110,7 @@ export default function ClientDetail() {
   const loadTrips = () => {
     supabase
       .from('trips')
-      .select('id, opponent_label, city, arrival_date, departure_date, game_date, game_dates, total_rooms_requested, stay2_arrival_date, stay2_departure_date, stay2_game_date, stay2_game_dates, status')
+      .select('id, opponent_label, city, arrival_date, departure_date, game_date, game_dates, total_rooms_requested, stay2_arrival_date, stay2_departure_date, stay2_game_date, stay2_game_dates, status, rfp_invitations(status, hotel_name)')
       .eq('client_id', id)
       .order('city', { ascending: true, nullsFirst: false })
       .then(({ data, error }) => {
@@ -342,7 +342,17 @@ export default function ClientDetail() {
                         )}
                       </td>
                       <td className="py-2">
-                        <Badge status={trip.status} />
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Badge status={trip.status} />
+                          {trip.status === 'closed' && (() => {
+                            const winner = trip.rfp_invitations?.find((i) => i.status === 'awarded')?.hotel_name
+                            return winner ? (
+                              <span className="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                                🏆 {winner}
+                              </span>
+                            ) : null
+                          })()}
+                        </div>
                       </td>
                     </tr>
                   ))}

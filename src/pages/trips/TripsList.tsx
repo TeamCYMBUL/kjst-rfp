@@ -14,7 +14,7 @@ type Row = {
   stay2_arrival_date: string | null
   status: string
   clients: { team_name: string } | null
-  rfp_invitations: { id: string; status: string }[]
+  rfp_invitations: { id: string; status: string; hotel_name: string }[]
 }
 
 export default function TripsList() {
@@ -28,7 +28,7 @@ export default function TripsList() {
     supabase
       .from('trips')
       .select(
-        'id, opponent_label, city, arrival_date, departure_date, stay2_arrival_date, status, clients(team_name), rfp_invitations(id, status)',
+        'id, opponent_label, city, arrival_date, departure_date, stay2_arrival_date, status, clients(team_name), rfp_invitations(id, status, hotel_name)',
       )
       .order('city', { ascending: true, nullsFirst: false })
       .then(({ data, error }) => {
@@ -132,7 +132,17 @@ export default function TripsList() {
                       )}
                     </td>
                     <td className="px-5 py-3">
-                      <Badge status={t.status} />
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge status={t.status} />
+                        {t.status === 'closed' && (() => {
+                          const winner = t.rfp_invitations.find((i) => i.status === 'awarded')?.hotel_name
+                          return winner ? (
+                            <span className="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                              🏆 {winner}
+                            </span>
+                          ) : null
+                        })()}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right">
                       {!isViewer && (isConfirming ? (
