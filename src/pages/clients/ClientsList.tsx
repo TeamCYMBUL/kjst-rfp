@@ -534,7 +534,11 @@ export default function ClientsList() {
                   <div className="space-y-2">
                     {[...selTrips]
                       .sort((a, b) =>
-                        (b.arrival_date ?? '').localeCompare(a.arrival_date ?? ''),
+                        (a.city ?? a.opponent_label ?? '').localeCompare(
+                          b.city ?? b.opponent_label ?? '',
+                          undefined,
+                          { sensitivity: 'base' },
+                        ),
                       )
                       .map((t) => (
                         <Link
