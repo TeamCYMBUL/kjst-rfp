@@ -407,7 +407,7 @@ export default function Dashboard() {
       {/* Stats bar */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {[
-          { label: 'Active trips', sublabel: 'in progress', value: activeTrips.length, color: 'text-[#1C1008]' },
+          { label: 'Active trips', sublabel: 'in progress · 2-visit trips count twice', value: countVisits(activeTrips), color: 'text-[#1C1008]' },
           { label: 'Hotels invited', sublabel: 'this cycle', value: totalInvited, color: 'text-slate-800' },
           { label: 'Bids received', sublabel: 'submitted', value: totalSubmitted, color: 'text-emerald-600' },
           {
