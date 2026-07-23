@@ -601,6 +601,7 @@ export default function TripGrid() {
         king_rooms_requested: trip.king_rooms_requested,
         suites_requested: trip.suites_requested,
         total_rooms_requested: trip.total_rooms_requested,
+        nights: trip.nights,
       },
       hotels,
       items,

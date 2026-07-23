@@ -10,14 +10,32 @@ import { formatMeetingSpaceNotes } from './format'
 
 // ── Revenue helpers ───────────────────────────────────────────────────────────
 
-/** Parse a tax string like "15.5%", "15.5", or null → decimal rate (0.155). */
-function parseTaxRate(raw: string | null | undefined): number {
-  if (raw == null) return 0
-  const stripped = raw.trim().replace('%', '')
-  const n = parseFloat(stripped)
-  if (!isFinite(n) || n < 0) return 0
-  // Values stored as a percent (e.g. 15.5) → divide by 100
-  return n / 100
+/**
+ * Parse a tax string into a percentage rate plus any flat per-room-per-night fee.
+ * Hotels enter free text like "15.5%", "15.5", "16.9% + $5 nightly", "$5 nightly".
+ * The old parser read only the leading percentage and silently dropped the "+ $5"
+ * flat fee, understating the all-in total. Returns { pct: 0.169, flat: 5 }.
+ */
+function parseTaxComponents(raw: string | null | undefined): { pct: number; flat: number } {
+  if (raw == null) return { pct: 0, flat: 0 }
+  const s = raw.trim()
+  // Flat dollar add-on, e.g. "$5", "$3.50" — treated as per room, per night.
+  const dollarMatch = s.match(/\$\s*(\d+(?:\.\d+)?)/)
+  const flatRaw = dollarMatch ? parseFloat(dollarMatch[1]) : 0
+  // Percentage: prefer an explicit "%" figure; otherwise a plain leading number
+  // (a bare "16" means 16% tax) — but not if the only number was the dollar fee.
+  let pctRaw = 0
+  const pctMatch = s.match(/(\d+(?:\.\d+)?)\s*%/)
+  if (pctMatch) {
+    pctRaw = parseFloat(pctMatch[1]) / 100
+  } else if (!dollarMatch) {
+    const bare = parseFloat(s)
+    if (isFinite(bare)) pctRaw = bare / 100
+  }
+  return {
+    pct: isFinite(pctRaw) && pctRaw >= 0 ? pctRaw : 0,
+    flat: isFinite(flatRaw) && flatRaw >= 0 ? flatRaw : 0,
+  }
 }
 
 /** Number of nights between two ISO date strings. Returns 1 if inputs are missing/invalid. */
@@ -57,6 +75,7 @@ export type GridTrip = {
   king_rooms_requested: number | null
   suites_requested: number | null
   total_rooms_requested: number | null
+  nights?: number | null
   client_name?: string | null
 }
 
@@ -85,7 +104,17 @@ function answerText(
     const yn = yesNo(answer.answer_yes_no)
     return answer.comment ? `${yn} (${answer.comment})` : yn
   }
-  const val = answer.answer_value ?? '—'
+  // Currency/percent answers are stored as bare numbers — re-attach $ / % so the
+  // exported sheet reads "$6.00" / "10%", matching the on-screen grid.
+  const raw = answer.answer_value
+  const val =
+    !raw
+      ? '—'
+      : item.answer_type === 'currency'
+        ? `$${raw}`
+        : item.answer_type === 'percent'
+          ? `${raw}%`
+          : raw
   return answer.comment ? `${val} (${answer.comment})` : val
 }
 
@@ -119,8 +148,11 @@ export function exportComparisonXlsx(
   rows.push([])
 
   // ── Pre-compute revenue inputs ────────────────────────────────────────────
-  const kingRooms = trip.king_rooms_requested ?? 0
-  const nights = calcNights(trip.arrival_date, trip.departure_date)
+  // Match the on-screen grid exactly: it costs the FULL room block
+  // (total_rooms_requested) over trip.nights, not just the king rooms over a
+  // date-derived night count. Fall back sensibly when a field is missing.
+  const roomBlock = trip.total_rooms_requested ?? trip.king_rooms_requested ?? 0
+  const nights = trip.nights ?? calcNights(trip.arrival_date, trip.departure_date)
 
   // ── Rates ────────────────────────────────────────────────────────────────
   rows.push(['RATES'])
@@ -130,15 +162,16 @@ export function exportComparisonXlsx(
   rows.push(row('BEST SUITE RATE', hotels.map((h) => h.best_suite_rate ?? '—')))
   rows.push(row('TAXES & FEES', hotels.map((h) => fmt(h.occupancy_tax))))
 
-  // Revenue per hotel (numeric where calculable, '—' otherwise)
+  // Revenue per hotel (numeric where calculable, '—' otherwise). Incl-tax applies
+  // the percentage AND any flat per-room-per-night fee the hotel quoted.
   const revenueInclTax = hotels.map((h) => {
-    if (h.best_king_rate == null || kingRooms === 0) return '—' as const
-    const taxRate = parseTaxRate(h.occupancy_tax)
-    return h.best_king_rate * kingRooms * nights * (1 + taxRate)
+    if (h.best_king_rate == null || roomBlock === 0) return '—' as const
+    const { pct, flat } = parseTaxComponents(h.occupancy_tax)
+    return h.best_king_rate * roomBlock * nights * (1 + pct) + flat * roomBlock * nights
   })
   const revenueExclTax = hotels.map((h) => {
-    if (h.best_king_rate == null || kingRooms === 0) return '—' as const
-    return h.best_king_rate * kingRooms * nights
+    if (h.best_king_rate == null || roomBlock === 0) return '—' as const
+    return h.best_king_rate * roomBlock * nights
   })
   const adr = hotels.map((h) => h.best_king_rate ?? ('—' as const))
 
@@ -182,9 +215,9 @@ export function exportComparisonXlsx(
 
   // ── Grand Total row ───────────────────────────────────────────────────────
   const grandTotalValues = hotels.map((h) => {
-    if (h.best_king_rate == null || kingRooms === 0) return '—' as const
-    const taxRate = parseTaxRate(h.occupancy_tax)
-    return h.best_king_rate * kingRooms * nights * (1 + taxRate)
+    if (h.best_king_rate == null || roomBlock === 0) return '—' as const
+    const { pct, flat } = parseTaxComponents(h.occupancy_tax)
+    return h.best_king_rate * roomBlock * nights * (1 + pct) + flat * roomBlock * nights
   })
   const grandTotalRowIdx = rows.length
   const grandTotalRow = ['GRAND TOTAL', ...grandTotalValues.map((v) => (v === '—' ? '—' : v))]

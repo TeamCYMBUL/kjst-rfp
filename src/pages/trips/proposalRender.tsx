@@ -109,12 +109,18 @@ export async function includeAnsweredItems(
   return [...items, ...extraItems].sort((a, b) => a.sort_order - b.sort_order)
 }
 
-export function answerText(ans: ProposalAnswer | undefined): string {
+export function answerText(ans: ProposalAnswer | undefined, answerType?: string): string {
   if (!ans || (ans.answer_yes_no == null && !ans.answer_value)) return '—'
   // Show the actual answer: a Yes/No if the hotel gave one (covers items later
-  // switched to quantity), otherwise the entered value.
+  // switched to quantity), otherwise the entered value with its unit. Currency
+  // and percent values are stored as bare numbers, so re-attach $ / % to match
+  // the on-screen comparison grid (otherwise a "$6.00 per person" reads as "6").
   if (ans.answer_yes_no != null) return ans.answer_yes_no === true ? 'Yes' : 'No'
-  return ans.answer_value || '—'
+  const val = ans.answer_value
+  if (!val) return '—'
+  if (answerType === 'currency') return `$${val}`
+  if (answerType === 'percent') return `${val}%`
+  return val
 }
 
 // ── Reusable print chrome ───────────────────────────────────────────────────
@@ -243,7 +249,7 @@ export function HotelFull({
                               )}
                             </td>
                             <td style={{ padding: '6px 12px', fontWeight: 600, color: '#111827', textAlign: 'right', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
-                              {answerText(ans)}
+                              {answerText(ans, item.answer_type)}
                             </td>
                           </tr>
                         )
