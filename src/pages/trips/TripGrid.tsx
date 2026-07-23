@@ -8,6 +8,7 @@ import type { ConcessionItem } from '../../lib/rfpApi'
 import type { Trip, Client } from '../../lib/types'
 import { Badge, ErrorNote, Loading } from '../../components/ui'
 import { PageHint } from '../../components/PageHint'
+import { PUBLIC_APP_URL } from '../../lib/config'
 
 // ── Data types ────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,7 @@ type Invitation = {
   hotel_name: string
   hotel_contact_name: string | null
   hotel_contact_email: string | null
+  token: string
   status: string
   submitted_at: string | null
   staff_notes: string | null
@@ -84,6 +86,11 @@ function YesNoCell({ value, comment }: { value: boolean | null; comment?: string
       )}
     </div>
   )
+}
+
+// Money with thousands separators, e.g. 1500 -> "$1,500", 189.5 -> "$189.50".
+function money(n: number): string {
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 }
 
 function ValueCell({
@@ -346,7 +353,7 @@ export default function TripGrid() {
         supabase
           .from('rfp_invitations')
           .select(`
-            id, hotel_name, hotel_contact_name, hotel_contact_email, status, submitted_at, staff_notes,
+            id, hotel_name, hotel_contact_name, hotel_contact_email, token, status, submitted_at, staff_notes,
             visit1_declined, visit2_declined,
             rfp_responses (
               id, completed_by_name, completed_date, best_king_rate, king_rate_notes,
@@ -717,7 +724,14 @@ export default function TripGrid() {
                   const isPassed = inv.status === 'passed'
                   const isUnavailable = inv.status === 'unavailable'
                   const isDimmed = isPassed || isUnavailable
-                  const canAward = ['submitted', 'opened'].includes(inv.status)
+                  // A real bid is on file only once the hotel submitted. Award
+                  // directly in that case. If there's no bid (a deal closed off
+                  // the RFP by phone/email), award goes through bid entry first so
+                  // the agreed terms are recorded rather than left blank.
+                  const hasBid = inv.submitted_at != null
+                  const canAward = hasBid && inv.status === 'submitted'
+                  const canEnterBidAndAward =
+                    !hasBid && ['sent', 'opened'].includes(inv.status) && trip?.status !== 'closed'
                   const canUndoAward = isAwarded
                   const canPass = !isPassed && !isAwarded && !isUnavailable && trip?.status !== 'closed'
                   const canMarkUnavailable = ['sent', 'opened'].includes(inv.status) && trip?.status !== 'closed'
@@ -763,7 +777,7 @@ export default function TripGrid() {
                         )
                       })()}
                       {/* Award / Undo Award / Pass / Unavailable actions */}
-                      {(canAward || canUndoAward || canPass || canMarkUnavailable) && (
+                      {(canAward || canEnterBidAndAward || canUndoAward || canPass || canMarkUnavailable) && (
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {canAward && (
                             <button
@@ -774,6 +788,17 @@ export default function TripGrid() {
                             >
                               🏆 Award
                             </button>
+                          )}
+                          {canEnterBidAndAward && (
+                            <a
+                              href={`${PUBLIC_APP_URL}/rfp/${inv.token}?entry=staff`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="This hotel has no bid on file. If the deal was closed off the RFP (phone/email), enter their agreed terms here for the record, then award. The hotel is not emailed."
+                              className="rounded px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-800 hover:bg-indigo-200 disabled:opacity-40 transition-colors"
+                            >
+                              ✎ Enter bid &amp; award
+                            </a>
                           )}
                           {canUndoAward && (
                             <button
@@ -852,7 +877,7 @@ export default function TripGrid() {
               <RateRow
                 label={trip?.stay2_arrival_date ? 'King Rate — Stay 1' : 'Best King Rate'}
                 invitations={invitations}
-                getValue={(r) => (r?.best_king_rate != null ? `$${r.best_king_rate}` : null)}
+                getValue={(r) => (r?.best_king_rate != null ? money(r.best_king_rate) : null)}
                 highlight
                 lowestRateId={lowestRateId}
                 declinedWhen={(inv) => inv.visit1_declined}
@@ -867,7 +892,7 @@ export default function TripGrid() {
               <RateRow
                 label={trip?.stay2_arrival_date ? 'Suite Rate — Stay 1' : 'Best Suite Rate'}
                 invitations={invitations}
-                getValue={(r) => (r?.best_suite_rate != null ? `$${r.best_suite_rate}` : null)}
+                getValue={(r) => (r?.best_suite_rate != null ? money(r.best_suite_rate) : null)}
                 lowestRateId={lowestRateId}
                 declinedWhen={(inv) => inv.visit1_declined}
               />
@@ -955,7 +980,7 @@ export default function TripGrid() {
                     <RateRow
                       label="King Rate — Stay 2"
                       invitations={invitations}
-                      getValue={(r) => (r?.stay2_king_rate != null ? `$${r.stay2_king_rate}` : null)}
+                      getValue={(r) => (r?.stay2_king_rate != null ? money(r.stay2_king_rate) : null)}
                       highlight
                       lowestRateId={lowestRateId}
                       declinedWhen={(inv) => inv.visit2_declined}
@@ -970,7 +995,7 @@ export default function TripGrid() {
                     <RateRow
                       label="Suite Rate — Stay 2"
                       invitations={invitations}
-                      getValue={(r) => (r?.stay2_suite_rate != null ? `$${r.stay2_suite_rate}` : null)}
+                      getValue={(r) => (r?.stay2_suite_rate != null ? money(r.stay2_suite_rate) : null)}
                       lowestRateId={lowestRateId}
                       declinedWhen={(inv) => inv.visit2_declined}
                     />
@@ -1015,7 +1040,7 @@ export default function TripGrid() {
                       } else if (!sr) {
                         // Fall back to best_king_rate for the first scenario
                         const fallback = n === scenarios[0] && resp?.best_king_rate != null
-                          ? `$${resp.best_king_rate}`
+                          ? money(resp.best_king_rate)
                           : null
                         content = fallback ? (
                           <span className="text-slate-600">{fallback}</span>
@@ -1025,7 +1050,7 @@ export default function TripGrid() {
                       } else if (sr.available === false) {
                         content = <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">N/A</span>
                       } else {
-                        content = <span className="font-medium text-slate-800">{sr.rate != null ? `$${sr.rate}` : '—'}</span>
+                        content = <span className="font-medium text-slate-800">{sr.rate != null ? money(sr.rate) : '—'}</span>
                       }
                       return (
                         <td

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabase'
-import { Loading, ErrorNote, PageTip } from '../../components/ui'
+import { Loading, ErrorNote } from '../../components/ui'
+import { PageHint } from '../../components/PageHint'
 import { useRole } from '../../lib/useRole'
 
 type Hotel = {
@@ -1003,12 +1004,14 @@ export default function HotelsList() {
         )}
       </div>
 
-      <PageTip id="hotels" title="Using the hotel directory" className="mx-6 mt-4 shrink-0">
-        <p>&bull; This is your master list of properties. A hotel&rsquo;s sales contact saved here auto-fills whenever you invite it to a trip, so you enter it once.</p>
-        <p>&bull; Add one by hand with <strong>+ New hotel</strong>, or bulk-load a spreadsheet with <strong>Import CSV</strong>.</p>
-        <p>&bull; Search or sort (brand / city / name) on the left, then click any hotel to see its contacts, notes, and which trips have used it.</p>
-        <p>&bull; Set an <strong>Always CC</strong> brand contact on a hotel to copy them automatically on every RFP for that property.</p>
-      </PageTip>
+      <div className="shrink-0 px-6 pt-4">
+        <PageHint id="hotels-overview">
+          Your master list of properties: a hotel&rsquo;s saved sales contact auto-fills whenever you invite it to a trip. Add one
+          with <strong>+ New hotel</strong> or bulk-load a spreadsheet with <strong>Import CSV</strong>. Search or sort on the left,
+          then click any hotel to see its contacts, notes, and trip history. Set an <strong>Always CC</strong> brand contact to copy
+          them on every RFP for that property.
+        </PageHint>
+      </div>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left: hotel list */}

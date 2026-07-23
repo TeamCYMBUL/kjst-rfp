@@ -177,7 +177,10 @@ function calcScores(
     const flexAns = getYesNo(flexCancelItem)
     const noFlexCancel = flexAns === false
     const commValue = getValue(commissionItem)
-    const noCommission = commValue != null && (commValue.trim() === '0' || commValue.trim() === '0%')
+    // Flag "no commission" when the template asks for one and the bid gives 0%,
+    // 0, or leaves it blank — same rule as the comparison grid, so the summary
+    // table and grid never disagree on which bids get the dealbreaker flag.
+    const noCommission = commissionItem != null && ['', '0', '0%'].includes((commValue ?? '').trim())
 
     // 1. Flex cancel — 20 pts
     const flexScore = flexAns === true ? 20 : 0
@@ -261,9 +264,11 @@ function StatusDot({ status, sentAt }: { status: string; sentAt?: string | null 
         ? 'bg-amber-400'
         : status === 'passed'
           ? 'bg-red-500'
-          : status === 'unavailable'
-            ? 'bg-red-400'
-            : 'bg-slate-300'
+          : status === 'declined'
+            ? 'bg-red-500'
+            : status === 'unavailable'
+              ? 'bg-red-400'
+              : 'bg-slate-300'
   return <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${color}`} />
 }
 
@@ -1107,7 +1112,10 @@ function HotelPanel({
               const postAns    = postItem   ? ansMap.get(postItem.id)   : null
 
               const noFlex = flexAns?.answer_yes_no === false
-              const noComm = commAns?.answer_value != null && (commAns.answer_value.trim() === '0' || commAns.answer_value.trim() === '0%')
+              // A blank commission counts as "no commission", same as an explicit 0
+              // — this matches the comparison grid's red flag so the two never
+              // disagree on the same bid.
+              const noComm = commAns != null && ['', '0', '0%'].includes((commAns.answer_value ?? '').trim())
 
               type Chip = { label: string; value: string; ok?: boolean | null; warn?: boolean }
               const chips: Chip[] = []
