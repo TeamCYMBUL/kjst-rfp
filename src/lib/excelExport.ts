@@ -630,7 +630,8 @@ export async function exportMultiCityConsolidatedXlsx(
   const logo = opts.logoUrl ? await loadLogoForExcel(opts.logoUrl) : null
   if (logo) {
     const imgId = wb.addImage({ buffer: logo.buffer, extension: logo.extension })
-    ws.addImage(imgId, { tl: { col: 0.15, row: 0.2 }, ext: { width: 108, height: 52 } })
+    // Square box so team crests (usually 1:1) aren't stretched into a wide oval.
+    ws.addImage(imgId, { tl: { col: 0.15, row: 0.12 }, ext: { width: 52, height: 52 } })
   }
 
   // ── Column header row (row 4; row 3 is a thin spacer) ──
@@ -666,8 +667,19 @@ export async function exportMultiCityConsolidatedXlsx(
 
   let rowIdx = 4
   let counter = 0
+  // Each trip is boxed as its own little table: an outline around the block, no
+  // interior gridlines. Awarded hotels are shaded green.
+  const OUTLINE = { style: 'medium' as const, color: { argb: 'FF9C8F80' } }
+  const AWARD_FILL = 'FFD8F3E3'
+  const AWARD_TEXT = 'FF166534'
+  let firstTrip = true
 
   for (const { trip, hotels, items } of cities) {
+    // Thin spacer row between trips so each reads as a distinct table.
+    if (!firstTrip) { rowIdx += 1; ws.getRow(rowIdx).height = 6 }
+    firstTrip = false
+    const tripStartRow = rowIdx + 1
+
     const compSuitesItem = items.find((i) => i.label.toLowerCase().includes('complimentary one bedroom suite'))
     const suiteUpgItem = items.find((i) => i.label.toLowerCase().includes('suite upgrade'))
     const playoffItem = items.find(
@@ -764,12 +776,18 @@ export async function exportMultiCityConsolidatedXlsx(
         }
         first = false
 
+        const awardedRow = h.status === 'awarded' && !struck
         vals.forEach((v, i) => {
           const cell = row.getCell(i + 1)
           cell.value = v as any
           cell.font = struck
             ? { name: 'Arial', size: 10, color: { argb: RED }, strike: true }
-            : { name: 'Arial', size: 10 }
+            : awardedRow
+              ? { name: 'Arial', size: 10, bold: true, color: { argb: AWARD_TEXT } }
+              : { name: 'Arial', size: 10 }
+          if (awardedRow) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AWARD_FILL } }
+          }
           cell.alignment = { vertical: 'top', wrapText: i === 12, horizontal: CENTER_COLS.has(i) ? 'center' : 'left' }
         })
         row.getCell(4).numFmt = 'm/d/yy'
@@ -780,6 +798,20 @@ export async function exportMultiCityConsolidatedXlsx(
           row.getCell(FNB_COL_FORECAST + 1).numFmt = '$#,##0'
           row.getCell(FNB_COL_FORECAST + 2).numFmt = '$#,##0'
         }
+      }
+    }
+
+    // Box this trip: outline only (top/bottom on the block ends, left/right on
+    // the outer columns), leaving interior gridlines off.
+    const tripEndRow = rowIdx
+    for (let r = tripStartRow; r <= tripEndRow; r++) {
+      for (let c = 1; c <= NCOL; c++) {
+        const edge: any = {}
+        if (r === tripStartRow) edge.top = OUTLINE
+        if (r === tripEndRow) edge.bottom = OUTLINE
+        if (c === 1) edge.left = OUTLINE
+        if (c === NCOL) edge.right = OUTLINE
+        if (edge.top || edge.bottom || edge.left || edge.right) ws.getCell(r, c).border = edge
       }
     }
   }
