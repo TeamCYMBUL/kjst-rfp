@@ -925,7 +925,7 @@ function HotelPanel({
                 response, not a "revised" bid. */}
             {inv.submitted_at && inv.reopened_at && new Date(inv.reopened_at).getTime() > new Date(inv.submitted_at).getTime() && (
               <span className="inline-flex rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-300">
-                ↺ Reopened — awaiting revised bid
+                ↺ Reopened for edits
               </span>
             )}
             {/* Reopen a submitted/awarded proposal so the hotel can revise it */}
