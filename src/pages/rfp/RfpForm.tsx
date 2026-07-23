@@ -905,8 +905,8 @@ export default function RfpForm() {
         // hotel can revise and resubmit — their answers pre-load either way.
         const reopenedForEdit =
           !!d.invitation.reopened_at &&
-          (!d.invitation.submitted_at ||
-            new Date(d.invitation.reopened_at).getTime() > new Date(d.invitation.submitted_at).getTime())
+          !!d.invitation.submitted_at &&
+          new Date(d.invitation.reopened_at).getTime() > new Date(d.invitation.submitted_at).getTime()
         if (d.invitation.status === 'submitted' && !reopenedForEdit) setSubmitted(true)
         if (d.invitation.status === 'declined') setDeclined(true)
         if (d.invitation.visit1_declined) setVisit1Declined(true)
@@ -1464,8 +1464,8 @@ export default function RfpForm() {
   // even though the bid stays "submitted" on the grid.
   const reopenedForEdit =
     !!data.invitation.reopened_at &&
-    (!data.invitation.submitted_at ||
-      new Date(data.invitation.reopened_at).getTime() > new Date(data.invitation.submitted_at).getTime())
+    !!data.invitation.submitted_at &&
+    new Date(data.invitation.reopened_at).getTime() > new Date(data.invitation.submitted_at).getTime()
   const isReadOnly = data.invitation.status === 'submitted' && !reopenedForEdit
   const hasStay2 = Boolean(data.invitation.trips.stay2_arrival_date)
 

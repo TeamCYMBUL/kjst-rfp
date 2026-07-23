@@ -919,10 +919,11 @@ function HotelPanel({
             ) : (
               <Badge status={inv.status} label={inv.status === 'passed' ? passedLabel(inv.submitted_at) : undefined} />
             )}
-            {/* Reopened-for-revision indicator. The bid keeps its submitted status
-                (so it stays on the grid); it's "awaiting a revised bid" while
-                reopened_at is newer than the last submitted_at. */}
-            {inv.reopened_at && (!inv.submitted_at || new Date(inv.reopened_at).getTime() > new Date(inv.submitted_at).getTime()) && (
+            {/* Reopened-for-revision indicator — only when the hotel actually
+                submitted a bid that was then reopened (reopened_at newer than
+                submitted_at). A hotel that never bid is just awaiting its first
+                response, not a "revised" bid. */}
+            {inv.submitted_at && inv.reopened_at && new Date(inv.reopened_at).getTime() > new Date(inv.submitted_at).getTime() && (
               <span className="inline-flex rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-300">
                 ↺ Reopened — awaiting revised bid
               </span>
