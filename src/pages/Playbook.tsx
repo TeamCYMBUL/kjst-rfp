@@ -27,8 +27,8 @@ const STAGES: Stage[] = [
   {
     n: 3,
     title: 'Create a trip',
-    body: 'Every away game that needs a room block is a trip. Make one at a time, or import a whole schedule at once. Same city twice in a season is one trip with two visits, never two separate trips.',
-    where: { label: 'Trips', to: '/trips' },
+    body: 'Every away game that needs a room block is a trip. Make one at a time from the dashboard, or import a whole schedule at once. Same city twice in a season is one trip with two visits, never two separate trips.',
+    where: { label: 'New trip', to: '/trips/new' },
   },
   {
     n: 4,

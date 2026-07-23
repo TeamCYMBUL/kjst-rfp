@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import ProtectedRoute from './auth/ProtectedRoute'
 import DashboardLayout from './components/DashboardLayout'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -6,7 +6,6 @@ import Login from './pages/Login'
 import ClientsList from './pages/clients/ClientsList'
 import ClientForm from './pages/clients/ClientForm'
 import ClientDetail from './pages/clients/ClientDetail'
-import TripsList from './pages/trips/TripsList'
 import TripForm from './pages/trips/TripForm'
 import TripDetail from './pages/trips/TripDetail'
 import TripGrid from './pages/trips/TripGrid'
@@ -47,7 +46,9 @@ export default function App() {
           <Route path="clients/:id" element={<ClientDetail />} />
           <Route path="clients/:id/edit" element={<ClientForm />} />
 
-          <Route path="trips" element={<TripsList />} />
+          {/* Trips list retired — the Dashboard is the trips home. Redirect any
+              old links/bookmarks there. The trip sub-routes below stay. */}
+          <Route path="trips" element={<Navigate to="/" replace />} />
           <Route path="trips/new" element={<TripForm />} />
           <Route path="trips/:id" element={<TripDetail />} />
           <Route path="trips/:id/edit" element={<TripForm />} />

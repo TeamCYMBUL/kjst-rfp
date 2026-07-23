@@ -785,7 +785,7 @@ export default function TripForm() {
           <Button
             type="button"
             variant="secondary"
-            onClick={() => navigate(editing ? `/trips/${id}` : '/trips')}
+            onClick={() => navigate(editing ? `/trips/${id}` : '/')}
           >
             Cancel
           </Button>

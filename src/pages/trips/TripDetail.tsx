@@ -1884,7 +1884,7 @@ export default function TripDetail() {
     setDeleting(true)
     const { error } = await supabase.from('trips').delete().eq('id', id!)
     if (error) { setError(error.message); setDeleting(false) }
-    else navigate('/trips')
+    else navigate('/')
   }
 
   const saveVersion = async () => {
