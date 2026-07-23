@@ -562,11 +562,13 @@ function BidSummaryTable({
 }) {
   const [showScoreInfo, setShowScoreInfo] = useState(false)
 
-  // Include 'passed' hotels so staff can undo them; sort: awarded first, then submitted, then passed
+  // Include 'passed' and 'declined' hotels so they're visible here too (they
+  // responded, just not with a live bid); sort: awarded, submitted, then the
+  // turned-down/declined rows last.
   const submitted = invites
-    .filter((i) => ['submitted', 'awarded', 'passed'].includes(i.status))
+    .filter((i) => ['submitted', 'awarded', 'passed', 'declined'].includes(i.status))
     .sort((a, b) => {
-      const rank = (s: string) => s === 'awarded' ? 0 : s === 'submitted' ? 1 : 2
+      const rank = (s: string) => s === 'awarded' ? 0 : s === 'submitted' ? 1 : s === 'passed' ? 2 : 3
       return rank(a.status) - rank(b.status)
     })
   if (submitted.length === 0) return null
@@ -629,18 +631,22 @@ function BidSummaryTable({
                 const isSelected = inv.id === selectedId
                 const isAwarded  = inv.status === 'awarded'
                 const isPassed   = inv.status === 'passed'
+                const isDeclined = inv.status === 'declined'
                 return (
                   <tr
                     key={inv.id}
                     onClick={() => onSelect(inv.id)}
-                    className={`cursor-pointer transition-colors ${isPassed ? 'opacity-50' : ''} ${isSelected ? 'bg-[#1C1008]/5' : 'hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+                    className={`cursor-pointer transition-colors ${isPassed || isDeclined ? 'opacity-50' : ''} ${isSelected ? 'bg-[#1C1008]/5' : 'hover:bg-slate-50 dark:hover:bg-slate-700'}`}
                   >
                     {/* Hotel name + issue flags */}
                     <td className="py-2.5 pr-6">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`font-medium ${isSelected ? 'text-[#1C1008] dark:text-amber-400' : 'text-slate-800 dark:text-slate-200'}`}>
+                        <span className={`font-medium ${isSelected ? 'text-[#1C1008] dark:text-amber-400' : 'text-slate-800 dark:text-slate-200'} ${isPassed || isDeclined ? 'line-through' : ''}`}>
                           {isAwarded && '🏆 '}{isPassed && '✗ '}{inv.hotel_name}
                         </span>
+                        {isDeclined && (
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400">Declined</span>
+                        )}
                         {result?.noFlexCancel && (
                           <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400">No flex cancel</span>
                         )}
@@ -704,6 +710,8 @@ function BidSummaryTable({
                             >
                               ↩ Undo
                             </button>
+                          ) : isDeclined ? (
+                            <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">Hotel declined</span>
                           ) : (
                             <button
                               onClick={() => onPass(inv)}
@@ -849,6 +857,7 @@ function HotelPanel({
   const isSubmitted = ['submitted', 'awarded'].includes(inv.status)
   const isPassed = inv.status === 'passed'
   const isUnavailable = inv.status === 'unavailable'
+  const isDeclined = inv.status === 'declined'
   // Bid submitted, then reopened (awaiting a possible revision). While in this
   // state the "Reopen for edits" button is hidden — it's already reopened.
   const isReopenedForEdit = Boolean(
@@ -1016,7 +1025,17 @@ function HotelPanel({
           </div>
         )}
 
-        {!isSubmitted && !isPassed && !isUnavailable && (
+        {isDeclined && (
+          <div className="m-6 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-6 text-center">
+            <p className="text-sm font-semibold text-red-700 dark:text-red-300">This hotel declined the RFP.</p>
+            <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+              They chose not to bid on these dates
+              {inv.visit1_decline_reason ? ` (reason: ${inv.visit1_decline_reason})` : ''}.
+            </p>
+          </div>
+        )}
+
+        {!isSubmitted && !isPassed && !isUnavailable && !isDeclined && (
           inv.sent_at ? (
             <div className="m-6 rounded-xl border border-amber-100 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-6 text-center">
               <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Awaiting response</p>
@@ -2256,12 +2275,12 @@ export default function TripDetail() {
                   >
                     <StatusDot status={inv.status} sentAt={inv.sent_at} />
                     <div className="min-w-0 flex-1">
-                      <div className={`truncate text-sm font-medium ${isAwarded ? 'text-amber-700' : inv.status === 'passed' || inv.status === 'unavailable' ? 'text-slate-400 line-through' : 'text-slate-800 dark:text-slate-200'}`}>
+                      <div className={`truncate text-sm font-medium ${isAwarded ? 'text-amber-700' : inv.status === 'passed' || inv.status === 'unavailable' || inv.status === 'declined' ? 'text-slate-400 line-through' : 'text-slate-800 dark:text-slate-200'}`}>
                         {isAwarded && '🏆 '}{inv.hotel_name}
                       </div>
-                      {(inv.status === 'passed' || inv.status === 'unavailable') ? (
+                      {(inv.status === 'passed' || inv.status === 'unavailable' || inv.status === 'declined') ? (
                         <span className="mt-0.5 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-600 dark:bg-red-900/30 dark:text-red-400">
-                          {inv.status === 'passed' ? passedLabel(inv.submitted_at) : 'Not available'}
+                          {inv.status === 'passed' ? passedLabel(inv.submitted_at) : inv.status === 'declined' ? 'Declined' : 'Not available'}
                         </span>
                       ) : inv.hotel_contact_name ? (
                         <div className="truncate text-xs text-slate-400 dark:text-slate-500">{inv.hotel_contact_name}</div>
