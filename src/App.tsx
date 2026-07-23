@@ -20,7 +20,6 @@ import HotelsList from './pages/hotels/HotelsList'
 import Tickets from './pages/tickets/Tickets'
 import TeamPage from './pages/team/TeamPage'
 import TimelinePage from './pages/timeline/TimelinePage'
-import GettingStarted from './pages/GettingStarted'
 
 export default function App() {
   return (
@@ -54,7 +53,6 @@ export default function App() {
 
           <Route path="hotels" element={<HotelsList />} />
           <Route path="tickets" element={<Tickets />} />
-          <Route path="getting-started" element={<GettingStarted />} />
           <Route path="template" element={<TemplateEditor />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="team" element={<TeamPage />} />

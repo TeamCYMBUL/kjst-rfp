@@ -3,7 +3,6 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useProfile } from '../hooks/useProfile'
-import { useOnboardingProgress } from '../hooks/useOnboardingProgress'
 import { useRole } from '../lib/useRole'
 import { TIMELINE_ADMIN_EMAIL } from '../lib/activity'
 
@@ -45,7 +44,6 @@ export default function DashboardLayout() {
   const { user, signOut } = useAuth()
   const { isDark } = useTheme()
   const { isAdmin } = useProfile()
-  const { completedCount, allDone, steps } = useOnboardingProgress()
   const { role } = useRole()
   const isViewer = role === 'viewer'
   const [navOpen, setNavOpen] = useState(false)
@@ -93,27 +91,6 @@ export default function DashboardLayout() {
           >
             <span className="mr-2">📊</span>Dashboard
           </NavLink>
-
-          {/* Get Started — only when onboarding not complete */}
-          {!allDone && (
-            <NavLink
-              to="/getting-started"
-              className={({ isActive }) =>
-                `flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-white/15 text-white'
-                    : 'text-white/60 hover:bg-white/10 hover:text-white'
-                }`
-              }
-            >
-              <span>
-                <span className="mr-2">🚀</span>Get Started
-              </span>
-              <span className="rounded-full bg-amber-400/90 px-1.5 py-0.5 text-[10px] font-bold text-[#1C1008]">
-                {completedCount}/{steps.length}
-              </span>
-            </NavLink>
-          )}
 
           {/* Clients */}
           <NavLink

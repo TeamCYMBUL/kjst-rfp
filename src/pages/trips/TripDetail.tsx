@@ -272,17 +272,23 @@ function StatusDot({ status, sentAt }: { status: string; sentAt?: string | null 
 function ResponseProgress({ invites }: { invites: Invitation[] }) {
   const total = invites.length
   if (total === 0) return null
-  const submitted = invites.filter((i) => ['submitted', 'awarded'].includes(i.status)).length
+  // "Responded" = every hotel we've heard back from or resolved: a live bid,
+  // a decline, or one we've passed/marked unavailable. Only hotels still
+  // sitting at sent/opened are outstanding, so the bar can reach 100%.
+  const resolved = invites.filter((i) => !['sent', 'opened'].includes(i.status)).length
+  const bids = invites.filter((i) => ['submitted', 'awarded'].includes(i.status)).length
+  const otherResolved = resolved - bids
   const opened = invites.filter((i) => i.status === 'opened').length
-  const pct = Math.round((submitted / total) * 100)
+  const pct = Math.round((resolved / total) * 100)
   return (
     <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
       <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-        <span><strong className="text-slate-700 dark:text-slate-300">{submitted}/{total}</strong> responded</span>
+        <span><strong className="text-slate-700 dark:text-slate-300">{resolved}/{total}</strong> responded</span>
         <span>{pct}%</span>
       </div>
       <div className="flex h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
-        <div className="bg-emerald-500 transition-all" style={{ width: `${(submitted / total) * 100}%` }} />
+        <div className="bg-emerald-500 transition-all" style={{ width: `${(bids / total) * 100}%` }} />
+        <div className="bg-slate-400 transition-all" style={{ width: `${(otherResolved / total) * 100}%` }} />
         <div className="bg-amber-400 transition-all" style={{ width: `${(opened / total) * 100}%` }} />
       </div>
     </div>
@@ -1155,10 +1161,10 @@ function HotelPanel({
                     <RateField label="Suite rate" value={fmtRate(response.best_suite_rate)} />
                     <RateField label="Selling rate" value={response.current_selling_rate || '—'} />
                     <RateField label="Occupancy tax" value={response.occupancy_tax || '—'} />
-                    {trip.king_rooms_requested && response.best_king_rate && trip.nights && (
+                    {response.best_king_rate && trip.total_rooms_requested && trip.nights && (
                       <RateField
                         label="Est. total cost"
-                        value={`$${(response.best_king_rate * trip.total_rooms_requested! * trip.nights).toLocaleString()}`}
+                        value={`$${(response.best_king_rate * trip.total_rooms_requested * trip.nights).toLocaleString()}`}
                         highlight
                       />
                     )}
@@ -1569,12 +1575,18 @@ export default function TripDetail() {
     if (first) setSelectedId(first.id)
   }, [invites, selectedId])
 
-  // Bulk-fetch responses + answers for all submitted hotels (for summary table + scoring)
+  // Bulk-fetch responses + answers. Include hotels whose bid must still be shown
+  // after they leave the running — a passed hotel (e.g. an award loser) really
+  // submitted a bid, so the summary table + client export must keep its rates.
+  // Scoring, however, still only ranks live bids (submitted/awarded).
   useEffect(() => {
     if (!invites || concessionItems.length === 0) return
-    const submitted = invites.filter((i) => ['submitted', 'awarded'].includes(i.status))
-    if (submitted.length === 0) return
-    const invIds = submitted.map((i) => i.id)
+    const scored = invites.filter((i) => ['submitted', 'awarded'].includes(i.status))
+    const withBid = invites.filter(
+      (i) => ['submitted', 'awarded', 'passed', 'declined'].includes(i.status) || i.submitted_at,
+    )
+    if (withBid.length === 0) return
+    const invIds = withBid.map((i) => i.id)
 
     supabase.from('rfp_responses').select('*').in('invitation_id', invIds)
       .then(async ({ data: respData }) => {
@@ -1603,7 +1615,7 @@ export default function TripDetail() {
 
         setAllResponses(respMap)
         setAllAnswers(ansMap)
-        setScores(calcScores(submitted, respMap, ansMap, concessionItems, Boolean(trip?.stay2_arrival_date)))
+        setScores(calcScores(scored, respMap, ansMap, concessionItems, Boolean(trip?.stay2_arrival_date)))
       })
   }, [invites, concessionItems, trip?.stay2_arrival_date])
 
@@ -1701,9 +1713,18 @@ export default function TripDetail() {
   // Undo a pass / unavailable / award for a single hotel. Reset to 'submitted'
   // only if they actually bid; a hotel passed before bidding goes back to 'sent'
   // (never falsely shows as having submitted a bid). Does NOT touch other hotels.
+  // Undoing an AWARD must also reopen the trip (back to 'collecting'), otherwise
+  // the trip stays 'closed' / "Hotel selected" with no awarded hotel — matching
+  // the comparison grid's Undo award. Losing hotels stay passed (change manually).
   const resetHotelStatus = async (inv: Invitation) => {
+    const wasAwarded = inv.status === 'awarded'
     const backTo = inv.submitted_at ? 'submitted' : 'sent'
     await supabase.from('rfp_invitations').update({ status: backTo }).eq('id', inv.id)
+    if (wasAwarded) {
+      await supabase.from('trips').update({ status: 'collecting' }).eq('id', id!)
+      const { data } = await supabase.from('trips').select('*, clients(id, team_name, league)').eq('id', id!).single()
+      if (data) setTrip(data as Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league'> | null })
+    }
     loadInvites()
   }
 
@@ -1919,7 +1940,12 @@ export default function TripDetail() {
   // Hotels passed without ever bidding (unavailable for the proposed dates) —
   // surface them so KJST can re-invite once the dates change/become official.
   const passedUnavailable = invites.filter((i) => i.status === 'passed' && !i.submitted_at)
-  const allResponded = invites.length > 0 && invites.filter((i) => ['submitted', 'awarded'].includes(i.status)).length === invites.filter((i) => i.status !== 'passed' && i.status !== 'unavailable').length
+  // Fire once no hotel is still outstanding (sent/opened) and there's at least
+  // one live bid to actually choose from. Declined / passed / unavailable count
+  // as resolved, so a full slate of answers lights this up even with no winner yet.
+  const outstanding = invites.filter((i) => ['sent', 'opened'].includes(i.status)).length
+  const hasLiveBid = invites.some((i) => ['submitted', 'awarded'].includes(i.status))
+  const allResponded = invites.length > 0 && outstanding === 0 && hasLiveBid
   const awarded = invites.find((i) => i.status === 'awarded')
 
   return (

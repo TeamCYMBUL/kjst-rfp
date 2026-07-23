@@ -3,8 +3,6 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { formatDate, countVisits } from '../lib/format'
 import { Badge, ErrorNote, LinkButton, Loading } from '../components/ui'
-import { useOnboardingProgress } from '../hooks/useOnboardingProgress'
-
 
 
 type DashTrip = {
@@ -16,7 +14,7 @@ type DashTrip = {
   stay2_arrival_date: string | null
   response_deadline: string | null
   clients: { id: string; team_name: string } | null
-  rfp_invitations: { id: string; status: string; hotel_name: string; sent_at: string | null }[]
+  rfp_invitations: { id: string; status: string; hotel_name: string; sent_at: string | null; submitted_at: string | null }[]
 }
 
 
@@ -69,9 +67,10 @@ function DeadlineChip({ deadline }: { deadline: string | null }) {
 /** A single trip row/card used in all three views */
 function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: boolean }) {
   const invited = trip.rfp_invitations.length
-  const submitted = trip.rfp_invitations.filter((i) =>
-    ['submitted', 'awarded'].includes(i.status),
-  ).length
+  // A bid counts once a hotel actually submitted, even if we later awarded
+  // elsewhere and it flipped to 'passed'. submitted_at is the reliable signal;
+  // a "Passed - Not Available" hotel that never bid has no submitted_at.
+  const submitted = trip.rfp_invitations.filter((i) => i.submitted_at != null).length
   const opened = trip.rfp_invitations.filter((i) => i.status === 'opened').length
   const delinquent = delinquentCount(trip)
   const awardedHotel = trip.rfp_invitations.find((i) => i.status === 'awarded')?.hotel_name ?? null
@@ -108,7 +107,7 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
                 title={`${delinquent} hotel${delinquent !== 1 ? 's' : ''} invited with no reply yet — consider a reminder`}
                 className="inline-flex items-center gap-1 rounded-full bg-red-100 dark:bg-red-900/40 px-2 py-0.5 text-xs font-semibold text-red-700 dark:text-red-300"
               >
-                ⚑ {delinquent} delinquent
+                ⚑ {delinquent} awaiting reply
               </span>
             )}
           </div>
@@ -204,9 +203,7 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
       {sorted.map(([key, group]) => {
         const allInvited = group.trips.reduce((n, t) => n + t.rfp_invitations.length, 0)
         const allSubmitted = group.trips.reduce(
-          (n, t) =>
-            n +
-            t.rfp_invitations.filter((i) => ['submitted', 'awarded'].includes(i.status)).length,
+          (n, t) => n + t.rfp_invitations.filter((i) => i.submitted_at != null).length,
           0,
         )
         const hasUrgent = isUrgent(group)
@@ -241,7 +238,7 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
                     title={`${groupDelinquent} hotel${groupDelinquent !== 1 ? 's' : ''} across this client with no reply yet`}
                     className="inline-flex items-center gap-1 rounded-full bg-red-100 dark:bg-red-900/40 px-2 py-0.5 text-xs font-semibold text-red-700 dark:text-red-300"
                   >
-                    ⚑ {groupDelinquent} delinquent
+                    ⚑ {groupDelinquent} awaiting reply
                   </span>
                 )}
               </div>
@@ -280,59 +277,6 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
   )
 }
 
-function OnboardingBanner() {
-  const { steps, completedCount, allDone, loading } = useOnboardingProgress()
-  if (loading || allDone) return null
-  const total = steps.length
-  const pct = Math.round((completedCount / total) * 100)
-
-  return (
-    <div className="rounded-xl border border-[#1C1008]/15 bg-[#1C1008]/5 px-6 py-5">
-      {/* Header row */}
-      <div className="flex items-center justify-between gap-4 mb-3">
-        <div>
-          <p className="text-sm font-semibold text-[#1C1008]">
-            🚀 Get Started — {completedCount} of {total} steps complete
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="w-32 h-2 rounded-full bg-[#1C1008]/10 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-[#1C1008] transition-all"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          <span className="text-xs font-medium text-[#1C1008]/60">{pct}%</span>
-        </div>
-      </div>
-
-      {/* Steps */}
-      <div className="space-y-2">
-        {steps.map((step) => (
-          <div key={step.n} className="flex items-start gap-2.5">
-            {step.done ? (
-              <span className="mt-0.5 text-sm font-bold text-emerald-500">✅</span>
-            ) : (
-              <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-[#1C1008]/20 text-[10px] font-bold text-[#1C1008]/40">
-                {step.n}
-              </span>
-            )}
-            <div>
-              <span className={`text-sm font-medium ${step.done ? 'text-slate-400 dark:text-slate-600 line-through' : 'text-slate-700 dark:text-slate-300'}`}>
-                {step.title}
-              </span>
-              {!step.done && (
-                <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{step.description}</p>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-    </div>
-  )
-}
-
 export default function Dashboard() {
   const [trips, setTrips] = useState<DashTrip[]>([])
   const [loading, setLoading] = useState(true)
@@ -349,7 +293,7 @@ export default function Dashboard() {
         supabase
           .from('trips')
           .select(
-            'id, opponent_label, city, status, arrival_date, stay2_arrival_date, response_deadline, clients(id, team_name), rfp_invitations(id, status, hotel_name, sent_at)',
+            'id, opponent_label, city, status, arrival_date, stay2_arrival_date, response_deadline, clients(id, team_name), rfp_invitations(id, status, hotel_name, sent_at, submitted_at)',
           )
           .order('response_deadline', { ascending: true }),
         supabase.from('clients').select('id').limit(1),
@@ -372,12 +316,15 @@ export default function Dashboard() {
   const activeTrips = openTrips.filter((t) => t.status !== 'draft')
   const totalInvited = activeTrips.reduce((n, t) => n + t.rfp_invitations.length, 0)
   const totalSubmitted = activeTrips.reduce(
-    (n, t) =>
-      n +
-      t.rfp_invitations.filter((i) => ['submitted', 'awarded'].includes(i.status)).length,
+    (n, t) => n + t.rfp_invitations.filter((i) => i.submitted_at != null).length,
     0,
   )
-  const totalOutstanding = totalInvited - totalSubmitted
+  // Outstanding = hotels still to hear from (emailed/opened, no answer yet),
+  // not "invited minus bids" — a declined or passed hotel isn't outstanding.
+  const totalOutstanding = activeTrips.reduce(
+    (n, t) => n + t.rfp_invitations.filter((i) => ['sent', 'opened'].includes(i.status)).length,
+    0,
+  )
   const closedCount = trips.filter((t) => t.status === 'closed').length
 
   // What the list actually shows. "Show closed" flips to ONLY closed trips, so
@@ -449,27 +396,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Onboarding banner */}
-      <OnboardingBanner />
-
-      {/* How this works — always-visible explanation */}
-      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">How this works</h2>
-        <div className="grid gap-3 sm:grid-cols-3 text-sm text-slate-500 dark:text-slate-400">
-          <div>
-            <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">1. Set up clients &amp; hotels</p>
-            <p>Add each sports team you work with under Clients. Add your hotel contacts under Hotels — they'll auto-fill when you invite hotels to a trip.</p>
-          </div>
-          <div>
-            <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">2. Create trips &amp; send RFPs</p>
-            <p>Every away game that needs a hotel block is a Trip. Add hotels to the trip and each one gets a unique, secure link to fill out their bid.</p>
-          </div>
-          <div>
-            <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">3. Compare &amp; present</p>
-            <p>As hotels submit, the comparison grid updates live. When ready, export an internal sheet for your team or a clean proposal PDF for the client.</p>
-          </div>
-        </div>
-      </div>
 
       {/* Stats bar */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

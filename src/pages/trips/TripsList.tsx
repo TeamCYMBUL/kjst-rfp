@@ -14,7 +14,7 @@ type Row = {
   stay2_arrival_date: string | null
   status: string
   clients: { team_name: string } | null
-  rfp_invitations: { id: string; status: string; hotel_name: string }[]
+  rfp_invitations: { id: string; status: string; hotel_name: string; submitted_at: string | null }[]
 }
 
 export default function TripsList() {
@@ -28,7 +28,7 @@ export default function TripsList() {
     supabase
       .from('trips')
       .select(
-        'id, opponent_label, city, arrival_date, departure_date, stay2_arrival_date, status, clients(team_name), rfp_invitations(id, status, hotel_name)',
+        'id, opponent_label, city, arrival_date, departure_date, stay2_arrival_date, status, clients(team_name), rfp_invitations(id, status, hotel_name, submitted_at)',
       )
       .order('city', { ascending: true, nullsFirst: false })
       .then(({ data, error }) => {
@@ -84,9 +84,7 @@ export default function TripsList() {
             <tbody>
               {rows.map((t) => {
                 const invited = t.rfp_invitations.length
-                const submitted = t.rfp_invitations.filter((i) =>
-                  ['submitted', 'awarded'].includes(i.status),
-                ).length
+                const submitted = t.rfp_invitations.filter((i) => i.submitted_at != null).length
                 const isConfirming = confirmId === t.id
                 const isDeleting = deletingId === t.id
 

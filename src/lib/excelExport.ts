@@ -272,7 +272,13 @@ export function exportTeamGrid(
     return answers.get(invId)?.find((a: any) => a.concession_item_id === itemId) ?? null
   }
 
-  const eligible = invitations.filter((i) => ['submitted', 'awarded'].includes(i.status))
+  // Include live bids plus any hotel that actually submitted one before leaving
+  // the running (e.g. an award loser now marked 'passed'): their rates still
+  // belong in the side-by-side. A response row only exists for a real bid, so
+  // decline/pass-without-bid hotels are naturally left out.
+  const eligible = invitations.filter(
+    (i) => ['submitted', 'awarded'].includes(i.status) || responses.has(i.id),
+  )
 
   const header = [
     'Hotel',
