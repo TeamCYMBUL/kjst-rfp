@@ -340,6 +340,9 @@ export default function Dashboard() {
   const [hasClients, setHasClients] = useState(false)
   const [showClosed, setShowClosed] = useState(false)
   const [clientFilter, setClientFilter] = useState<string | null>(null)
+  // "Log an award" launcher — pick a trip to jump into and log an off-platform award.
+  const [awardOpen, setAwardOpen] = useState(false)
+  const [awardClient, setAwardClient] = useState('')
   useEffect(() => {
     const load = async () => {
       const [tripsRes, clientsRes] = await Promise.all([
@@ -501,6 +504,12 @@ export default function Dashboard() {
             {showClosed ? 'Closed trips (hotel selected)' : 'Active & draft trips'} · by client
           </h2>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setAwardOpen(true)}
+              className="rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 px-3.5 py-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+            >
+              🏆 Log an award
+            </button>
             {clientOptions.length > 0 && (
               <select
                 value={clientFilter ?? ''}
@@ -529,6 +538,58 @@ export default function Dashboard() {
         </div>
         <ClientView key={clientFilter ?? 'all'} trips={clientFilteredTrips} />
       </div>
+
+      {/* Log an award — pick the trip to jump into (then add the hotel, enter its
+          terms, award, and send the contract request from the trip workspace). */}
+      {awardOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setAwardOpen(false)}>
+          <div className="w-full max-w-md rounded-xl bg-white dark:bg-slate-800 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Log an award</h3>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+              Pick the trip. On the trip you can add the hotel (if needed), enter its terms on their behalf, mark it awarded, and send the contract request.
+            </p>
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Team</label>
+            <select
+              value={awardClient}
+              onChange={(e) => setAwardClient(e.target.value)}
+              className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-[#1C1008] focus:outline-none focus:ring-1 focus:ring-[#1C1008]"
+            >
+              <option value="">Select a team…</option>
+              {clientOptions.map(([clientId, teamName]) => (
+                <option key={clientId} value={clientId}>{teamName}</option>
+              ))}
+            </select>
+            {awardClient && (
+              <div className="mt-3 max-h-64 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700">
+                {trips
+                  .filter((t) => t.clients?.id === awardClient && t.status !== 'closed')
+                  .sort((a, b) => (a.city ?? a.opponent_label ?? '').localeCompare(b.city ?? b.opponent_label ?? '', undefined, { sensitivity: 'base' }))
+                  .map((t) => (
+                    <Link
+                      key={t.id}
+                      to={`/trips/${t.id}`}
+                      className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 px-3 py-2.5 text-sm last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700"
+                    >
+                      <span className="font-medium text-slate-800 dark:text-slate-200">{t.opponent_label || t.city || 'Trip'}</span>
+                      <span className="text-xs text-[#1C1008] dark:text-amber-400">Open →</span>
+                    </Link>
+                  ))}
+                {trips.filter((t) => t.clients?.id === awardClient && t.status !== 'closed').length === 0 && (
+                  <p className="px-3 py-4 text-center text-xs text-slate-400 dark:text-slate-500">No open trips for this team.</p>
+                )}
+              </div>
+            )}
+            <div className="mt-5 text-right">
+              <button
+                onClick={() => setAwardOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )
