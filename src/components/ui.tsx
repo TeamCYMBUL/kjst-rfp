@@ -126,14 +126,14 @@ const badgeColors: Record<string, string> = {
   unavailable: 'bg-slate-100 text-slate-400',
 }
 
-export function Badge({ status }: { status: string }) {
+export function Badge({ status, label }: { status: string; label?: string }) {
   return (
     <span
       className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${
         badgeColors[status] ?? 'bg-slate-100 text-slate-600'
       }`}
     >
-      {status}
+      {label ?? status}
     </span>
   )
 }

@@ -136,3 +136,10 @@ export function countVisits(
 ): number {
   return (trips ?? []).reduce((n, t) => n + (t.stay2_arrival_date ? 2 : 1), 0)
 }
+
+// Display label for a passed invitation: "Passed" when the hotel actually
+// submitted a bid we turned down (bad terms / client declined), vs
+// "Passed - Not Available" when they never bid (couldn't do the proposed dates).
+export function passedLabel(submittedAt: string | null | undefined): string {
+  return submittedAt ? 'Passed' : 'Passed - Not Available'
+}

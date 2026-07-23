@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activity'
-import { formatDate, formatMeetingSpaceNotes } from '../../lib/format'
+import { formatDate, formatMeetingSpaceNotes, passedLabel } from '../../lib/format'
 import { exportComparisonXlsx } from '../../lib/excelExport'
 import type { ConcessionItem } from '../../lib/rfpApi'
 import type { Trip, Client } from '../../lib/types'
@@ -740,7 +740,7 @@ export default function TripGrid() {
                         </div>
                       )}
                       <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                        <Badge status={inv.status} />
+                        <Badge status={inv.status} label={inv.status === 'passed' ? passedLabel(inv.submitted_at) : undefined} />
                         {isLowest && !isAwarded && !isDimmed && (
                           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
                             Best rate

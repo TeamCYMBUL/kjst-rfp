@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activity'
 import type { Client, DateScenario, Invitation, Trip } from '../../lib/types'
-import { formatDate, generateToken, formatMeetingSpaceNotes } from '../../lib/format'
+import { formatDate, generateToken, formatMeetingSpaceNotes, passedLabel } from '../../lib/format'
 import { PUBLIC_APP_URL } from '../../lib/config'
 import { sendInvitationEmail, sendReminderEmails, sendSingleReminderEmail, reopenRfp } from '../../lib/emailApi'
 import { Badge, ErrorNote, LinkButton, Loading } from '../../components/ui'
@@ -917,7 +917,7 @@ function HotelPanel({
                 Draft — not sent
               </span>
             ) : (
-              <Badge status={inv.status} />
+              <Badge status={inv.status} label={inv.status === 'passed' ? passedLabel(inv.submitted_at) : undefined} />
             )}
             {/* Reopened-for-revision indicator. The bid keeps its submitted status
                 (so it stays on the grid); it's "awaiting a revised bid" while
@@ -1000,7 +1000,9 @@ function HotelPanel({
 
         {isPassed && (
           <div className="m-6 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 p-6 text-center text-sm text-slate-500 dark:text-slate-400">
-            Passed on this hotel.
+            {inv.submitted_at
+              ? 'Passed on this hotel.'
+              : 'Passed - Not Available. This hotel did not submit a bid (unavailable for the proposed dates).'}
           </div>
         )}
 
@@ -1631,6 +1633,16 @@ export default function TripDetail() {
     loadInvites()
   }
 
+  // Re-invite a hotel that was "Passed - Not Available" (never bid) — e.g. once the
+  // dates are updated. Puts them back to 'sent' and resends the RFP invitation.
+  const reInvitePassed = async (inv: Invitation) => {
+    setAwardingId(inv.id)
+    await supabase.from('rfp_invitations').update({ status: 'sent' }).eq('id', inv.id)
+    await loadInvites()
+    setAwardingId(null)
+    await sendEmail({ ...inv, status: 'sent' })
+  }
+
   // Undo a pass / unavailable / award for a single hotel. Reset to 'submitted'
   // only if they actually bid; a hotel passed before bidding goes back to 'sent'
   // (never falsely shows as having submitted a bid). Does NOT touch other hotels.
@@ -1808,6 +1820,9 @@ export default function TripDetail() {
   const unprintedCount = submittedInvites.filter((i) => !i.printed_at).length
 
   const noEmailSent = invites.filter((i) => !i.sent_at && i.hotel_contact_email).length
+  // Hotels passed without ever bidding (unavailable for the proposed dates) —
+  // surface them so KJST can re-invite once the dates change/become official.
+  const passedUnavailable = invites.filter((i) => i.status === 'passed' && !i.submitted_at)
   const allResponded = invites.length > 0 && invites.filter((i) => ['submitted', 'awarded'].includes(i.status)).length === invites.filter((i) => i.status !== 'passed' && i.status !== 'unavailable').length
   const awarded = invites.find((i) => i.status === 'awarded')
 
@@ -2000,6 +2015,24 @@ export default function TripDetail() {
       {!awarded && allResponded && invites.length > 0 && (
         <div className="border-b border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-6 py-2 text-xs text-emerald-800 dark:text-emerald-300">
           ✅ All hotels have responded — select a winner below or open the <Link to={`/trips/${id}/grid`} className="font-semibold underline">full comparison grid</Link>.
+        </div>
+      )}
+      {!isViewer && passedUnavailable.length > 0 && (
+        <div className="border-b border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 px-6 py-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-indigo-800 dark:text-indigo-300">
+          <span>
+            <strong>{passedUnavailable.length} hotel{passedUnavailable.length !== 1 ? 's' : ''}</strong> marked <strong>Passed - Not Available</strong> (couldn't do the proposed dates). If the dates changed, re-invite:
+          </span>
+          {passedUnavailable.map((inv) => (
+            <button
+              key={inv.id}
+              onClick={() => reInvitePassed(inv)}
+              disabled={!inv.hotel_contact_email || awardingId === inv.id}
+              title={!inv.hotel_contact_email ? 'No email address on file' : `Re-invite ${inv.hotel_name} with the current dates`}
+              className="rounded-md border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-800 px-2 py-1 font-medium text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 disabled:opacity-40 transition-colors"
+            >
+              ↻ Re-invite {inv.hotel_name}
+            </button>
+          ))}
         </div>
       )}
 
@@ -2218,7 +2251,7 @@ export default function TripDetail() {
                       </div>
                       {(inv.status === 'passed' || inv.status === 'unavailable') ? (
                         <span className="mt-0.5 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-600 dark:bg-red-900/30 dark:text-red-400">
-                          {inv.status === 'passed' ? 'Passed' : 'Not available'}
+                          {inv.status === 'passed' ? passedLabel(inv.submitted_at) : 'Not available'}
                         </span>
                       ) : inv.hotel_contact_name ? (
                         <div className="truncate text-xs text-slate-400 dark:text-slate-500">{inv.hotel_contact_name}</div>
