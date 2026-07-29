@@ -243,17 +243,21 @@ export function HotelFull({
                     <tbody>
                       {items.map((item) => {
                         const ans = ansByItemId.get(item.id)
+                        // Make "No" answers pop in red and any comment/counter in
+                        // blue, so a reviewer scanning a printed bid catches the
+                        // issues (the No's) and their notes at a glance.
+                        const isNo = ans?.answer_yes_no === false
                         return (
                           <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                             <td style={{ padding: '6px 12px', color: '#374151', verticalAlign: 'top' }}>
                               {item.label}
                               {ans?.comment && (
-                                <div style={{ marginTop: 2, fontSize: 12, color: '#92400e', background: '#fffbeb', borderRadius: 4, padding: '3px 8px', display: 'inline-block' }}>
+                                <div style={{ marginTop: 2, fontSize: 12, fontWeight: 600, color: '#1d4ed8', background: '#eff6ff', borderRadius: 4, padding: '3px 8px', display: 'inline-block' }}>
                                   {ans.comment}
                                 </div>
                               )}
                             </td>
-                            <td style={{ padding: '6px 12px', fontWeight: 600, color: '#111827', textAlign: 'right', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
+                            <td style={{ padding: '6px 12px', fontWeight: isNo ? 700 : 600, color: isNo ? '#dc2626' : '#111827', textAlign: 'right', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
                               {answerText(ans, item.answer_type)}
                             </td>
                           </tr>
