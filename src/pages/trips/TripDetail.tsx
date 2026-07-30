@@ -2244,19 +2244,38 @@ export default function TripDetail() {
         <div className={`${mobileView === 'detail' ? 'hidden lg:flex' : 'flex'} w-full shrink-0 flex-col border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 lg:w-64 lg:border-b-0 lg:border-r`}>
           {invites.length > 0 && <ResponseProgress invites={invites} />}
 
-          <div className="flex items-center justify-between px-4 py-2.5">
+          <div className="flex items-center justify-between gap-2 px-4 py-2.5">
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               Hotels {invites.length > 0 && `(${invites.length})`}
             </span>
-            {!isViewer && invites.some((i) => !i.sent_at && i.hotel_contact_email) && (
+            {!isViewer && (
+              <button
+                onClick={() => setShowInvite((s) => !s)}
+                className="shrink-0 rounded-lg bg-[#1C1008] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#2d1e0e] transition-colors"
+              >
+                {showInvite ? 'Close' : '+ Add hotel'}
+              </button>
+            )}
+          </div>
+          {!isViewer && !showInvite && invites.some((i) => !i.sent_at && i.hotel_contact_email) && (
+            <div className="-mt-1 px-4 pb-2">
               <button
                 onClick={selectAllNotSent}
                 className="text-xs font-medium text-[#1C1008] hover:underline"
               >
                 Select all not sent
               </button>
-            )}
-          </div>
+            </div>
+          )}
+          {/* Invite form renders here at the TOP so it's always visible when adding a hotel. */}
+          {showInvite && (
+            <InviteForm
+              tripId={id!}
+              defaultLeague={trip.clients?.league}
+              onDone={() => { setShowInvite(false); loadInvites() }}
+              onCancel={() => setShowInvite(false)}
+            />
+          )}
 
           {!isViewer && selectedInviteIds.size > 0 && (
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 px-4 py-2">
@@ -2283,7 +2302,7 @@ export default function TripDetail() {
           <div className="flex-1">
             {invites.length === 0 && !showInvite && (
               <div className="px-4 py-6 text-center text-xs text-slate-400 dark:text-slate-500">
-                No hotels added to RFP yet.<br />Add one below to get started.
+                No hotels added to RFP yet.<br />Use <strong>+ Add hotel</strong> above to get started.
               </div>
             )}
             {invites.map((inv) => {
@@ -2343,16 +2362,6 @@ export default function TripDetail() {
             })}
           </div>
 
-          {/* Invite form — pinned above footer so hotel list stays scrollable */}
-          {showInvite && (
-            <InviteForm
-              tripId={id!}
-              defaultLeague={trip.clients?.league}
-              onDone={() => { setShowInvite(false); loadInvites() }}
-              onCancel={() => setShowInvite(false)}
-            />
-          )}
-
           {/* Version history */}
           {versions.length > 0 && (
             <div className="border-t border-slate-100 dark:border-slate-700 px-4 py-3">
@@ -2378,17 +2387,6 @@ export default function TripDetail() {
             </div>
           )}
 
-          {/* Add hotel button — hidden for viewers */}
-          {!isViewer && (
-            <div className="border-t border-slate-100 dark:border-slate-700 p-3">
-              <button
-                onClick={() => { setShowInvite((s) => !s) }}
-                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 py-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:border-[#1C1008] hover:text-[#1C1008] transition-colors"
-              >
-                + Add hotel
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Right: hotel detail or empty state */}
