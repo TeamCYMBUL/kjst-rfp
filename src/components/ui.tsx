@@ -49,13 +49,23 @@ export function LinkButton({
   to,
   variant = 'primary',
   children,
+  target,
+  title,
 }: {
   to: string
   variant?: keyof typeof btnVariants
   children: ReactNode
+  target?: string
+  title?: string
 }) {
   return (
-    <Link to={to} className={`${btnBase} ${btnVariants[variant]}`}>
+    <Link
+      to={to}
+      target={target}
+      rel={target === '_blank' ? 'noopener noreferrer' : undefined}
+      title={title}
+      className={`${btnBase} ${btnVariants[variant]}`}
+    >
       {children}
     </Link>
   )

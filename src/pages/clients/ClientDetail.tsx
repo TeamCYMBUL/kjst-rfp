@@ -270,6 +270,14 @@ export default function ClientDetail() {
             >
               {exportingAllCities ? 'Exporting…' : '↓ Export Hotel Options'}
             </Button>
+            <LinkButton
+              to={`/clients/${id}/delinquent`}
+              target="_blank"
+              variant="secondary"
+              title="Print/share which hotels missed the RFP deadline — to escalate to a hotel's global sales rep."
+            >
+              Delinquent report
+            </LinkButton>
             {canEditClient(id!) && (
               <LinkButton to={`/trips/new?client=${id}`}>+ New trip</LinkButton>
             )}

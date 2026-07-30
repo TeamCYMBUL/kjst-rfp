@@ -536,7 +536,7 @@ export type ConsolidatedCity = {
 // Fetch a client logo and return an ExcelJS-embeddable buffer + extension.
 // Returns null on any failure (missing/SVG/unsupported/CORS) so the export
 // falls back to a text-only branded header instead of breaking.
-async function loadLogoForExcel(
+export async function loadLogoForExcel(
   url: string,
 ): Promise<{ buffer: Uint8Array; extension: 'png' | 'jpeg' | 'gif' } | null> {
   try {

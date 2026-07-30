@@ -361,6 +361,15 @@ export default function ClientsList() {
                     >
                       {exportingCities ? 'Exporting…' : '↓ Export Hotel Options'}
                     </button>
+                    <Link
+                      to={`/clients/${selected.id}/delinquent`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Print/share which hotels missed the RFP deadline — to escalate to a hotel's global sales rep."
+                      className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700"
+                    >
+                      Delinquent report
+                    </Link>
                     {canEditClient(selected.id) && (
                       <>
                         <button

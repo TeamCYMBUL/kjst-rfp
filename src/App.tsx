@@ -11,6 +11,7 @@ import TripDetail from './pages/trips/TripDetail'
 import TripGrid from './pages/trips/TripGrid'
 import ProposalPrint from './pages/trips/ProposalPrint'
 import ClientProposalsPrint from './pages/clients/ClientProposalsPrint'
+import DelinquentPrint from './pages/clients/DelinquentPrint'
 import RfpForm from './pages/rfp/RfpForm'
 import TemplateEditor from './pages/settings/TemplateEditor'
 import SettingsPage from './pages/settings/Settings'
@@ -36,6 +37,7 @@ export default function App() {
             of being clipped to whatever fits in DashboardLayout's viewport. */}
         <Route path="trips/:id/proposal" element={<ProposalPrint />} />
         <Route path="clients/:id/proposals" element={<ClientProposalsPrint />} />
+        <Route path="clients/:id/delinquent" element={<DelinquentPrint />} />
 
         <Route element={<DashboardLayout />}>
           <Route index element={<Dashboard />} />
