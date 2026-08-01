@@ -118,7 +118,7 @@ export default function ClientsList() {
   const [showImport, setShowImport] = useState(false)
   // Submitted bids across the selected client's trips, and how many are unprinted
   // — drives the progressive batch-print buttons.
-  const [proposalCounts, setProposalCounts] = useState<{ total: number; unprinted: number } | null>(null)
+  const [proposalCounts, setProposalCounts] = useState<{ total: number; unprinted: number; awarded: number } | null>(null)
   const { role, canEditClient } = useRole()
 
   const loadClients = (keepSelected?: string) => {
@@ -149,12 +149,12 @@ export default function ClientsList() {
   useEffect(() => {
     if (!selected) { setProposalCounts(null); return }
     const tripIds = selected.trips.map((t) => t.id)
-    if (tripIds.length === 0) { setProposalCounts({ total: 0, unprinted: 0 }); return }
+    if (tripIds.length === 0) { setProposalCounts({ total: 0, unprinted: 0, awarded: 0 }); return }
     let cancelled = false
     setProposalCounts(null)
     supabase
       .from('rfp_invitations')
-      .select('printed_at')
+      .select('printed_at, status')
       .in('trip_id', tripIds)
       .in('status', ['submitted', 'awarded'])
       .then(({ data }) => {
@@ -163,6 +163,7 @@ export default function ClientsList() {
         setProposalCounts({
           total: bids.length,
           unprinted: bids.filter((b: any) => b.printed_at == null).length,
+          awarded: bids.filter((b: any) => b.status === 'awarded').length,
         })
       })
     return () => { cancelled = true }
@@ -453,6 +454,22 @@ export default function ClientsList() {
                       Print new proposals
                       <span className={`rounded-full px-2 py-0.5 text-xs ${proposalCounts.unprinted > 0 ? 'bg-[#1C1008]/10 dark:bg-white/10' : 'bg-slate-100 dark:bg-slate-800'}`}>
                         {proposalCounts.unprinted}
+                      </span>
+                    </a>
+                    <a
+                      href={`/clients/${selected.id}/proposals?mode=awarded`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Download the completed RFPs for just the awarded (winning) hotels — a checklist for the room agreements."
+                      className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition-colors ${
+                        proposalCounts.awarded > 0
+                          ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300'
+                          : 'pointer-events-none border-slate-200 text-slate-400 dark:border-slate-700 dark:text-slate-600'
+                      }`}
+                    >
+                      Print selected (awarded) RFPs
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${proposalCounts.awarded > 0 ? 'bg-emerald-600/15 dark:bg-white/10' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                        {proposalCounts.awarded}
                       </span>
                     </a>
                     <p className="mt-1 w-full text-xs text-slate-400 dark:text-slate-500">

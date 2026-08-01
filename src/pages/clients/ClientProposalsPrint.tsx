@@ -21,7 +21,11 @@ type ClientRow = { id: string; team_name: string }
 export default function ClientProposalsPrint() {
   const { id: clientId } = useParams<{ id: string }>()
   const [searchParams] = useSearchParams()
-  const newMode = searchParams.get('mode') === 'new'
+  const mode = searchParams.get('mode')
+  const newMode = mode === 'new'
+  // "awarded" = only the hotels marked Awarded (the winners we're contracting),
+  // so staff can save just the selected hotels' completed RFPs as a checklist.
+  const awardedMode = mode === 'awarded'
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -56,20 +60,22 @@ export default function ClientProposalsPrint() {
       if (tps.length === 0) { setLoading(false); return }
       const tripIds = tps.map((t) => t.id)
 
-      // Every submitted/awarded bid across those trips; "new" = not yet printed.
+      // "awarded" = winners only; otherwise every submitted/awarded bid; "new" =
+      // not yet printed.
       let invQuery = supabase
         .from('rfp_invitations')
         .select('id, trip_id, hotel_name, hotel_contact_name, hotel_contact_email, status, submitted_at, visit1_declined, visit2_declined')
         .in('trip_id', tripIds)
-        .in('status', ['submitted', 'awarded'])
+        .in('status', awardedMode ? ['awarded'] : ['submitted', 'awarded'])
       if (newMode) invQuery = invQuery.is('printed_at', null)
       const { data: invData } = await invQuery
       const invs = (invData as unknown as Invitation[]) ?? []
       setInvitations(invs)
 
       // Printing marks those bids printed so the next "print new" run only picks
-      // up bids that have arrived since.
-      if (invs.length > 0) {
+      // up bids that have arrived since. The awarded checklist print is on-demand
+      // and must NOT consume the "new" queue, so skip the stamp in awarded mode.
+      if (invs.length > 0 && !awardedMode) {
         await supabase
           .from('rfp_invitations')
           .update({ printed_at: new Date().toISOString() })
@@ -95,11 +101,24 @@ export default function ClientProposalsPrint() {
         setResponses(resps)
 
         if (resps.length > 0) {
-          const { data: ansData } = await supabase
-            .from('concession_answers')
-            .select('response_id, concession_item_id, answer_yes_no, answer_value, comment')
-            .in('response_id', resps.map((r) => r.id))
-          const ansRows = (ansData as unknown as Answer[]) ?? []
+          // Page past Supabase's 1000-row cap: a client with many bids (SJ Sharks
+          // has ~2,300 answers) would otherwise get only the first 1000, so every
+          // later bid would print with dashes instead of its real Yes/No answers.
+          const respIds = resps.map((r) => r.id)
+          const ansRows: Answer[] = []
+          const PAGE = 1000
+          for (let from = 0; ; from += PAGE) {
+            const { data: page } = await supabase
+              .from('concession_answers')
+              .select('response_id, concession_item_id, answer_yes_no, answer_value, comment')
+              .in('response_id', respIds)
+              .order('response_id')
+              .order('concession_item_id')
+              .range(from, from + PAGE - 1)
+            const rows = (page as unknown as Answer[]) ?? []
+            ansRows.push(...rows)
+            if (rows.length < PAGE) break
+          }
           setAnswers(ansRows)
 
           // Include any question a bid actually answered that isn't in the scoped
@@ -165,7 +184,9 @@ export default function ClientProposalsPrint() {
       <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 900, margin: '0 auto', padding: '0 24px 48px' }}>
         {totalBids === 0 ? (
           <div style={{ marginTop: 80, border: '1px solid #e2e8f0', borderRadius: 12, padding: '48px 32px', textAlign: 'center', color: '#94a3b8', fontSize: 15 }}>
-            {newMode ? 'No new proposals since your last print.' : 'No submitted bids yet for this client.'}
+            {awardedMode
+              ? 'No awarded hotels yet. Mark the winning hotel on each trip as Awarded, then this will collect their completed RFPs.'
+              : newMode ? 'No new proposals since your last print.' : 'No submitted bids yet for this client.'}
           </div>
         ) : (
           tripsWithBids.map((trip, ti) => {
@@ -175,7 +196,7 @@ export default function ClientProposalsPrint() {
               <div key={trip.id} style={!isLastTrip ? { pageBreakAfter: 'always' } : undefined}>
                 <TripHeader
                   trip={trip}
-                  subtitle={`Hotel Proposals — ${newMode ? 'New Since Last Print' : 'Full Copy'}`}
+                  subtitle={`Hotel Proposals — ${awardedMode ? 'Selected (Awarded) Hotels' : newMode ? 'New Since Last Print' : 'Full Copy'}`}
                 />
                 {tripInvs.map((inv, hi) => (
                   <HotelFull
