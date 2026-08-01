@@ -100,4 +100,6 @@ export type Invitation = {
   visit2_declined: boolean
   visit2_decline_reason: string | null
   visit2_decline_notes: string | null
+  awarded_stay1: boolean
+  awarded_stay2: boolean
 }

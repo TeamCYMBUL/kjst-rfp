@@ -559,6 +559,7 @@ function BidSummaryTable({
   onRemove,
   passingId,
   isViewer,
+  twoVisit,
 }: {
   invites: Invitation[]
   responses: Map<string, HotelResponse>
@@ -574,8 +575,17 @@ function BidSummaryTable({
   onRemove: (inv: Invitation) => void
   passingId: string | null
   isViewer?: boolean
+  twoVisit?: boolean
 }) {
   const [showScoreInfo, setShowScoreInfo] = useState(false)
+  // On a 2-visit trip, say which stay each hotel won.
+  const stayLabel = (inv: Invitation): string => {
+    if (!twoVisit) return ''
+    const s: string[] = []
+    if (inv.awarded_stay1) s.push('1')
+    if (inv.awarded_stay2) s.push('2')
+    return s.length ? ` · Stay ${s.join(' & ')}` : ''
+  }
 
   // Include 'passed' and 'declined' hotels so they're visible here too (they
   // responded, just not with a live bid); sort: awarded, submitted, then the
@@ -710,7 +720,7 @@ function BidSummaryTable({
                         <div className="flex items-center justify-end gap-2">
                           {isAwarded ? (
                             <>
-                              <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold">Awarded</span>
+                              <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold">Awarded{stayLabel(inv)}</span>
                               <button
                                 onClick={() => onResetStatus(inv)}
                                 className="rounded px-2 py-0.5 text-[10px] font-medium text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-600 transition-colors"
@@ -764,7 +774,7 @@ function BidSummaryTable({
                         </div>
                       )}
                       {isViewer && isAwarded && (
-                        <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold">Awarded</span>
+                        <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold">Awarded{stayLabel(inv)}</span>
                       )}
                     </td>
                   </tr>
@@ -951,7 +961,16 @@ function HotelPanel({
                 Draft — not sent
               </span>
             ) : (
-              <Badge status={inv.status} label={inv.status === 'passed' ? passedLabel(inv.submitted_at) : undefined} />
+              <Badge
+                status={inv.status}
+                label={
+                  inv.status === 'passed'
+                    ? passedLabel(inv.submitted_at)
+                    : inv.status === 'awarded' && trip.stay2_arrival_date && (inv.awarded_stay1 || inv.awarded_stay2)
+                      ? `Awarded · Stay ${[inv.awarded_stay1 && '1', inv.awarded_stay2 && '2'].filter(Boolean).join(' & ')}`
+                      : undefined
+                }
+              />
             )}
             {/* Reopened-for-revision indicator — only when the hotel actually
                 submitted a bid that was then reopened (reopened_at newer than
@@ -1917,6 +1936,19 @@ export default function TripDetail() {
   const hasLiveBid = invites.some((i) => ['submitted', 'awarded'].includes(i.status))
   const allResponded = invites.length > 0 && outstanding === 0 && hasLiveBid
   const awarded = invites.find((i) => i.status === 'awarded')
+  // Per-stay winners (a same-city 2-visit trip can award a different hotel per stay).
+  const twoVisit = !!trip.stay2_arrival_date
+  const stay1Winner = invites.find((i) => i.awarded_stay1)
+  const stay2Winner = invites.find((i) => i.awarded_stay2)
+  // Short label of the stay(s) a hotel won, e.g. "Stay 1", "Stay 2", "Stay 1 & 2".
+  // Empty for single-visit trips (there's only one stay, so "Awarded" is enough).
+  const awardStayLabel = (inv: Invitation): string => {
+    if (!twoVisit) return ''
+    const s: string[] = []
+    if (inv.awarded_stay1) s.push('1')
+    if (inv.awarded_stay2) s.push('2')
+    return s.length ? `Stay ${s.join(' & ')}` : ''
+  }
 
   return (
     <div className="flex min-h-[calc(100dvh-3.5rem)] lg:min-h-[calc(100vh-4rem)] flex-col -mx-4 -my-6 sm:-mx-6 lg:-mx-8 lg:-my-8">
@@ -1933,7 +1965,14 @@ export default function TripDetail() {
               </span>
             )}
             <Badge status={trip.status} />
-            {awarded && <span className="rounded-full bg-amber-100 dark:bg-amber-900/20 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">🏆{awarded.hotel_name}</span>}
+            {twoVisit ? (
+              <>
+                {stay1Winner && <span className="rounded-full bg-amber-100 dark:bg-amber-900/20 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">🏆 Stay 1: {stay1Winner.hotel_name}</span>}
+                {stay2Winner && <span className="rounded-full bg-amber-100 dark:bg-amber-900/20 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">🏆 Stay 2: {stay2Winner.hotel_name}</span>}
+              </>
+            ) : (
+              awarded && <span className="rounded-full bg-amber-100 dark:bg-amber-900/20 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">🏆 {awarded.hotel_name}</span>
+            )}
             {isViewer && (
               <span className="rounded-full border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 px-2 py-0.5 text-xs text-slate-400 dark:text-slate-500">
                 View only
@@ -2094,7 +2133,37 @@ export default function TripDetail() {
         let body: ReactNode = null
         let actions: ReactNode = null
 
-        if (awarded) {
+        if (awarded && twoVisit) {
+          const bothDone = !!stay1Winner && !!stay2Winner
+          const sameHotel = bothDone && stay1Winner!.id === stay2Winner!.id
+          title = bothDone
+            ? sameHotel
+              ? `Winner selected (both stays): ${stay1Winner!.hotel_name}`
+              : 'Winners selected for both stays'
+            : stay1Winner
+              ? 'Stay 1 awarded — still pick a Stay 2 winner'
+              : 'Stay 2 awarded — still pick a Stay 1 winner'
+          body = (
+            <>
+              {stay1Winner && <>Stay 1: <strong>{stay1Winner.hotel_name}</strong>. </>}
+              {stay2Winner && <>Stay 2: <strong>{stay2Winner.hotel_name}</strong>. </>}
+              {bothDone
+                ? <>Send each awarded hotel their contract request to lock it in. Undo on the grid if plans change.</>
+                : <>Open the grid to award the other stay, or send the awarded hotel's contract now.</>}
+            </>
+          )
+          const winners = (sameHotel ? [stay1Winner!] : [stay1Winner, stay2Winner].filter(Boolean) as Invitation[])
+          actions = !isViewer ? (
+            <>
+              {winners.map((w) => (
+                <button key={w.id} onClick={() => openContractDialog(w)} className={btn}>
+                  Contract: {w.hotel_name.split(',')[0]}
+                </button>
+              ))}
+              <Link to={`/trips/${id}/grid`} className={btnGhost}>Open grid</Link>
+            </>
+          ) : null
+        } else if (awarded) {
           title = `Winner selected: ${awarded.hotel_name}`
           body = <>Send the awarded hotel their contract request to lock it in. Plans change? You can undo the award on the grid.</>
           actions = !isViewer ? (
@@ -2220,6 +2289,7 @@ export default function TripDetail() {
           onRemove={removeInviteFromTable}
           passingId={awardingId}
           isViewer={isViewer}
+          twoVisit={twoVisit}
         />
       )}
 
@@ -2335,6 +2405,11 @@ export default function TripDetail() {
                       <div className={`truncate text-sm font-medium ${isAwarded ? 'text-amber-700' : inv.status === 'passed' || inv.status === 'unavailable' || inv.status === 'declined' ? 'text-slate-400 line-through' : 'text-slate-800 dark:text-slate-200'}`}>
                         {isAwarded && '🏆 '}{inv.hotel_name}
                       </div>
+                      {isAwarded && twoVisit && awardStayLabel(inv) && (
+                        <span className="mt-0.5 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                          Won {awardStayLabel(inv)}
+                        </span>
+                      )}
                       {(inv.status === 'passed' || inv.status === 'unavailable' || inv.status === 'declined') ? (
                         <span className="mt-0.5 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-600 dark:bg-red-900/30 dark:text-red-400">
                           {inv.status === 'passed' ? passedLabel(inv.submitted_at) : inv.status === 'declined' ? 'Declined' : 'Not available'}
