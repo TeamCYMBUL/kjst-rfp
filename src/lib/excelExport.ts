@@ -495,6 +495,9 @@ export type ConsolidatedHotel = {
   hotel_name: string
   status: string
   staff_notes: string | null
+  // Per-stay award flags — a two-visit trip can award a different hotel per stay.
+  awarded_stay1?: boolean
+  awarded_stay2?: boolean
   // Per-visit availability — a hotel can be sold out for one visit but not the other
   visit1_declined: boolean
   visit1_decline_reason: string | null
@@ -733,8 +736,10 @@ export async function exportMultiCityConsolidatedXlsx(
         const postGte = playoffAns?.answer_yes_no === true ? 'YES' : playoffAns?.answer_yes_no === false ? 'NO' : ''
 
         const reason = visit.index === 1 ? h.visit1_decline_reason : h.visit2_decline_reason
+        // Awarded per stay: mark AWARDED only on the visit this hotel actually won.
+        const wonThisVisit = visit.index === 1 ? !!h.awarded_stay1 : !!h.awarded_stay2
         const noteFrags: string[] = []
-        if (h.status === 'awarded') noteFrags.push('AWARDED')
+        if (wonThisVisit) noteFrags.push('AWARDED')
         if (struck) noteFrags.push(reason ? REASON_LABELS[reason] ?? 'Not available' : 'Not available')
         if (h.staff_notes) noteFrags.push(h.staff_notes)
         if (h.general_comments) noteFrags.push(h.general_comments)
@@ -776,7 +781,7 @@ export async function exportMultiCityConsolidatedXlsx(
         }
         first = false
 
-        const awardedRow = h.status === 'awarded' && !struck
+        const awardedRow = wonThisVisit && !struck
         vals.forEach((v, i) => {
           const cell = row.getCell(i + 1)
           cell.value = v as any

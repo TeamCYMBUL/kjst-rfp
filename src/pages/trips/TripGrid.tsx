@@ -53,6 +53,8 @@ type Invitation = {
   staff_notes: string | null
   visit1_declined: boolean
   visit2_declined: boolean
+  awarded_stay1: boolean
+  awarded_stay2: boolean
   // PostgREST returns a single object (not array) because invitation_id has a UNIQUE constraint.
   rfp_responses: Response | null
 }
@@ -354,7 +356,7 @@ export default function TripGrid() {
           .from('rfp_invitations')
           .select(`
             id, hotel_name, hotel_contact_name, hotel_contact_email, token, status, submitted_at, staff_notes,
-            visit1_declined, visit2_declined,
+            visit1_declined, visit2_declined, awarded_stay1, awarded_stay2,
             rfp_responses (
               id, completed_by_name, completed_date, best_king_rate, king_rate_notes,
               current_selling_rate, stay2_king_rate, stay2_suite_rate, stay2_selling_rate,
@@ -477,40 +479,50 @@ export default function TripGrid() {
   }, [invitations])
 
   // ── Award / Pass ────────────────────────────────────────────────────────────
-  const handleAward = async (invitationId: string, hotelName: string) => {
-    if (
-      !confirm(
-        `Award "${hotelName}"?\n\nThis will:\n• Mark this hotel as Awarded\n• Mark the other submitted bids as Passed\n• Close the trip\n\nHotels that declined or are unavailable keep their status. You can undo this at any time.`,
-      )
-    )
-      return
+  // A trip can have TWO visits (same city twice) and the client may pick a
+  // different hotel per visit, so awards are tracked per stay. Awarding a stay
+  // marks that winner; the trip only closes (and the non-winners get passed)
+  // once every stay has a winner. Single-visit trips have one stay = Stay 1.
+  const twoVisit = !!trip?.stay2_arrival_date
+
+  const awardStay = async (invitationId: string, hotelName: string, stay: 1 | 2) => {
+    const label = twoVisit ? ` for Stay ${stay}` : ''
+    if (!confirm(`Award "${hotelName}"${label}? You can undo it at any time.`)) return
     setSaving(true)
     try {
-      await supabase
+      const patch = stay === 1 ? { status: 'awarded', awarded_stay1: true } : { status: 'awarded', awarded_stay2: true }
+      await supabase.from('rfp_invitations').update(patch).eq('id', invitationId)
+
+      // Re-read the trip's award state to decide whether every stay is now set.
+      const { data: fresh } = await supabase
         .from('rfp_invitations')
-        .update({ status: 'awarded' })
-        .eq('id', invitationId)
-      // Only turn the losing SUBMITTED bids into "Passed" — never overwrite a
-      // hotel that declined, is unavailable, was already passed, or never responded.
-      await supabase
-        .from('rfp_invitations')
-        .update({ status: 'passed' })
+        .select('awarded_stay1, awarded_stay2')
         .eq('trip_id', id!)
-        .neq('id', invitationId)
-        .eq('status', 'submitted')
-      await supabase.from('trips').update({ status: 'closed' }).eq('id', id!)
-      // Snapshot with updated statuses before re-render
-      const awardedInvitations = invitations.map((inv) => ({
-        ...inv,
-        status: inv.id === invitationId ? 'awarded' : inv.status === 'submitted' ? 'passed' : inv.status,
-      }))
-      await saveGridVersion(`Awarded: ${hotelName}`, awardedInvitations)
-      // Timeline: record the award (no base-table timestamp exists for this).
+      const rows = (fresh ?? []) as any[]
+      const stay1Won = rows.some((r) => r.awarded_stay1)
+      const stay2Won = rows.some((r) => r.awarded_stay2)
+      const fullyAwarded = twoVisit ? stay1Won && stay2Won : stay1Won
+
+      if (fullyAwarded) {
+        // Pass only the submitted hotels that won NEITHER stay — never a winner,
+        // and never a declined/unavailable/already-passed hotel.
+        await supabase
+          .from('rfp_invitations')
+          .update({ status: 'passed' })
+          .eq('trip_id', id!)
+          .eq('status', 'submitted')
+          .eq('awarded_stay1', false)
+          .eq('awarded_stay2', false)
+        await supabase.from('trips').update({ status: 'closed' }).eq('id', id!)
+      } else {
+        // Keep the trip open until the other stay is decided.
+        await supabase.from('trips').update({ status: 'collecting' }).eq('id', id!)
+      }
       void logActivity({
         event_type: 'awarded',
         client_id: trip?.client_id ?? null,
         trip_id: id ?? null,
-        detail: { hotel_name: hotelName },
+        detail: { hotel_name: hotelName, stay: twoVisit ? stay : null },
       })
       await loadData()
     } finally {
@@ -518,19 +530,17 @@ export default function TripGrid() {
     }
   }
 
-  const handleUndoAward = async (invitationId: string, hotelName: string) => {
-    if (
-      !confirm(
-        `Undo award for "${hotelName}"?\n\nThis will:\n• Reset this hotel back to Submitted\n• Reopen the trip for further review\n\nOther hotels marked as Passed will stay passed — you can manually change them from the trip detail page.`,
-      )
-    )
-      return
+  const undoAwardStay = async (invitationId: string, hotelName: string, stay: 1 | 2) => {
+    const label = twoVisit ? ` Stay ${stay}` : ''
+    if (!confirm(`Undo${label} award for "${hotelName}"? The trip reopens; other hotels keep their current status.`)) return
     setSaving(true)
     try {
-      await supabase
-        .from('rfp_invitations')
-        .update({ status: 'submitted' })
-        .eq('id', invitationId)
+      const inv = invitations.find((i) => i.id === invitationId)
+      const stillWinsOtherStay = stay === 1 ? inv?.awarded_stay2 : inv?.awarded_stay1
+      const patch: any = stay === 1 ? { awarded_stay1: false } : { awarded_stay2: false }
+      // Only drop back to Submitted if this hotel no longer wins any stay.
+      if (!stillWinsOtherStay) patch.status = 'submitted'
+      await supabase.from('rfp_invitations').update(patch).eq('id', invitationId)
       await supabase.from('trips').update({ status: 'collecting' }).eq('id', id!)
       await loadData()
     } finally {
@@ -729,10 +739,16 @@ export default function TripGrid() {
                   // the RFP by phone/email), award goes through bid entry first so
                   // the agreed terms are recorded rather than left blank.
                   const hasBid = inv.submitted_at != null
-                  const canAward = hasBid && inv.status === 'submitted'
+                  const wonS1 = inv.awarded_stay1
+                  const wonS2 = inv.awarded_stay2
+                  // A stay can only go to one hotel, so its Award button shows
+                  // only while that stay is still open.
+                  const stay1Taken = invitations.some((i) => i.awarded_stay1)
+                  const stay2Taken = invitations.some((i) => i.awarded_stay2)
+                  const canAwardS1 = hasBid && !isPassed && !isUnavailable && !wonS1 && !stay1Taken && !inv.visit1_declined
+                  const canAwardS2 = twoVisit && hasBid && !isPassed && !isUnavailable && !wonS2 && !stay2Taken && !inv.visit2_declined
                   const canEnterBidAndAward =
                     !hasBid && ['sent', 'opened'].includes(inv.status) && trip?.status !== 'closed'
-                  const canUndoAward = isAwarded
                   const canPass = !isPassed && !isAwarded && !isUnavailable && trip?.status !== 'closed'
                   const canMarkUnavailable = ['sent', 'opened'].includes(inv.status) && trip?.status !== 'closed'
                   return (
@@ -758,6 +774,12 @@ export default function TripGrid() {
                       )}
                       <div className="mt-1 flex flex-wrap items-center gap-1.5">
                         <Badge status={inv.status} label={inv.status === 'passed' ? passedLabel(inv.submitted_at) : undefined} />
+                        {twoVisit && wonS1 && (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">🏆 Stay 1</span>
+                        )}
+                        {twoVisit && wonS2 && (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">🏆 Stay 2</span>
+                        )}
                         {isLowest && !isAwarded && !isDimmed && (
                           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
                             Best rate
@@ -776,17 +798,27 @@ export default function TripGrid() {
                           </div>
                         )
                       })()}
-                      {/* Award / Undo Award / Pass / Unavailable actions */}
-                      {(canAward || canEnterBidAndAward || canUndoAward || canPass || canMarkUnavailable) && (
+                      {/* Award (per stay) / Undo / Pass / Unavailable actions */}
+                      {(canAwardS1 || canAwardS2 || wonS1 || wonS2 || canEnterBidAndAward || canPass || canMarkUnavailable) && (
                         <div className="mt-2 flex flex-wrap gap-1.5">
-                          {canAward && (
+                          {canAwardS1 && (
                             <button
-                              onClick={() => handleAward(inv.id, inv.hotel_name)}
+                              onClick={() => awardStay(inv.id, inv.hotel_name, 1)}
                               disabled={saving}
-                              title="Use this when the team picks this hotel, even if you've also confirmed by phone or email. It marks the winner, passes the rest, and closes the trip."
+                              title={twoVisit ? "Mark this hotel the winner for Stay 1. The trip closes once every stay has a winner. Undo anytime." : "Mark this hotel the winner. It passes the other bids and closes the trip. Undo anytime."}
                               className="rounded px-2 py-1 text-xs font-medium bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-40 transition-colors"
                             >
-                              🏆 Award
+                              🏆 Award{twoVisit ? ' Stay 1' : ''}
+                            </button>
+                          )}
+                          {canAwardS2 && (
+                            <button
+                              onClick={() => awardStay(inv.id, inv.hotel_name, 2)}
+                              disabled={saving}
+                              title="Mark this hotel the winner for Stay 2 (the second visit to this city)."
+                              className="rounded px-2 py-1 text-xs font-medium bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-40 transition-colors"
+                            >
+                              🏆 Award Stay 2
                             </button>
                           )}
                           {canEnterBidAndAward && (
@@ -800,13 +832,22 @@ export default function TripGrid() {
                               Enter bid &amp; award
                             </a>
                           )}
-                          {canUndoAward && (
+                          {wonS1 && (
                             <button
-                              onClick={() => handleUndoAward(inv.id, inv.hotel_name)}
+                              onClick={() => undoAwardStay(inv.id, inv.hotel_name, 1)}
                               disabled={saving}
                               className="rounded px-2 py-1 text-xs font-medium bg-white border border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-40 transition-colors"
                             >
-                              ↩ Undo award
+                              ↩ Undo{twoVisit ? ' Stay 1' : ' award'}
+                            </button>
+                          )}
+                          {wonS2 && (
+                            <button
+                              onClick={() => undoAwardStay(inv.id, inv.hotel_name, 2)}
+                              disabled={saving}
+                              className="rounded px-2 py-1 text-xs font-medium bg-white border border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-40 transition-colors"
+                            >
+                              ↩ Undo Stay 2
                             </button>
                           )}
                           {canPass && (

@@ -1729,7 +1729,9 @@ export default function TripDetail() {
   const resetHotelStatus = async (inv: Invitation) => {
     const wasAwarded = inv.status === 'awarded'
     const backTo = inv.submitted_at ? 'submitted' : 'sent'
-    await supabase.from('rfp_invitations').update({ status: backTo }).eq('id', inv.id)
+    // Also clear any per-stay award flags so a re-opened hotel isn't still marked
+    // the Stay 1 / Stay 2 winner on a two-visit trip.
+    await supabase.from('rfp_invitations').update({ status: backTo, awarded_stay1: false, awarded_stay2: false }).eq('id', inv.id)
     if (wasAwarded) {
       await supabase.from('trips').update({ status: 'collecting' }).eq('id', id!)
       const { data } = await supabase.from('trips').select('*, clients(id, team_name, league)').eq('id', id!).single()

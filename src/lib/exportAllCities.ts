@@ -40,7 +40,7 @@ export async function exportAllCitiesForClient(
     const { data: invs } = await supabase
       .from('rfp_invitations')
       .select(`
-        id, hotel_name, status, staff_notes,
+        id, hotel_name, status, staff_notes, awarded_stay1, awarded_stay2,
         visit1_declined, visit1_decline_reason, visit2_declined, visit2_decline_reason,
         rfp_responses(
           best_king_rate, best_suite_rate, current_selling_rate, occupancy_tax, resort_fee,
@@ -67,6 +67,8 @@ export async function exportAllCitiesForClient(
         hotel_name: inv.hotel_name,
         status: inv.status,
         staff_notes: inv.staff_notes ?? null,
+        awarded_stay1: inv.awarded_stay1 ?? false,
+        awarded_stay2: inv.awarded_stay2 ?? false,
         visit1_declined: inv.visit1_declined ?? false,
         visit1_decline_reason: inv.visit1_decline_reason ?? null,
         visit2_declined: inv.visit2_declined ?? false,
