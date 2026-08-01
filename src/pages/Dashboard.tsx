@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { formatDate, countVisits } from '../lib/format'
 import { Badge, ErrorNote, LinkButton, Loading } from '../components/ui'
 import { PageHint } from '../components/PageHint'
+import { RevenuePanel } from '../components/RevenuePanel'
 import { exportAllCitiesForClient } from '../lib/exportAllCities'
 
 
@@ -445,6 +446,9 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* CYMBUL-only: revenue & commissions from awarded trips (renders only for info@cymbul.co) */}
+      <RevenuePanel />
 
       {/* Trips by client — the single home view. Header row carries the filter
           and show-closed controls; delinquent trips are flagged inline and rolled
