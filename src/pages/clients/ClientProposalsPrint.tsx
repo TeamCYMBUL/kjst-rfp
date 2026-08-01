@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { fetchAllAnswersByResponseIds } from '../../lib/answers'
 import {
   PRIMARY, includeAnsweredItems,
   TripHeader, ProposalFooter, PrintStyles, HotelFull,
@@ -101,24 +102,9 @@ export default function ClientProposalsPrint() {
         setResponses(resps)
 
         if (resps.length > 0) {
-          // Page past Supabase's 1000-row cap: a client with many bids (SJ Sharks
-          // has ~2,300 answers) would otherwise get only the first 1000, so every
-          // later bid would print with dashes instead of its real Yes/No answers.
-          const respIds = resps.map((r) => r.id)
-          const ansRows: Answer[] = []
-          const PAGE = 1000
-          for (let from = 0; ; from += PAGE) {
-            const { data: page } = await supabase
-              .from('concession_answers')
-              .select('response_id, concession_item_id, answer_yes_no, answer_value, comment')
-              .in('response_id', respIds)
-              .order('response_id')
-              .order('concession_item_id')
-              .range(from, from + PAGE - 1)
-            const rows = (page as unknown as Answer[]) ?? []
-            ansRows.push(...rows)
-            if (rows.length < PAGE) break
-          }
+          // Page past Supabase's 1000-row cap (a client with many bids has
+          // thousands of answers) so every bid prints its real Yes/No answers.
+          const ansRows = (await fetchAllAnswersByResponseIds(resps.map((r) => r.id))) as unknown as Answer[]
           setAnswers(ansRows)
 
           // Include any question a bid actually answered that isn't in the scoped

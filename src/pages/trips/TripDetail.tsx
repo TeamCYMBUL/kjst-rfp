@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activity'
 import type { Client, DateScenario, Invitation, Trip } from '../../lib/types'
 import { formatDate, generateToken, formatMeetingSpaceNotes, passedLabel } from '../../lib/format'
+import { fetchAllAnswersByResponseIds } from '../../lib/answers'
 import { PUBLIC_APP_URL } from '../../lib/config'
 import { sendInvitationEmail, sendReminderEmails, sendSingleReminderEmail, reopenRfp, sendContractRequest } from '../../lib/emailApi'
 import { Badge, ErrorNote, LinkButton, Loading } from '../../components/ui'
@@ -1613,10 +1614,7 @@ export default function TripDetail() {
 
         const ansMap = new Map<string, Answer[]>()
         if (responseIds.length > 0) {
-          const { data: ansData } = await supabase
-            .from('concession_answers')
-            .select('response_id, concession_item_id, answer_yes_no, answer_value, comment')
-            .in('response_id', responseIds)
+          const ansData = await fetchAllAnswersByResponseIds(responseIds)
           ;(ansData ?? []).forEach((a: any) => {
             const invId = respIdToInvId.get(a.response_id)
             if (!invId) return

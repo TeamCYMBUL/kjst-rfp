@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { fetchAllAnswersByResponseIds } from '../../lib/answers'
 import {
   PRIMARY, fmtMoney, normLabel, includeAnsweredItems,
   TripHeader, ProposalFooter, PrintStyles, HotelFull,
@@ -87,12 +88,7 @@ export default function ProposalPrint() {
         setResponses(resps)
 
         if (resps.length > 0) {
-          const respIds = resps.map((r) => r.id)
-          const { data: ansData } = await supabase
-            .from('concession_answers')
-            .select('response_id, concession_item_id, answer_yes_no, answer_value, comment')
-            .in('response_id', respIds)
-          const ansRows = (ansData as unknown as Answer[]) ?? []
+          const ansRows = (await fetchAllAnswersByResponseIds(resps.map((r) => r.id))) as unknown as Answer[]
           setAnswers(ansRows)
 
           // Include any answered question missing from the scoped list (archived
