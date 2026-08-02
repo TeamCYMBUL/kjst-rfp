@@ -5,8 +5,8 @@ import { useAuth } from '../auth/AuthContext'
 import { fetchCommissions } from '../lib/commissions'
 import type { CommissionRow, CommissionSummary } from '../lib/commissions'
 
-// The one login allowed to see this panel.
-const OWNER_EMAIL = 'info@cymbul.co'
+// The logins allowed to see this panel (CYMBUL ownership).
+const OWNER_EMAILS = ['info@cymbul.co', 'aaron@galetapartners.com']
 
 const usd = (n: number) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
@@ -21,7 +21,7 @@ function stayLabel(r: CommissionRow): string {
 
 export function RevenuePanel() {
   const { user } = useAuth()
-  const isOwner = (user?.email ?? '').trim().toLowerCase() === OWNER_EMAIL
+  const isOwner = OWNER_EMAILS.includes((user?.email ?? '').trim().toLowerCase())
 
   const [data, setData] = useState<CommissionSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -253,7 +253,7 @@ export function RevenuePanel() {
 
               <p className="text-[11px] text-slate-400 dark:text-slate-500">
                 Room revenue = awarded king rate x room block x nights (excl. tax), per stay. Commission % is pulled from each
-                winning hotel&apos;s own bid. Visible only to {OWNER_EMAIL}.
+                winning hotel&apos;s own bid. Visible only to {OWNER_EMAILS.join(' and ')}.
               </p>
             </>
           )}
