@@ -211,6 +211,23 @@ function ValueInput({
   )
 }
 
+// Some concessions must not be left as a bare "No" — KJST would then have to
+// email the hotel to ask for the number. For these, a "No" REQUIRES a note so
+// the hotel states the term they can offer. Matched by label so it covers every
+// client's copy of the item. Returns the guidance placeholder, or null.
+function noteRequirementOnNo(item: ConcessionItem): { placeholder: string } | null {
+  if (item.answer_type !== 'yes_no') return null
+  const l = item.label.toLowerCase()
+  if (l.includes('attrition')) {
+    return { placeholder: 'Required: enter the attrition % you can offer (and any notes)…' }
+  }
+  // "No F&B Minimum at time of contracting" — NOT the separate "3% F&B increase" items.
+  if (l.includes('f&b minimum') || l.includes('food and beverage minimum') || l.includes('food & beverage minimum')) {
+    return { placeholder: 'Required: enter the F&B minimum ($) you require (and any notes)…' }
+  }
+  return null
+}
+
 // ── Single concession item row ────────────────────────────────────────────────
 
 function ConcessionRow({
@@ -246,6 +263,14 @@ function ConcessionRow({
   const commVal = answer.answer_value?.trim() ?? ''
   const warnZeroCommission = showCommissionWarning && (commVal === '0' || commVal === '')
 
+  // Items where a "No" must be explained (attrition %, F&B minimum $). When the
+  // hotel answers No, the note becomes required — so any submit error on this
+  // item points at the note box, not the toggle.
+  const noReq = noteRequirementOnNo(item)
+  const noteRequired = !!noReq && answer.answer_yes_no === false
+  const showNoteError = !!hasError && noteRequired
+  const showToggleError = !!hasError && !noteRequired
+
   return (
     <div className="border-b border-slate-100 py-4 last:border-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
@@ -265,7 +290,7 @@ function ConcessionRow({
         <div className="flex-shrink-0 sm:w-48">
           <div
             id={`concession-item-${item.id}`}
-            className={hasError ? 'rounded-lg ring-2 ring-red-400 p-1' : ''}
+            className={showToggleError ? 'rounded-lg ring-2 ring-red-400 p-1' : ''}
           >
           {isYesNo ? (
             <YesNoToggle value={answer.answer_yes_no} onChange={handleYesNo} disabled={disabled} />
@@ -303,7 +328,7 @@ function ConcessionRow({
             <ValueInput item={item} value={answer.answer_value} onChange={(v) => onChange({ answer_value: v })} disabled={disabled} />
           )}
           </div>
-          {hasError && (
+          {showToggleError && (
             <p className="mt-1 text-xs font-medium text-red-500">Required</p>
           )}
         </div>
@@ -312,14 +337,22 @@ function ConcessionRow({
       {/* Inline comment / counteroffer box */}
       {showComment && (
         <div className="mt-3">
+          {noteRequired && (
+            <p className="mb-1 text-xs font-medium text-slate-600">
+              Since you answered No, please note the term you can offer<span className="ml-0.5 text-red-500">*</span>
+            </p>
+          )}
           <textarea
-            className={`${inputCls} resize-none`}
+            className={`${inputCls} resize-none ${showNoteError ? 'ring-2 ring-red-400' : ''}`}
             rows={2}
-            placeholder="Reason or counteroffer…"
+            placeholder={noteRequired ? noReq!.placeholder : 'Reason or counteroffer…'}
             value={answer.comment}
             onChange={(e) => onChange({ comment: e.target.value })}
             disabled={disabled}
           />
+          {showNoteError && (
+            <p className="mt-1 text-xs font-medium text-red-500">A note is required when you answer No here.</p>
+          )}
         </div>
       )}
 
@@ -1310,7 +1343,15 @@ export default function RfpForm() {
         !item.label.includes('(if applicable)') &&
         !answers[item.id]?.answer_value?.trim(),
     )
-    const allMissing = [...unansweredYesNo, ...unansweredValue]
+    // Items where a "No" must be explained (attrition %, F&B minimum $) — a bare
+    // No with no note is treated as missing, so KJST never has to chase it later.
+    const missingRequiredNote = (data?.items ?? []).filter(
+      (item) =>
+        noteRequirementOnNo(item) &&
+        answers[item.id]?.answer_yes_no === false &&
+        !answers[item.id]?.comment?.trim(),
+    )
+    const allMissing = [...unansweredYesNo, ...unansweredValue, ...missingRequiredNote]
     if (allMissing.length > 0) {
       const missingIds = new Set(allMissing.map((i) => i.id))
       setFieldErrors(missingIds)

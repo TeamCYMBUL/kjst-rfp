@@ -76,6 +76,18 @@ export async function sendContractRequest(
   return res.json()
 }
 
+/** (Re)send a hotel a copy of its own completed RFP — the same summary it gets on submit. */
+export async function sendRfpCopy(
+  invitation_id: string,
+): Promise<{ ok: true; sent_to: string } | { error: string }> {
+  const res = await fetch(`${FN_BASE}/send-rfp-copy`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ invitation_id }),
+  })
+  return res.json()
+}
+
 /** Send reminder emails to all non-submitted hotels for a trip. */
 export async function sendReminderEmails(
   trip_id: string,

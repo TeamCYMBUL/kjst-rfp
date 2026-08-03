@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { logActivity } from '../../lib/activity'
+import { awardStay as awardStayLib, undoAwardStay as undoAwardStayLib } from '../../lib/award'
 import { formatDate, formatMeetingSpaceNotes, passedLabel } from '../../lib/format'
 import { exportComparisonXlsx } from '../../lib/excelExport'
 import type { ConcessionItem } from '../../lib/rfpApi'
@@ -485,45 +485,14 @@ export default function TripGrid() {
   // once every stay has a winner. Single-visit trips have one stay = Stay 1.
   const twoVisit = !!trip?.stay2_arrival_date
 
+  const awardCtx = { tripId: id!, twoVisit, clientId: trip?.client_id ?? null }
+
   const awardStay = async (invitationId: string, hotelName: string, stay: 1 | 2) => {
     const label = twoVisit ? ` for Stay ${stay}` : ''
     if (!confirm(`Award "${hotelName}"${label}? You can undo it at any time.`)) return
     setSaving(true)
     try {
-      const patch = stay === 1 ? { status: 'awarded', awarded_stay1: true } : { status: 'awarded', awarded_stay2: true }
-      await supabase.from('rfp_invitations').update(patch).eq('id', invitationId)
-
-      // Re-read the trip's award state to decide whether every stay is now set.
-      const { data: fresh } = await supabase
-        .from('rfp_invitations')
-        .select('awarded_stay1, awarded_stay2')
-        .eq('trip_id', id!)
-      const rows = (fresh ?? []) as any[]
-      const stay1Won = rows.some((r) => r.awarded_stay1)
-      const stay2Won = rows.some((r) => r.awarded_stay2)
-      const fullyAwarded = twoVisit ? stay1Won && stay2Won : stay1Won
-
-      if (fullyAwarded) {
-        // Pass only the submitted hotels that won NEITHER stay — never a winner,
-        // and never a declined/unavailable/already-passed hotel.
-        await supabase
-          .from('rfp_invitations')
-          .update({ status: 'passed' })
-          .eq('trip_id', id!)
-          .eq('status', 'submitted')
-          .eq('awarded_stay1', false)
-          .eq('awarded_stay2', false)
-        await supabase.from('trips').update({ status: 'closed' }).eq('id', id!)
-      } else {
-        // Keep the trip open until the other stay is decided.
-        await supabase.from('trips').update({ status: 'collecting' }).eq('id', id!)
-      }
-      void logActivity({
-        event_type: 'awarded',
-        client_id: trip?.client_id ?? null,
-        trip_id: id ?? null,
-        detail: { hotel_name: hotelName, stay: twoVisit ? stay : null },
-      })
+      await awardStayLib(awardCtx, invitationId, hotelName, stay)
       await loadData()
     } finally {
       setSaving(false)
@@ -536,12 +505,7 @@ export default function TripGrid() {
     setSaving(true)
     try {
       const inv = invitations.find((i) => i.id === invitationId)
-      const stillWinsOtherStay = stay === 1 ? inv?.awarded_stay2 : inv?.awarded_stay1
-      const patch: any = stay === 1 ? { awarded_stay1: false } : { awarded_stay2: false }
-      // Only drop back to Submitted if this hotel no longer wins any stay.
-      if (!stillWinsOtherStay) patch.status = 'submitted'
-      await supabase.from('rfp_invitations').update(patch).eq('id', invitationId)
-      await supabase.from('trips').update({ status: 'collecting' }).eq('id', id!)
+      await undoAwardStayLib(awardCtx, { id: invitationId, awarded_stay1: inv?.awarded_stay1, awarded_stay2: inv?.awarded_stay2 }, stay)
       await loadData()
     } finally {
       setSaving(false)

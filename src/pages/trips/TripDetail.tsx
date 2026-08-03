@@ -2,11 +2,12 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activity'
+import { awardStay as awardStayLib, undoAwardStay as undoAwardStayLib } from '../../lib/award'
 import type { Client, DateScenario, Invitation, Trip } from '../../lib/types'
 import { formatDate, generateToken, formatMeetingSpaceNotes, passedLabel } from '../../lib/format'
 import { fetchAllAnswersByResponseIds } from '../../lib/answers'
 import { PUBLIC_APP_URL } from '../../lib/config'
-import { sendInvitationEmail, sendReminderEmails, sendSingleReminderEmail, reopenRfp, sendContractRequest } from '../../lib/emailApi'
+import { sendInvitationEmail, sendReminderEmails, sendSingleReminderEmail, reopenRfp, sendContractRequest, sendRfpCopy } from '../../lib/emailApi'
 import { Badge, ErrorNote, LinkButton, Loading } from '../../components/ui'
 import { exportSingleHotelXlsx } from '../../lib/excelExport'
 import { useRole } from '../../lib/useRole'
@@ -554,6 +555,8 @@ function BidSummaryTable({
   onSelect,
   onPass,
   onResetStatus,
+  onAward,
+  onUndoAward,
   onReopen,
   reopeningId,
   onRemove,
@@ -570,6 +573,8 @@ function BidSummaryTable({
   onSelect: (id: string) => void
   onPass: (inv: Invitation) => void
   onResetStatus: (inv: Invitation) => void
+  onAward: (inv: Invitation, stay: 1 | 2) => void
+  onUndoAward: (inv: Invitation, stay: 1 | 2) => void
   onReopen: (inv: Invitation) => void
   reopeningId: string | null
   onRemove: (inv: Invitation) => void
@@ -610,6 +615,10 @@ function BidSummaryTable({
 
   // Trips with a second stay show both stays' rates side by side, not just Stay 1.
   const hasStay2 = submitted.some((inv) => responses.get(inv.id)?.stay2_king_rate != null)
+
+  // Which stays already have a winner (so we don't offer an already-taken stay).
+  const stay1Taken = invites.some((i) => i.awarded_stay1)
+  const stay2Taken = invites.some((i) => i.awarded_stay2)
 
   // no cascade — each hotel is passed individually
 
@@ -717,17 +726,9 @@ function BidSummaryTable({
                     {/* Pass / Undo + Remove — hidden for viewers */}
                     <td className="py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
                       {!isViewer && (
-                        <div className="flex items-center justify-end gap-2">
-                          {isAwarded ? (
-                            <>
-                              <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold">Awarded{stayLabel(inv)}</span>
-                              <button
-                                onClick={() => onResetStatus(inv)}
-                                className="rounded px-2 py-0.5 text-[10px] font-medium text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-600 transition-colors"
-                              >
-                                ↩ Undo
-                              </button>
-                            </>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {isDeclined ? (
+                            <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">Hotel declined</span>
                           ) : isPassed ? (
                             <button
                               onClick={() => onResetStatus(inv)}
@@ -735,17 +736,56 @@ function BidSummaryTable({
                             >
                               ↩ Undo
                             </button>
-                          ) : isDeclined ? (
-                            <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">Hotel declined</span>
                           ) : (
-                            <button
-                              onClick={() => onPass(inv)}
-                              disabled={passingId === inv.id}
-                              title="Turn this hotel down. Their bid is kept and shows as 'Not available' on the exported grid. Use Undo to reverse."
-                              className="rounded-lg border border-red-300 bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30 disabled:opacity-40 transition-colors"
-                            >
-                              {passingId === inv.id ? '…' : 'Pass'}
-                            </button>
+                            <>
+                              {/* Per-stay award controls (single-visit trips use Stay 1 only) */}
+                              {([1, 2] as const).map((stay) => {
+                                if (stay === 2 && !twoVisit) return null
+                                const won = stay === 1 ? inv.awarded_stay1 : inv.awarded_stay2
+                                const taken = stay === 1 ? stay1Taken : stay2Taken
+                                const visitDeclined = stay === 1 ? inv.visit1_declined : inv.visit2_declined
+                                const stayTxt = twoVisit ? ` Stay ${stay}` : ''
+                                if (won) {
+                                  return (
+                                    <span key={stay} className="inline-flex items-center gap-1">
+                                      <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">🏆 Awarded{stayTxt}</span>
+                                      <button
+                                        onClick={() => onUndoAward(inv, stay)}
+                                        disabled={passingId === inv.id}
+                                        className="rounded px-2 py-0.5 text-[10px] font-medium text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-600 transition-colors disabled:opacity-40"
+                                      >
+                                        ↩ Undo{stayTxt}
+                                      </button>
+                                    </span>
+                                  )
+                                }
+                                if (!taken && !visitDeclined) {
+                                  return (
+                                    <button
+                                      key={stay}
+                                      onClick={() => onAward(inv, stay)}
+                                      disabled={passingId === inv.id}
+                                      title={`Award this hotel${stayTxt ? ' for' + stayTxt : ''}. You can undo it anytime.`}
+                                      className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400 dark:hover:bg-emerald-900/30 disabled:opacity-40 transition-colors"
+                                    >
+                                      🏆 Award{stayTxt}
+                                    </button>
+                                  )
+                                }
+                                return null
+                              })}
+                              {/* Pass — only when this hotel has won no stay */}
+                              {!inv.awarded_stay1 && !inv.awarded_stay2 && (
+                                <button
+                                  onClick={() => onPass(inv)}
+                                  disabled={passingId === inv.id}
+                                  title="Turn this hotel down. Their bid is kept and shows as 'Not available' on the exported grid. Use Undo to reverse."
+                                  className="rounded-lg border border-red-300 bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30 disabled:opacity-40 transition-colors"
+                                >
+                                  {passingId === inv.id ? '…' : 'Pass'}
+                                </button>
+                              )}
+                            </>
                           )}
                           {/* Reopen for edits — lets the hotel revise a locked
                               submission (e.g. after a date change). Preserves answers.
@@ -802,6 +842,8 @@ function HotelPanel({
   onResetStatus,
   onReopen,
   onContractRequest,
+  onSendCopy,
+  copyingId,
   reopeningId,
   onCopyLink,
   onContactUpdated,
@@ -822,6 +864,8 @@ function HotelPanel({
   onResetStatus: (inv: Invitation) => void
   onReopen: (inv: Invitation) => void
   onContractRequest: (inv: Invitation) => void
+  onSendCopy: (inv: Invitation) => void
+  copyingId: string | null
   reopeningId: string | null
   onCopyLink: (token: string) => void
   onContactUpdated: (id: string, name: string | null, email: string | null) => void
@@ -1020,6 +1064,18 @@ function HotelPanel({
             >
               {copied === inv.token ? '✓Copied' : 'Copy link'}
             </button>
+            {/* Email this hotel a copy of its own completed RFP (on request, or
+                for a bid entered by KJST that never triggered the auto-email). */}
+            {(inv.status === 'submitted' || inv.status === 'awarded') && (
+              <button
+                onClick={() => onSendCopy(inv)}
+                disabled={!inv.hotel_contact_email || copyingId === inv.id}
+                title={!inv.hotel_contact_email ? 'No email address on file' : "Email this hotel a copy of their completed RFP for their records"}
+                className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors"
+              >
+                {copyingId === inv.id ? 'Sending…' : 'Email completed RFP'}
+              </button>
+            )}
             {/* Enter the bid on the hotel's behalf (e.g. an award made off-platform).
                 Opens the RFP form in KJST entry mode; the hotel gets no email. */}
             {(inv.status === 'sent' || inv.status === 'opened') && (
@@ -1759,6 +1815,37 @@ export default function TripDetail() {
     loadInvites()
   }
 
+  // Award a stay to a hotel straight from the trip page (no need to open Full grid).
+  // Uses the SAME shared logic as the grid so behavior is identical: on a 2-visit
+  // trip you pick a hotel per stay; the trip closes and losers are passed only
+  // once every stay has a winner.
+  const refreshTrip = async () => {
+    const { data } = await supabase.from('trips').select('*, clients(id, team_name, league)').eq('id', id!).single()
+    if (data) setTrip(data as Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league'> | null })
+  }
+  const awardFromTable = async (inv: Invitation, stay: 1 | 2) => {
+    const two = !!trip?.stay2_arrival_date
+    const label = two ? ` for Stay ${stay}` : ''
+    if (!confirm(`Award "${inv.hotel_name}"${label}? You can undo it at any time.`)) return
+    setAwardingId(inv.id)
+    await awardStayLib({ tripId: id!, twoVisit: two, clientId: trip?.client_id ?? null }, inv.id, inv.hotel_name, stay)
+    await refreshTrip()
+    setAwardingId(null)
+    loadInvites()
+  }
+  const undoAwardFromTable = async (inv: Invitation, stay: 1 | 2) => {
+    const two = !!trip?.stay2_arrival_date
+    setAwardingId(inv.id)
+    await undoAwardStayLib(
+      { tripId: id!, twoVisit: two, clientId: trip?.client_id ?? null },
+      { id: inv.id, awarded_stay1: inv.awarded_stay1, awarded_stay2: inv.awarded_stay2 },
+      stay,
+    )
+    await refreshTrip()
+    setAwardingId(null)
+    loadInvites()
+  }
+
   // Reopen a submitted hotel's proposal so they can revise it (e.g. dates changed).
   // Their saved answers are preserved — they edit and resubmit, they don't refill.
   // Clicking Reopen opens a small dialog with an explicit email / no-email choice.
@@ -1812,6 +1899,18 @@ export default function TripDetail() {
     )
     setContractTarget(inv)
   }
+  // Email a hotel a copy of its own completed RFP (on request, or for a bid KJST
+  // entered on their behalf). Re-sends the same summary they'd get on self-submit.
+  const [copyingId, setCopyingId] = useState<string | null>(null)
+  const sendRfpCopyToHotel = async (inv: Invitation) => {
+    if (!inv.hotel_contact_email) { alert('This hotel has no contact email on file.'); return }
+    setCopyingId(inv.id)
+    const res = await sendRfpCopy(inv.id)
+    setCopyingId(null)
+    if ('error' in res) { alert(`Could not send copy: ${res.error}`); return }
+    alert(`Copy of the completed RFP sent to ${res.sent_to}.`)
+  }
+
   const confirmSendContract = async () => {
     if (!contractTarget) return
     const inv = contractTarget
@@ -2284,6 +2383,8 @@ export default function TripDetail() {
           onSelect={setSelectedId}
           onPass={passHotel}
           onResetStatus={resetHotelStatus}
+          onAward={awardFromTable}
+          onUndoAward={undoAwardFromTable}
           onReopen={setReopenTarget}
           reopeningId={reopeningId}
           onRemove={removeInviteFromTable}
@@ -2486,6 +2587,8 @@ export default function TripDetail() {
               onResetStatus={resetHotelStatus}
               onReopen={setReopenTarget}
               onContractRequest={openContractDialog}
+              onSendCopy={sendRfpCopyToHotel}
+              copyingId={copyingId}
               reopeningId={reopeningId}
               onCopyLink={copyLink}
               onContactUpdated={(id, name, email) => {
