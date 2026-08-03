@@ -1746,18 +1746,32 @@ export default function TripDetail() {
     const targets = invites.filter((i) => selectedInviteIds.has(i.id) && canEmailStatus(i.status))
     setBulkSending(true); setError(null)
 
-    const results = await Promise.all(
-      targets.map(async (inv) => {
-        if (!inv.hotel_contact_email) {
-          return { hotelName: inv.hotel_name, email: null, ok: false, error: 'No email address on file' }
-        }
-        const result = await sendInvitationEmail(inv.id)
-        if ('error' in result) {
-          return { hotelName: inv.hotel_name, email: inv.hotel_contact_email, ok: false, error: result.error }
-        }
-        return { hotelName: inv.hotel_name, email: inv.hotel_contact_email, ok: true }
-      }),
-    )
+    // Pace the batch instead of firing everything at once. Sending all in
+    // parallel bursts past Resend's per-second rate limit, so we run a small
+    // pool at a time (the edge function additionally retries any 429). Same
+    // per-hotel result shape as before, just paced.
+    const sendOne = async (inv: Invitation) => {
+      if (!inv.hotel_contact_email) {
+        return { hotelName: inv.hotel_name, email: null, ok: false, error: 'No email address on file' }
+      }
+      const result = await sendInvitationEmail(inv.id)
+      if ('error' in result) {
+        return { hotelName: inv.hotel_name, email: inv.hotel_contact_email, ok: false, error: result.error }
+      }
+      return { hotelName: inv.hotel_name, email: inv.hotel_contact_email, ok: true }
+    }
+
+    const CONCURRENCY = 3
+    const results: Array<{ hotelName: string; email: string | null; ok: boolean; error?: string }> = new Array(targets.length)
+    let cursor = 0
+    const worker = async (): Promise<void> => {
+      while (true) {
+        const idx = cursor++
+        if (idx >= targets.length) return
+        results[idx] = await sendOne(targets[idx])
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, () => worker()))
 
     setBulkSending(false)
     setBulkSendResult(results)
