@@ -324,6 +324,9 @@ export default function Dashboard() {
   // "Log an award" launcher — pick a trip to jump into and log an off-platform award.
   const [awardOpen, setAwardOpen] = useState(false)
   const [awardClient, setAwardClient] = useState('')
+  // Collapsible "Your teams · setup" — remembers the choice across visits.
+  const [teamsOpen, setTeamsOpen] = useState(() => localStorage.getItem('kjst_teams_collapsed') !== '1')
+  const toggleTeams = () => setTeamsOpen((v) => { localStorage.setItem('kjst_teams_collapsed', v ? '1' : '0'); return !v })
   useEffect(() => {
     const load = async () => {
       const [tripsRes, clientsRes] = await Promise.all([
@@ -475,9 +478,15 @@ export default function Dashboard() {
           info@cymbul.co sees all). Each team's one-time setup before its trips. */}
       {myTeams.length > 0 && (
         <div>
-          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+          <button
+            onClick={toggleTeams}
+            className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+          >
+            <span className="text-[10px]">{teamsOpen ? '▾' : '▸'}</span>
             Your teams · setup
-          </div>
+            <span className="font-normal normal-case text-slate-400 dark:text-slate-500">({myTeams.length})</span>
+          </button>
+          {teamsOpen && (
           <div className="space-y-3">
             {myTeams.map((t) => {
               const auto = teamAutoDone(t.hasTrips)
@@ -504,6 +513,7 @@ export default function Dashboard() {
               )
             })}
           </div>
+          )}
         </div>
       )}
 
