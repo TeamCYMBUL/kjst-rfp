@@ -13,6 +13,8 @@ import ProposalPrint from './pages/trips/ProposalPrint'
 import ClientProposalsPrint from './pages/clients/ClientProposalsPrint'
 import DelinquentPrint from './pages/clients/DelinquentPrint'
 import RfpForm from './pages/rfp/RfpForm'
+import ContractUpload from './pages/contracts/ContractUpload'
+import ContractsList from './pages/contracts/ContractsList'
 import TemplateEditor from './pages/settings/TemplateEditor'
 import SettingsPage from './pages/settings/Settings'
 import Dashboard from './pages/Dashboard'
@@ -26,8 +28,9 @@ export default function App() {
   return (
     <ErrorBoundary>
     <Routes>
-      {/* Public hotel-facing form — no auth required */}
+      {/* Public hotel-facing pages — no auth required */}
       <Route path="/rfp/:token" element={<RfpForm />} />
+      <Route path="/contract/:token" element={<ContractUpload />} />
 
       <Route path="/login" element={<Login />} />
 
@@ -56,6 +59,7 @@ export default function App() {
           <Route path="trips/:id/edit" element={<TripForm />} />
           <Route path="trips/:id/grid" element={<TripGrid />} />
 
+          <Route path="contracts" element={<ContractsList />} />
           <Route path="hotels" element={<HotelsList />} />
           <Route path="tickets" element={<Tickets />} />
           <Route path="template" element={<TemplateEditor />} />

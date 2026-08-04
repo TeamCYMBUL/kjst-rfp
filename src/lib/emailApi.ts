@@ -71,7 +71,7 @@ export async function sendContractRequest(
   const res = await fetch(`${FN_BASE}/send-contract-request`, {
     method: 'POST',
     headers: await authHeaders(),
-    body: JSON.stringify({ invitation_id, subject: opts.subject, message: opts.message }),
+    body: JSON.stringify({ invitation_id, subject: opts.subject, message: opts.message, base_url: PUBLIC_APP_URL }),
   })
   return res.json()
 }

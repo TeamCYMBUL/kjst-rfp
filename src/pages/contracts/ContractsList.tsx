@@ -1,0 +1,182 @@
+// Staff Contracts page — every awarded hotel and where its room agreement stands.
+// The hotel uploads via the link in the contract-request email; it lands here.
+// Staff can view the uploaded agreement, move it through review, and upload the
+// final signed copy so the whole lifecycle lives in the platform.
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { ErrorNote, Loading } from '../../components/ui'
+import {
+  listAwardedContracts, contractFileUrl, updateContractStatus, uploadSignedCopy,
+} from '../../lib/contractsApi'
+import type { AwardedContract, ContractStatus } from '../../lib/contractsApi'
+
+const STATUS_LABEL: Record<ContractStatus, string> = {
+  requested: 'Requested',
+  uploaded: 'Uploaded',
+  in_review: 'In review',
+  verified: 'Verified',
+  signed: 'Signed',
+  filed: 'Filed',
+}
+const STATUS_STYLE: Record<ContractStatus, string> = {
+  requested: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+  uploaded: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  in_review: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  verified: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+  signed: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+  filed: 'bg-emerald-600 text-white',
+}
+const NEXT_STATUS: ContractStatus[] = ['requested', 'uploaded', 'in_review', 'verified', 'signed', 'filed']
+
+export default function ContractsList() {
+  const [rows, setRows] = useState<AwardedContract[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  const load = () => {
+    setError(null)
+    listAwardedContracts()
+      .then(setRows)
+      .catch((e) => setError(e.message ?? 'Failed to load'))
+  }
+  useEffect(load, [])
+
+  const groups = useMemo(() => {
+    if (!rows) return []
+    const byClient = new Map<string, { name: string; items: AwardedContract[] }>()
+    for (const r of rows) {
+      const key = r.client?.id ?? 'unknown'
+      if (!byClient.has(key)) byClient.set(key, { name: r.client?.team_name ?? 'Unknown client', items: [] })
+      byClient.get(key)!.items.push(r)
+    }
+    return [...byClient.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [rows])
+
+  const openFile = async (path: string | null) => {
+    if (!path) return
+    const url = await contractFileUrl(path)
+    if (url) window.open(url, '_blank', 'noopener')
+    else alert('Could not open the file.')
+  }
+
+  const setStatus = async (id: string, status: ContractStatus) => {
+    setBusyId(id)
+    try { await updateContractStatus(id, status); load() }
+    catch (e: any) { alert(e.message ?? 'Failed to update') }
+    finally { setBusyId(null) }
+  }
+
+  const onUploadSigned = async (id: string, file: File | null) => {
+    if (!file) return
+    setBusyId(id)
+    try { await uploadSignedCopy(id, file); load() }
+    catch (e: any) { alert(e.message ?? 'Upload failed') }
+    finally { setBusyId(null) }
+  }
+
+  if (error) return <ErrorNote message={error} />
+  if (!rows) return <Loading />
+
+  const total = rows.length
+  const uploaded = rows.filter((r) => r.contract && r.contract.status !== 'requested').length
+  const awaiting = rows.filter((r) => !r.contract || r.contract.status === 'requested').length
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Contracts</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Room agreements for awarded hotels. Hotels upload via the link in their contract-request email.
+          </p>
+        </div>
+        <div className="flex gap-4 text-right">
+          <div><div className="text-2xl font-bold text-slate-800 dark:text-slate-200">{total}</div><div className="text-xs text-slate-400">awarded</div></div>
+          <div><div className="text-2xl font-bold text-blue-600">{uploaded}</div><div className="text-xs text-slate-400">received</div></div>
+          <div><div className="text-2xl font-bold text-amber-500">{awaiting}</div><div className="text-xs text-slate-400">awaiting</div></div>
+        </div>
+      </div>
+
+      {total === 0 && (
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-10 text-center">
+          <p className="text-sm text-slate-500 dark:text-slate-400">No awarded hotels yet. Once you award a hotel on a trip, it shows up here.</p>
+        </div>
+      )}
+
+      {groups.map((g) => (
+        <div key={g.name} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
+          <div className="border-b border-slate-100 dark:border-slate-700 px-5 py-3">
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{g.name}</h2>
+          </div>
+          <div className="divide-y divide-slate-100 dark:divide-slate-700">
+            {g.items.map((r) => {
+              const c = r.contract
+              const status: ContractStatus = c?.status ?? 'requested'
+              const twoVisit = !!r.trip?.stay2_arrival_date
+              const stayTxt = twoVisit ? (r.awarded_stay1 && r.awarded_stay2 ? ' · Stay 1 & 2' : r.awarded_stay1 ? ' · Stay 1' : ' · Stay 2') : ''
+              const busy = busyId === c?.id
+              return (
+                <div key={r.invitation_id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-slate-800 dark:text-slate-200">{r.hotel_name}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_STYLE[status]}`}>{STATUS_LABEL[status]}</span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                      {[r.trip?.city, r.trip?.opponent_label ? `vs. ${r.trip.opponent_label}` : null].filter(Boolean).join(' · ')}{stayTxt}
+                      {c?.uploaded_at && <> · uploaded {new Date(c.uploaded_at).toLocaleDateString()}</>}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!c ? (
+                      <>
+                        <span className="text-xs text-slate-400 dark:text-slate-500">Request not sent yet</span>
+                        {r.trip && (
+                          <Link to={`/trips/${r.trip.id}`} className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                            Open trip to send request
+                          </Link>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {c.file_path && (
+                          <button onClick={() => openFile(c.file_path)} className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                            View agreement
+                          </button>
+                        )}
+                        {c.signed_file_path && (
+                          <button onClick={() => openFile(c.signed_file_path)} className="rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100">
+                            View signed copy
+                          </button>
+                        )}
+                        <select
+                          value={status}
+                          disabled={busy}
+                          onChange={(e) => setStatus(c.id, e.target.value as ContractStatus)}
+                          className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-xs text-slate-700 dark:text-slate-300"
+                          title="Set contract status"
+                        >
+                          {NEXT_STATUS.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                        </select>
+                        <label className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer">
+                          {busy ? 'Working…' : 'Upload signed copy'}
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            className="hidden"
+                            onChange={(e) => onUploadSigned(c.id, e.target.files?.[0] ?? null)}
+                          />
+                        </label>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
