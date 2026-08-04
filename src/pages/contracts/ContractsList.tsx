@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ErrorNote, Loading } from '../../components/ui'
 import {
-  listAwardedContracts, contractFileUrl, updateContractStatus, uploadSignedCopy,
+  listAwardedContracts, contractFileUrl, updateContractStatus, uploadSignedCopy, uploadContractStaff,
 } from '../../lib/contractsApi'
 import type { AwardedContract, ContractStatus } from '../../lib/contractsApi'
 
@@ -74,6 +74,17 @@ export default function ContractsList() {
     finally { setBusyId(null) }
   }
 
+  // Staff uploads the hotel's agreement directly (e.g. it came back over email).
+  const onUploadContract = async (r: AwardedContract, file: File | null) => {
+    if (!file) return
+    setBusyId(r.contract?.id ?? r.invitation_id)
+    try {
+      await uploadContractStaff({ invitationId: r.invitation_id, tripId: r.trip?.id ?? null, clientId: r.client?.id ?? null }, file)
+      load()
+    } catch (e: any) { alert(e.message ?? 'Upload failed') }
+    finally { setBusyId(null) }
+  }
+
   if (error) return <ErrorNote message={error} />
   if (!rows) return <Loading />
 
@@ -92,10 +103,18 @@ export default function ContractsList() {
             <span className="font-medium text-slate-600 dark:text-slate-300">3.</span> Review &amp; file it here
           </p>
         </div>
-        <div className="flex gap-4 text-right">
-          <div><div className="text-2xl font-bold text-slate-800 dark:text-slate-200">{total}</div><div className="text-xs text-slate-400">awarded</div></div>
-          <div><div className="text-2xl font-bold text-blue-600">{uploaded}</div><div className="text-xs text-slate-400">received</div></div>
-          <div><div className="text-2xl font-bold text-amber-500">{awaiting}</div><div className="text-xs text-slate-400">awaiting</div></div>
+        <div className="flex items-center gap-4">
+          <div className="flex gap-4 text-right">
+            <div><div className="text-2xl font-bold text-slate-800 dark:text-slate-200">{total}</div><div className="text-xs text-slate-400">awarded</div></div>
+            <div><div className="text-2xl font-bold text-blue-600">{uploaded}</div><div className="text-xs text-slate-400">received</div></div>
+            <div><div className="text-2xl font-bold text-amber-500">{awaiting}</div><div className="text-xs text-slate-400">awaiting</div></div>
+          </div>
+          <Link
+            to="/contracts/print"
+            className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+          >
+            Print
+          </Link>
         </div>
       </div>
 
@@ -115,7 +134,7 @@ export default function ContractsList() {
               const c = r.contract
               const twoVisit = !!r.trip?.stay2_arrival_date
               const stayTxt = twoVisit ? (r.awarded_stay1 && r.awarded_stay2 ? ' · Stay 1 & 2' : r.awarded_stay1 ? ' · Stay 1' : ' · Stay 2') : ''
-              const busy = busyId === c?.id
+              const busy = busyId === (c?.id ?? r.invitation_id)
               // A hotel with no contract record hasn't been requested yet — say so
               // plainly rather than mislabeling it "Requested".
               const pillLabel = c ? STATUS_LABEL[c.status] : 'Not requested'
@@ -135,20 +154,32 @@ export default function ContractsList() {
 
                   <div className="flex flex-wrap items-center gap-2">
                     {!c ? (
-                      r.trip && (
-                        <Link
-                          to={`/trips/${r.trip.id}?contract=${r.invitation_id}`}
-                          className="rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100"
-                        >
-                          Send contract request →
-                        </Link>
-                      )
+                      <>
+                        {r.trip && (
+                          <Link
+                            to={`/trips/${r.trip.id}?contract=${r.invitation_id}`}
+                            className="rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100"
+                          >
+                            Send contract request →
+                          </Link>
+                        )}
+                        {/* Already handled over email? Upload it here directly. */}
+                        <label className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer">
+                          {busy ? 'Working…' : 'Upload contract'}
+                          <input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" onChange={(e) => onUploadContract(r, e.target.files?.[0] ?? null)} />
+                        </label>
+                      </>
                     ) : (
                       <>
-                        {c.file_path && (
+                        {c.file_path ? (
                           <button onClick={() => openFile(c.file_path)} className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
                             View agreement
                           </button>
+                        ) : (
+                          <label className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer">
+                            {busy ? 'Working…' : 'Upload contract'}
+                            <input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" onChange={(e) => onUploadContract(r, e.target.files?.[0] ?? null)} />
+                          </label>
                         )}
                         {c.signed_file_path && (
                           <button onClick={() => openFile(c.signed_file_path)} className="rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100">

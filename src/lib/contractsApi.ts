@@ -121,6 +121,44 @@ export async function saveContractNotes(id: string, staff_notes: string): Promis
   if (error) throw error
 }
 
+// Staff uploads the hotel's agreement themselves — for when the contract was
+// handled over email rather than through the hotel's upload link. Creates the
+// contract record first if the request was never sent through the platform.
+export async function uploadContractStaff(
+  args: { invitationId: string; tripId: string | null; clientId: string | null },
+  file: File,
+): Promise<void> {
+  let { data: c } = await supabase
+    .from('contracts')
+    .select('id')
+    .eq('invitation_id', args.invitationId)
+    .maybeSingle()
+  if (!c) {
+    const { data: created, error: insErr } = await supabase
+      .from('contracts')
+      .insert({ invitation_id: args.invitationId, trip_id: args.tripId, client_id: args.clientId, status: 'requested' })
+      .select('id')
+      .single()
+    if (insErr || !created) throw insErr ?? new Error('Failed to create contract record')
+    c = created
+  }
+  const safe = (file.name || 'contract').replace(/[^\w.\- ]+/g, '_').replace(/\s+/g, '_').slice(0, 120)
+  const path = `${c.id}/staff-${Date.now()}-${safe}`
+  const { error: upErr } = await supabase.storage.from('contracts').upload(path, file, { upsert: false })
+  if (upErr) throw upErr
+  const { error } = await supabase
+    .from('contracts')
+    .update({
+      file_path: path,
+      file_name: safe,
+      uploaded_at: new Date().toISOString(),
+      status: 'uploaded',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', c.id)
+  if (error) throw error
+}
+
 // Staff uploads the final signed copy directly to the private bucket, then marks
 // the contract signed. (Authenticated staff have write access to the bucket.)
 export async function uploadSignedCopy(contractId: string, file: File): Promise<void> {

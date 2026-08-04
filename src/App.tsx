@@ -15,6 +15,7 @@ import DelinquentPrint from './pages/clients/DelinquentPrint'
 import RfpForm from './pages/rfp/RfpForm'
 import ContractUpload from './pages/contracts/ContractUpload'
 import ContractsList from './pages/contracts/ContractsList'
+import ContractsPrint from './pages/contracts/ContractsPrint'
 import TemplateEditor from './pages/settings/TemplateEditor'
 import SettingsPage from './pages/settings/Settings'
 import Dashboard from './pages/Dashboard'
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="trips/:id/proposal" element={<ProposalPrint />} />
         <Route path="clients/:id/proposals" element={<ClientProposalsPrint />} />
         <Route path="clients/:id/delinquent" element={<DelinquentPrint />} />
+        <Route path="contracts/print" element={<ContractsPrint />} />
 
         <Route element={<DashboardLayout />}>
           <Route index element={<Dashboard />} />
