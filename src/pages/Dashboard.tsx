@@ -6,6 +6,20 @@ import { Badge, ErrorNote, LinkButton, Loading } from '../components/ui'
 import { PageHint } from '../components/PageHint'
 import { RevenuePanel } from '../components/RevenuePanel'
 import { exportAllCitiesForClient } from '../lib/exportAllCities'
+import { useAuth } from '../auth/AuthContext'
+import { StageTimeline } from '../components/StageTimeline'
+import { TEAM_STAGES, teamAutoDone, resolveDone, currentStage } from '../lib/rfpStages'
+import type { StageKey } from '../lib/rfpStages'
+
+const OWNER_EMAIL = 'info@cymbul.co'
+
+type TeamCard = {
+  id: string
+  team_name: string
+  progress_steps: Record<string, boolean>
+  hasTrips: boolean
+  summary: string
+}
 
 
 type DashTrip = {
@@ -298,7 +312,10 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
 }
 
 export default function Dashboard() {
+  const { user } = useAuth()
+  const isOwner = (user?.email ?? '').trim().toLowerCase() === OWNER_EMAIL
   const [trips, setTrips] = useState<DashTrip[]>([])
+  const [myTeams, setMyTeams] = useState<TeamCard[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [hasClients, setHasClients] = useState(false)
@@ -319,14 +336,45 @@ export default function Dashboard() {
         supabase.from('clients').select('id').limit(1),
       ])
 
+      const tripRows = (tripsRes.data as unknown as DashTrip[]) ?? []
       if (tripsRes.error) setError(tripsRes.error.message)
-      else setTrips((tripsRes.data as unknown as DashTrip[]) ?? [])
+      else setTrips(tripRows)
 
       setHasClients((clientsRes.data?.length ?? 0) > 0)
+
+      // "Your teams" setup cards — scoped to the teams assigned to this user
+      // (everyone), except info@cymbul.co who sees all teams.
+      let teamClientIds: string[] | null = null
+      if (!isOwner && user) {
+        const { data: asg } = await supabase.from('client_assignments').select('client_id').eq('staff_user_id', user.id)
+        teamClientIds = [...new Set((asg ?? []).map((a: any) => a.client_id).filter(Boolean))]
+      }
+      let teamQ = supabase.from('clients').select('id, team_name, progress_steps')
+      if (teamClientIds) teamQ = teamQ.in('id', teamClientIds.length ? teamClientIds : ['00000000-0000-0000-0000-000000000000'])
+      const { data: teamClients } = await teamQ.order('team_name')
+      const cards: TeamCard[] = (teamClients ?? []).map((c: any) => {
+        const clientTrips = tripRows.filter((t) => t.clients?.id === c.id)
+        const collecting = clientTrips.filter((t) => t.status === 'collecting').length
+        const awarded = clientTrips.filter((t) => t.status === 'closed').length
+        const summary = clientTrips.length === 0
+          ? 'No trips yet'
+          : [`${clientTrips.length} trip${clientTrips.length !== 1 ? 's' : ''}`, collecting ? `${collecting} collecting` : null, awarded ? `${awarded} awarded` : null].filter(Boolean).join(' · ')
+        return { id: c.id, team_name: c.team_name, progress_steps: c.progress_steps ?? {}, hasTrips: clientTrips.length > 0, summary }
+      })
+      setMyTeams(cards)
+
       setLoading(false)
     }
     load()
-  }, [])
+  }, [user, isOwner])
+
+  // Toggle a team-setup check (e.g. Review template) and persist to the client.
+  const toggleTeamStep = async (teamId: string, key: StageKey, done: boolean) => {
+    setMyTeams((prev) => prev.map((t) => (t.id === teamId ? { ...t, progress_steps: { ...t.progress_steps, [key]: done } } : t)))
+    const team = myTeams.find((t) => t.id === teamId)
+    const next = { ...(team?.progress_steps ?? {}), [key]: done }
+    await supabase.from('clients').update({ progress_steps: next }).eq('id', teamId)
+  }
 
   if (loading) return <Loading />
   if (error) return <ErrorNote message={error} />
@@ -422,6 +470,42 @@ export default function Dashboard() {
         filter</strong> and the <strong>Show closed</strong> toggle to narrow the list, or <strong>Log an award</strong> to record
         a hotel signed outside the RFP flow.
       </PageHint>
+
+      {/* Your teams — per-team setup checklist (scoped to your assignments;
+          info@cymbul.co sees all). Each team's one-time setup before its trips. */}
+      {myTeams.length > 0 && (
+        <div>
+          <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+            Your teams · setup
+          </div>
+          <div className="space-y-3">
+            {myTeams.map((t) => {
+              const auto = teamAutoDone(t.hasTrips)
+              const done = (k: StageKey) => resolveDone(k, auto[k], t.progress_steps)
+              return (
+                <div key={t.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <Link to={`/clients/${t.id}`} className="min-w-0">
+                      <div className="font-semibold text-slate-900 dark:text-slate-100 hover:underline">{t.team_name}</div>
+                      <div className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{t.summary}</div>
+                    </Link>
+                    <div className="w-full max-w-xs">
+                      <StageTimeline
+                        stages={TEAM_STAGES}
+                        isDone={done}
+                        currentKey={currentStage(TEAM_STAGES, done)}
+                        tipFor={(k) => TEAM_STAGES.find((s) => s.key === k)?.tip ?? ''}
+                        onToggle={(k) => toggleTeamStep(t.id, k, !done(k))}
+                        size="sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Stats bar */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

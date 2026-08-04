@@ -3,6 +3,11 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activity'
 import { awardStay as awardStayLib, undoAwardStay as undoAwardStayLib } from '../../lib/award'
+import { StageTimeline } from '../../components/StageTimeline'
+import {
+  TEAM_STAGES, TRIP_STAGES, resolveDone, teamAutoDone, tripAutoDone, currentStage,
+} from '../../lib/rfpStages'
+import type { StageKey } from '../../lib/rfpStages'
 import type { Client, DateScenario, Invitation, Trip } from '../../lib/types'
 import { formatDate, generateToken, formatMeetingSpaceNotes, passedLabel } from '../../lib/format'
 import { fetchAllAnswersByResponseIds } from '../../lib/answers'
@@ -1477,7 +1482,7 @@ function RateField({ label, value, highlight = false }: { label: string; value: 
 
 // ── Trip info panel (right panel when no hotel selected) ──────────────────────
 
-function TripInfoPanel({ trip }: { trip: Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league'> | null } }) {
+function TripInfoPanel({ trip }: { trip: Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league' | 'progress_steps'> | null } }) {
   const fmt = (d: string | null) => formatDate(d) || '—'
   // Format a list of game dates, falling back to the single game_date column.
   const fmtGames = (dates: string[] | null | undefined, single: string | null) => {
@@ -1555,7 +1560,7 @@ export default function TripDetail() {
   const contractParamHandled = useRef(false)
   const { role, canEditClient } = useRole()
   const isViewer = role === 'viewer'
-  const [trip, setTrip] = useState<(Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league'> | null }) | null>(null)
+  const [trip, setTrip] = useState<(Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league' | 'progress_steps'> | null }) | null>(null)
   // Sibling trips for this client (for the Next/Prev city shortcut), alpha by city.
   const [siblings, setSiblings] = useState<{ id: string; city: string | null }[]>([])
   const [invites, setInvites] = useState<Invitation[] | null>(null)
@@ -1618,11 +1623,11 @@ export default function TripDetail() {
   }
 
   useEffect(() => {
-    supabase.from('trips').select('*, clients(id, team_name, league)').eq('id', id!).single()
+    supabase.from('trips').select('*, clients(id, team_name, league, progress_steps)').eq('id', id!).single()
       .then(({ data, error }) => {
         if (error) setError(error.message)
         else {
-          setTrip(data as Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league'> | null })
+          setTrip(data as Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league' | 'progress_steps'> | null })
           const plan = (data as any)?.fnb_plan
           if (plan && typeof plan === 'object') setFnbPlan(plan as Record<string, number>)
         }
@@ -1827,8 +1832,8 @@ export default function TripDetail() {
     await supabase.from('rfp_invitations').update({ status: backTo, awarded_stay1: false, awarded_stay2: false }).eq('id', inv.id)
     if (wasAwarded) {
       await supabase.from('trips').update({ status: 'collecting' }).eq('id', id!)
-      const { data } = await supabase.from('trips').select('*, clients(id, team_name, league)').eq('id', id!).single()
-      if (data) setTrip(data as Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league'> | null })
+      const { data } = await supabase.from('trips').select('*, clients(id, team_name, league, progress_steps)').eq('id', id!).single()
+      if (data) setTrip(data as Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league' | 'progress_steps'> | null })
     }
     loadInvites()
   }
@@ -1838,8 +1843,8 @@ export default function TripDetail() {
   // trip you pick a hotel per stay; the trip closes and losers are passed only
   // once every stay has a winner.
   const refreshTrip = async () => {
-    const { data } = await supabase.from('trips').select('*, clients(id, team_name, league)').eq('id', id!).single()
-    if (data) setTrip(data as Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league'> | null })
+    const { data } = await supabase.from('trips').select('*, clients(id, team_name, league, progress_steps)').eq('id', id!).single()
+    if (data) setTrip(data as Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league' | 'progress_steps'> | null })
   }
   const awardFromTable = async (inv: Invitation, stay: 1 | 2) => {
     const two = !!trip?.stay2_arrival_date
@@ -2008,8 +2013,8 @@ export default function TripDetail() {
       game_date: scenario.game_date ?? null,
       date_scenarios: [],
     }).eq('id', id!)
-    const { data } = await supabase.from('trips').select('*, clients(id, team_name, league)').eq('id', id!).single()
-    if (data) setTrip(data as Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league'> | null })
+    const { data } = await supabase.from('trips').select('*, clients(id, team_name, league, progress_steps)').eq('id', id!).single()
+    if (data) setTrip(data as Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league' | 'progress_steps'> | null })
     setConfirmingScenarioSaving(false)
     setConfirmingScenario(false)
   }
@@ -2068,6 +2073,33 @@ export default function TripDetail() {
   const awarded = invites.find((i) => i.status === 'awarded')
   // Per-stay winners (a same-city 2-visit trip can award a different hotel per stay).
   const twoVisit = !!trip.stay2_arrival_date
+
+  // ── Stage timeline: Team setup tier (context) + this-trip tier ──────────────
+  const tripAuto = tripAutoDone({
+    anySent: invites.some((i) => i.sent_at),
+    anySubmitted: invites.some((i) => i.submitted_at),
+    anyAwarded: invites.some((i) => i.status === 'awarded'),
+    closed: trip.status === 'closed',
+  })
+  const teamAuto = teamAutoDone(true) // this trip exists, so the schedule was imported
+  const tripDone = (k: StageKey) => resolveDone(k, tripAuto[k], trip.progress_steps)
+  const teamDone = (k: StageKey) => resolveDone(k, teamAuto[k], trip.clients?.progress_steps)
+  const toggleTripStage = async (k: StageKey) => {
+    const next = { ...(trip.progress_steps ?? {}), [k]: !tripDone(k) }
+    setTrip({ ...trip, progress_steps: next })
+    await supabase.from('trips').update({ progress_steps: next }).eq('id', id!)
+  }
+  const toggleTeamStage = async (k: StageKey) => {
+    if (!trip.clients) return
+    const next = { ...(trip.clients.progress_steps ?? {}), [k]: !teamDone(k) }
+    setTrip({ ...trip, clients: { ...trip.clients, progress_steps: next } })
+    await supabase.from('clients').update({ progress_steps: next }).eq('id', trip.clients.id)
+  }
+  const onTeamLabel = (k: StageKey) => {
+    if (k === 'review_template') navigate('/template')
+    else if (k === 'import_schedule' && trip.client_id) navigate(`/clients/${trip.client_id}`)
+  }
+
   const stay1Winner = invites.find((i) => i.awarded_stay1)
   const stay2Winner = invites.find((i) => i.awarded_stay2)
   // Short label of the stay(s) a hotel won, e.g. "Stay 1", "Stay 2", "Stay 1 & 2".
@@ -2206,6 +2238,39 @@ export default function TripDetail() {
           )}
         </div>
       </div>
+
+      {/* ── Stage timeline — where this trip is in the RFP journey. Team-setup
+          tier is context (done once per team); the trip tier is the live one.
+          Click a circle to check/uncheck; the ⓘ explains each step. ── */}
+      {!isViewer && (
+        <div className="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-4">
+          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+            Team setup <span className="font-normal normal-case text-slate-400 dark:text-slate-500">· {trip.clients?.team_name ?? 'team'} · once per team</span>
+          </div>
+          <div className="mx-auto max-w-md">
+            <StageTimeline
+              stages={TEAM_STAGES}
+              isDone={teamDone}
+              currentKey={currentStage(TEAM_STAGES, teamDone)}
+              tipFor={(k) => TEAM_STAGES.find((s) => s.key === k)?.tip ?? ''}
+              onToggle={toggleTeamStage}
+              onLabelClick={onTeamLabel}
+              size="sm"
+            />
+          </div>
+          <div className="my-3 h-px bg-slate-100 dark:bg-slate-700" />
+          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            This trip
+          </div>
+          <StageTimeline
+            stages={TRIP_STAGES}
+            isDone={tripDone}
+            currentKey={currentStage(TRIP_STAGES, tripDone)}
+            tipFor={(k) => TRIP_STAGES.find((s) => s.key === k)?.tip ?? ''}
+            onToggle={toggleTripStage}
+          />
+        </div>
+      )}
 
       {/* ── Banners ── */}
       {error && <div className="border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-6 py-2 text-xs text-red-700 dark:text-red-400">{error}</div>}

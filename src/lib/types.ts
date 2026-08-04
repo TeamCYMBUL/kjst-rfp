@@ -35,6 +35,7 @@ export type Client = {
   always_cc_enabled: boolean
   always_cc_name: string | null
   always_cc_email: string | null
+  progress_steps: Record<string, boolean>
   created_at: string
 }
 
@@ -76,6 +77,7 @@ export type Trip = {
   response_deadline: string | null
   night_scenarios: number[]
   date_scenarios: DateScenario[]
+  progress_steps: Record<string, boolean>
   created_at: string
 }
 
