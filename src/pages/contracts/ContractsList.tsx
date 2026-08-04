@@ -87,7 +87,9 @@ export default function ContractsList() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Contracts</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Room agreements for awarded hotels. Hotels upload via the link in their contract-request email.
+            <span className="font-medium text-slate-600 dark:text-slate-300">1.</span> Send the contract request &nbsp;·&nbsp;
+            <span className="font-medium text-slate-600 dark:text-slate-300">2.</span> Hotel uploads the signed agreement &nbsp;·&nbsp;
+            <span className="font-medium text-slate-600 dark:text-slate-300">3.</span> Review &amp; file it here
           </p>
         </div>
         <div className="flex gap-4 text-right">
@@ -111,16 +113,19 @@ export default function ContractsList() {
           <div className="divide-y divide-slate-100 dark:divide-slate-700">
             {g.items.map((r) => {
               const c = r.contract
-              const status: ContractStatus = c?.status ?? 'requested'
               const twoVisit = !!r.trip?.stay2_arrival_date
               const stayTxt = twoVisit ? (r.awarded_stay1 && r.awarded_stay2 ? ' · Stay 1 & 2' : r.awarded_stay1 ? ' · Stay 1' : ' · Stay 2') : ''
               const busy = busyId === c?.id
+              // A hotel with no contract record hasn't been requested yet — say so
+              // plainly rather than mislabeling it "Requested".
+              const pillLabel = c ? STATUS_LABEL[c.status] : 'Not requested'
+              const pillStyle = c ? STATUS_STYLE[c.status] : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
               return (
                 <div key={r.invitation_id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-slate-800 dark:text-slate-200">{r.hotel_name}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_STYLE[status]}`}>{STATUS_LABEL[status]}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${pillStyle}`}>{pillLabel}</span>
                     </div>
                     <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                       {[r.trip?.city, r.trip?.opponent_label ? `vs. ${r.trip.opponent_label}` : null].filter(Boolean).join(' · ')}{stayTxt}
@@ -130,14 +135,14 @@ export default function ContractsList() {
 
                   <div className="flex flex-wrap items-center gap-2">
                     {!c ? (
-                      <>
-                        <span className="text-xs text-slate-400 dark:text-slate-500">Request not sent yet</span>
-                        {r.trip && (
-                          <Link to={`/trips/${r.trip.id}`} className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
-                            Open trip to send request
-                          </Link>
-                        )}
-                      </>
+                      r.trip && (
+                        <Link
+                          to={`/trips/${r.trip.id}?contract=${r.invitation_id}`}
+                          className="rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100"
+                        >
+                          Send contract request →
+                        </Link>
+                      )
                     ) : (
                       <>
                         {c.file_path && (

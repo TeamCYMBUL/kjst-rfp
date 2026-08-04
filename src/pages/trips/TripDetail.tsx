@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activity'
 import { awardStay as awardStayLib, undoAwardStay as undoAwardStayLib } from '../../lib/award'
@@ -1549,6 +1549,10 @@ function InfoRow({ label, value }: { label: string; value: string | null | undef
 export default function TripDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  // When arriving from the Contracts page ("Send contract request"), auto-open
+  // the contract dialog for that hotel once its data has loaded.
+  const contractParamHandled = useRef(false)
   const { role, canEditClient } = useRole()
   const isViewer = role === 'viewer'
   const [trip, setTrip] = useState<(Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league'> | null }) | null>(null)
@@ -1913,6 +1917,19 @@ export default function TripDetail() {
     )
     setContractTarget(inv)
   }
+  // Deep-link from the Contracts page: /trips/:id?contract=<invitationId> opens
+  // the contract dialog for that hotel automatically (once, after data loads).
+  useEffect(() => {
+    if (contractParamHandled.current) return
+    const wanted = searchParams.get('contract')
+    if (!wanted || !invites || !trip) return
+    const inv = invites.find((i) => i.id === wanted)
+    if (inv) {
+      contractParamHandled.current = true
+      openContractDialog(inv)
+    }
+  }, [searchParams, invites, trip])
+
   // Email a hotel a copy of its own completed RFP (on request, or for a bid KJST
   // entered on their behalf). Re-sends the same summary they'd get on self-submit.
   const [copyingId, setCopyingId] = useState<string | null>(null)
