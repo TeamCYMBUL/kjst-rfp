@@ -249,7 +249,7 @@ export function HotelFull({
                         const isNo = ans?.answer_yes_no === false
                         return (
                           <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td style={{ padding: '6px 12px', color: '#374151', verticalAlign: 'top' }}>
+                            <td style={{ padding: '6px 12px', color: '#374151', verticalAlign: 'top', whiteSpace: 'pre-line' }}>
                               {item.label}
                               {ans?.comment && (
                                 <div style={{ marginTop: 2, fontSize: 12, fontWeight: 600, color: '#1d4ed8', background: '#eff6ff', borderRadius: 4, padding: '3px 8px', display: 'inline-block' }}>

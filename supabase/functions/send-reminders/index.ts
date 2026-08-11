@@ -57,6 +57,31 @@ async function getCcRecipients(sb: ReturnType<typeof createClient>, clientId: st
   return recipients
 }
 
+// Brand-level Always CC (e.g. Marriott -> Dominick) on the hotel's card, copied
+// on every message. Match by contact email first, then name+city.
+async function getHotelBrandCc(
+  sb: ReturnType<typeof createClient>,
+  contactEmail: string | null,
+  hotelName: string | null,
+  city: string | null,
+): Promise<{ name: string; email: string } | null> {
+  const pick = (rows: any[] | null) => {
+    const r = (rows ?? [])[0]
+    return r?.brand_cc_email ? { name: r.brand_cc_name || r.brand_cc_email, email: r.brand_cc_email as string } : null
+  }
+  if (contactEmail) {
+    const { data } = await sb.from('hotels').select('brand_cc_name, brand_cc_email').ilike('contact_email', contactEmail).limit(1)
+    const hit = pick(data as any[]); if (hit) return hit
+  }
+  if (hotelName) {
+    let q = sb.from('hotels').select('brand_cc_name, brand_cc_email').ilike('name', hotelName)
+    if (city) q = q.ilike('city', city)
+    const { data } = await q.limit(1)
+    const hit = pick(data as any[]); if (hit) return hit
+  }
+  return null
+}
+
 function fmt(dateStr: string | null): string {
   if (!dateStr) return ''
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
@@ -241,13 +266,24 @@ Deno.serve(async (req: Request) => {
       contactEmail: CONTACT_EMAIL,
     })
 
+    // Per-hotel CC = assigned managers + this hotel's brand Always CC.
+    const perHotelCc = [...ccList]
+    const hotelCc = await getHotelBrandCc(sb, inv.hotel_contact_email, inv.hotel_name, trip?.city ?? null)
+    if (
+      hotelCc &&
+      hotelCc.email.toLowerCase() !== (inv.hotel_contact_email ?? '').toLowerCase() &&
+      !perHotelCc.some((c) => c.toLowerCase().includes(hotelCc.email.toLowerCase()))
+    ) {
+      perHotelCc.push(`${hotelCc.name} <${hotelCc.email}>`)
+    }
+
     const resendBody: Record<string, unknown> = {
       from: `${senderName || FROM_NAME} <${fromAddress}>`,
       to: [inv.hotel_contact_email],
       subject,
       html,
     }
-    if (ccList.length > 0) resendBody.cc = ccList
+    if (perHotelCc.length > 0) resendBody.cc = perHotelCc
 
     const resendRes = await sendResend(resendBody, RESEND_API_KEY)
 

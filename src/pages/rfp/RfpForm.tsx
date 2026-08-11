@@ -276,7 +276,7 @@ function ConcessionRow({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
         {/* Label + requested value */}
         <div className="flex-1">
-          <p className="text-sm leading-relaxed text-slate-800">
+          <p className="whitespace-pre-line text-sm leading-relaxed text-slate-800">
             {item.label}<span className="ml-0.5 text-red-500">*</span>
           </p>
           {hasRequestedValue && (
@@ -1764,7 +1764,7 @@ export default function RfpForm() {
               return (
                 <div key={item.id} className="border-b border-slate-100 py-4 last:border-0">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-                    <p className="flex-1 text-sm leading-relaxed text-slate-800">{item.label}</p>
+                    <p className="flex-1 whitespace-pre-line text-sm leading-relaxed text-slate-800">{item.label}</p>
                     <div className="flex-shrink-0 sm:w-48">
                       <div
                         id={`concession-item-${item.id}`}
@@ -2017,7 +2017,7 @@ export default function RfpForm() {
               <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-6">
                 <SectionHeading>Function Spaces</SectionHeading>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-                  <p className="flex-1 text-sm leading-relaxed text-slate-800">{item.label}</p>
+                  <p className="flex-1 whitespace-pre-line text-sm leading-relaxed text-slate-800">{item.label}</p>
                   <div className="flex-shrink-0 sm:w-48">
                     <div id={`concession-item-${item.id}`} className={nfsHasError ? 'rounded-lg ring-2 ring-red-400 p-1' : ''}>
                       <YesNoToggle

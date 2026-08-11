@@ -577,7 +577,7 @@ export default function TemplateEditor() {
 
                 {/* Label + meta */}
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm leading-snug text-slate-800">{item.label}</p>
+                  <p className="whitespace-pre-line text-sm leading-snug text-slate-800">{item.label}</p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-2">
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_COLORS[item.answer_type]}`}

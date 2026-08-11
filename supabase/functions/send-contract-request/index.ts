@@ -41,6 +41,31 @@ async function getCcRecipients(sb: ReturnType<typeof createClient>, clientId: st
   return recipients
 }
 
+// A hotel's persistent card can carry an "Always CC" (brand_cc) copied on every
+// message to that property. Match by contact email first, then name+city.
+async function getHotelBrandCc(
+  sb: ReturnType<typeof createClient>,
+  contactEmail: string | null,
+  hotelName: string | null,
+  city: string | null,
+): Promise<CcRecipient | null> {
+  const pick = (rows: any[] | null): CcRecipient | null => {
+    const r = (rows ?? [])[0]
+    return r?.brand_cc_email ? { name: r.brand_cc_name || r.brand_cc_email, email: r.brand_cc_email as string } : null
+  }
+  if (contactEmail) {
+    const { data } = await sb.from('hotels').select('brand_cc_name, brand_cc_email').ilike('contact_email', contactEmail).limit(1)
+    const hit = pick(data as any[]); if (hit) return hit
+  }
+  if (hotelName) {
+    let q = sb.from('hotels').select('brand_cc_name, brand_cc_email').ilike('name', hotelName)
+    if (city) q = q.ilike('city', city)
+    const { data } = await q.limit(1)
+    const hit = pick(data as any[]); if (hit) return hit
+  }
+  return null
+}
+
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
@@ -184,6 +209,16 @@ Deno.serve(async (req: Request) => {
   const ccList: string[] = ccRecipients.map((r) => `${r.name} <${r.email}>`)
   if (client?.always_cc_enabled && client?.always_cc_email) {
     ccList.push(client.always_cc_name ? `${client.always_cc_name} <${client.always_cc_email}>` : client.always_cc_email)
+  }
+
+  // Brand-level Always CC (e.g. Marriott -> Dominick) — copied on every message.
+  const hotelCc = await getHotelBrandCc(sb, inv.hotel_contact_email, inv.hotel_name, trip?.city ?? null)
+  if (
+    hotelCc &&
+    hotelCc.email.toLowerCase() !== (inv.hotel_contact_email ?? '').toLowerCase() &&
+    !ccList.some((c) => c.toLowerCase().includes(hotelCc.email.toLowerCase()))
+  ) {
+    ccList.push(`${hotelCc.name} <${hotelCc.email}>`)
   }
 
   const fromAddress = senderEmail || FROM_EMAIL
