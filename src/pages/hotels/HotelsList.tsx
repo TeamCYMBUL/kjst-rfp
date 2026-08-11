@@ -387,11 +387,14 @@ function HotelDetail({
   const saveNote = async () => {
     if (!newNote.trim()) return
     setSavingNote(true)
-    const { data: profile } = await supabase.from('profiles').select('id').single()
+    // Use the signed-in user id directly. An unfiltered profiles.single() throws
+    // once the org has more than one member (the profiles SELECT policy exposes
+    // every teammate's row), which would drop note attribution.
+    const { data: { user } } = await supabase.auth.getUser()
     await supabase.from('hotel_notes').insert({
       hotel_id: hotel.id,
       note: newNote.trim(),
-      created_by: profile?.id ?? null,
+      created_by: user?.id ?? null,
     })
     setSavingNote(false)
     setNewNote('')

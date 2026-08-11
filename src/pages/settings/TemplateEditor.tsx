@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Button, Card, ErrorNote, Loading, PageHeader, TextField } from '../../components/ui'
 import { useRole } from '../../lib/useRole'
+import { useAuth } from '../../auth/AuthContext'
 
 type ActiveTab = 'header' | 'concessions' | 'facilities' | 'in_season_tournament' | 'postseason'
 type Section = 'concessions' | 'facilities' | 'in_season_tournament' | 'postseason'
@@ -267,6 +268,7 @@ function HeaderTab({ orgId, isViewer }: { orgId: string | null; isViewer: boolea
 
 export default function TemplateEditor() {
   const { role } = useRole()
+  const { user } = useAuth()
   const isViewer = role === 'viewer'
   const [items, setItems] = useState<TemplateItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -293,13 +295,20 @@ export default function TemplateEditor() {
 
   useEffect(() => {
     // Fetch org ID (needed for inserts) and the client list for the selector.
-    supabase
-      .from('profiles')
-      .select('organization_id')
-      .single()
-      .then(({ data }) => {
-        if (data?.organization_id) setOrgId(data.organization_id)
-      })
+    // Must scope profiles to THIS user: the profiles SELECT policy lets a user
+    // see every profile in their org, so an unfiltered .single() throws once the
+    // org has more than one member and leaves orgId null (which silently blocked
+    // "Add item"). Filter by the signed-in user id.
+    if (user?.id) {
+      supabase
+        .from('profiles')
+        .select('organization_id')
+        .eq('id', user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.organization_id) setOrgId(data.organization_id)
+        })
+    }
     supabase
       .from('clients')
       .select('id, team_name, league')
@@ -307,7 +316,7 @@ export default function TemplateEditor() {
       .then(({ data }) => {
         if (data) setClients(data as { id: string; team_name: string; league: string | null }[])
       })
-  }, [])
+  }, [user?.id])
 
   // Reload items whenever the selected client changes (fires on mount with null = master).
   useEffect(() => {
