@@ -26,7 +26,7 @@ export function RevenuePanel() {
   const [data, setData] = useState<CommissionSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false) // start collapsed on load for a clean page
   const [clientFilter, setClientFilter] = useState<string | null>(null)
 
   useEffect(() => {
