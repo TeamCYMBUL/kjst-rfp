@@ -190,7 +190,7 @@ function buildInviteHtml(p: {
         <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6">I hope this email finds you well.</p>
         <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6">
           We are reaching out on behalf of the <strong>${teamName}</strong> to request pricing and availability
-          for the ${seasonYear} season. Please refer to the attached RFP for specific dates and requirements.
+          for the ${seasonYear} season. Please use the link below to view specific dates and requirements and submit your response.
         </p>
         <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:24px">
           <tr><td style="padding:20px 24px">
@@ -212,8 +212,7 @@ function buildInviteHtml(p: {
         </table>
         ${p.sampleMenusHtml}
         <p style="margin:0 0 16px;font-size:14px;color:#475569;line-height:1.6">
-          If there are any requested concessions your property is unable to approve, we welcome counteroffers.
-          To help keep responses organized, please include all comments and counteroffers directly on the last page of the RFP rather than in the body of the email.
+          If there are any requested concessions your property is unable to approve, we welcome counteroffers in the spaces provided.
         </p>
         <p style="margin:0 0 16px;font-size:14px;color:#475569;line-height:1.6">
           Hotel selections will be made based on overall value, including rates, concessions, and suite upgrade offerings.
