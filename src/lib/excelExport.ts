@@ -508,6 +508,7 @@ export type ConsolidatedHotel = {
   current_selling_rate: string | null
   occupancy_tax: string | null
   resort_fee: string | null
+  standard_checkin_time: string | null
   // Second-visit rates (when the trip covers two stays)
   stay2_king_rate: number | null
   stay2_suite_rate: number | null
@@ -526,6 +527,8 @@ export type ConsolidatedCity = {
     game_date: string | null
     game_dates?: string[] | null
     total_rooms_requested?: number | null
+    king_rooms_requested?: number | null
+    suites_requested?: number | null
     fnb_plan?: Record<string, number> | null
     stay2_arrival_date?: string | null
     stay2_departure_date?: string | null
@@ -535,6 +538,28 @@ export type ConsolidatedCity = {
   hotels: ConsolidatedHotel[]
   items: ConcessionItem[]
 }
+
+// ── Per-team grid columns ──────────────────────────────────────────────────
+// A client can define extra client-facing grid columns, each EXPLICITLY bound
+// to a data source (never guessed by label). Two kinds:
+//   • system  — a named structured field/computed value (rate, taxes, counts…)
+//   • item    — a specific concession item, referenced by its id
+// Stored on clients.grid_columns (jsonb) and rendered in order after the base
+// columns. This is what makes the grid non-fuzzy: the binding is an id/key.
+export type GridSystemKey =
+  | 'taxes_fees'
+  | 'total_per_night'
+  | 'est_total_cost'
+  | 'avg_rate'
+  | 'suite_rate'
+  | 'kings_suites'
+  | 'total_rooms'
+  | 'in_season'
+  | 'postseason'
+  | 'check_in_time'
+export type GridColumnSpec =
+  | { type: 'system'; key: GridSystemKey; label: string; width?: number }
+  | { type: 'item'; item_id: string; label: string; format?: 'yesno' | 'value' | 'currency'; width?: number }
 
 // Fetch a client logo and return an ExcelJS-embeddable buffer + extension.
 // Returns null on any failure (missing/SVG/unsupported/CORS) so the export
@@ -566,7 +591,12 @@ export async function loadLogoForExcel(
 export async function exportMultiCityConsolidatedXlsx(
   cities: ConsolidatedCity[],
   clientName: string,
-  opts: { logoUrl?: string | null; season?: string | null; filename?: string } = {},
+  opts: {
+    logoUrl?: string | null
+    season?: string | null
+    filename?: string
+    gridColumns?: GridColumnSpec[]
+  } = {},
 ): Promise<void> {
   const mod: any = await import('exceljs')
   const ExcelJS = mod.default ?? mod
@@ -600,6 +630,11 @@ export async function exportMultiCityConsolidatedXlsx(
   if (fnbActive) {
     COLS.push({ header: 'Forecasted F&B', width: 13 }, { header: 'Rooms + F&B', width: 14 })
   }
+  // Per-team custom grid columns (explicitly bound; appended last so base indices
+  // and the F&B block are untouched). Order = the client's grid_columns config.
+  const gridCols = opts.gridColumns ?? []
+  const GRID_COL_START = COLS.length // 0-based index of first custom col
+  for (const gc of gridCols) COLS.push({ header: gc.label, width: gc.width ?? 12 })
   const NCOL = COLS.length
 
   const wb = new ExcelJS.Workbook()
@@ -667,6 +702,89 @@ export async function exportMultiCityConsolidatedXlsx(
   }
   const CENTER_COLS = new Set([0, 1, 3, 4, 5, 6, 8, 9, 10, 11])
   if (fnbActive) { CENTER_COLS.add(FNB_COL_FORECAST); CENTER_COLS.add(FNB_COL_FORECAST + 1) }
+
+  // ── Custom grid column plumbing ──
+  const firstNum = (s: any): number | null => {
+    const m = String(s ?? '').match(/[\d,]+(\.\d+)?/)
+    return m ? parseFloat(m[0].replace(/,/g, '')) : null
+  }
+  // Currency custom columns get $ formatting; all custom columns are centered.
+  const gridCurrencyCols = new Set<number>() // 1-based excel column index
+  gridCols.forEach((gc, i) => {
+    CENTER_COLS.add(GRID_COL_START + i)
+    const isCur =
+      gc.type === 'item'
+        ? gc.format === 'currency'
+        : ['total_per_night', 'est_total_cost', 'avg_rate', 'suite_rate'].includes(gc.key)
+    if (isCur) gridCurrencyCols.add(GRID_COL_START + i + 1)
+  })
+  const asYesNo = (a?: { answer_yes_no: boolean | null }) =>
+    a?.answer_yes_no === true ? 'Yes' : a?.answer_yes_no === false ? 'No' : ''
+  // Resolve one custom column's value for a given hotel row. Every branch is an
+  // explicit binding — a named field/computation or a specific concession item.
+  const gridColValue = (
+    gc: GridColumnSpec,
+    h: ConsolidatedHotel,
+    visitIndex: 1 | 2,
+    kingRate: number | null,
+    nights: number,
+    trip: ConsolidatedCity['trip'],
+    items: ConcessionItem[],
+  ): string | number | null => {
+    if (gc.type === 'item') {
+      const a = h.answers[gc.item_id]
+      if (!a) return ''
+      if (gc.format === 'currency') return firstNum(a.answer_value)
+      if (gc.format === 'value') return a.answer_value ?? asYesNo(a)
+      return asYesNo(a)
+    }
+    const tax = firstNum(h.occupancy_tax) // percent
+    const fee = firstNum(h.resort_fee) // per-night $
+    const suite = visitIndex === 1 ? h.best_suite_rate : h.stay2_suite_rate
+    const perNight = kingRate != null ? kingRate * (1 + (tax ?? 0) / 100) + (fee ?? 0) : null
+    switch (gc.key) {
+      case 'taxes_fees': {
+        const t = h.occupancy_tax
+          ? String(h.occupancy_tax).includes('%') ? String(h.occupancy_tax) : `${h.occupancy_tax}%`
+          : ''
+        const f = h.resort_fee
+          ? String(h.resort_fee).trim().startsWith('$') ? String(h.resort_fee) : `$${h.resort_fee}`
+          : ''
+        return [t, f].filter(Boolean).join(' + ')
+      }
+      case 'total_per_night':
+        return perNight != null ? Math.round(perNight) : null
+      case 'est_total_cost':
+        return perNight != null ? Math.round(perNight * nights) : null
+      case 'avg_rate': {
+        const rs = [h.best_king_rate, h.stay2_king_rate].filter((x): x is number => x != null)
+        return rs.length ? Math.round(rs.reduce((a, b) => a + b, 0) / rs.length) : null
+      }
+      case 'suite_rate':
+        return suite != null ? suite : null
+      case 'check_in_time':
+        return h.standard_checkin_time ?? ''
+      case 'kings_suites':
+        return `${trip.king_rooms_requested ?? '-'} / ${trip.suites_requested ?? '-'}`
+      case 'total_rooms':
+        return trip.total_rooms_requested ?? null
+      case 'in_season': {
+        const it = items.find(
+          (i) => i.section === 'in_season_tournament' ||
+            i.label.toLowerCase().includes('in-season') || i.label.toLowerCase().includes('in season'),
+        )
+        return it ? asYesNo(h.answers[it.id]) : ''
+      }
+      case 'postseason': {
+        const it = items.find(
+          (i) => i.section === 'postseason' ||
+            (i.label.toLowerCase().includes('post') && i.label.toLowerCase().includes('season')),
+        )
+        return it ? asYesNo(h.answers[it.id]) : ''
+      }
+    }
+    return ''
+  }
 
   let rowIdx = 4
   let counter = 0
@@ -779,6 +897,12 @@ export async function exportMultiCityConsolidatedXlsx(
           const roomsPlusFnb = (fnb != null || roomCost != null) ? (fnb ?? 0) + (roomCost ?? 0) : null
           vals.push(fnb, roomsPlusFnb)
         }
+
+        // Per-team custom grid columns — populated only for genuine bids (blank
+        // on sold-out / non-responding rows, matching the rate columns).
+        for (const gc of gridCols) {
+          vals.push(bid ? gridColValue(gc, h, visit.index, kingRate, nights, trip, items) : null)
+        }
         first = false
 
         const awardedRow = wonThisVisit && !struck
@@ -803,6 +927,7 @@ export async function exportMultiCityConsolidatedXlsx(
           row.getCell(FNB_COL_FORECAST + 1).numFmt = '$#,##0'
           row.getCell(FNB_COL_FORECAST + 2).numFmt = '$#,##0'
         }
+        for (const cc of gridCurrencyCols) row.getCell(cc).numFmt = '$#,##0'
       }
     }
 

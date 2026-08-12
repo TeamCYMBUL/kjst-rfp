@@ -12,7 +12,7 @@ export async function exportAllCitiesForClient(
   // Client branding for the grid header (logo + team name + season)
   const { data: client } = await supabase
     .from('clients')
-    .select('team_name, logo_url, season')
+    .select('team_name, logo_url, season, grid_columns')
     .eq('id', clientId)
     .maybeSingle()
 
@@ -28,7 +28,7 @@ export async function exportAllCitiesForClient(
   const { data: trips } = await supabase
     .from('trips')
     .select(
-      'id, opponent_label, city, arrival_date, departure_date, game_date, game_dates, total_rooms_requested, stay2_arrival_date, stay2_departure_date, stay2_game_date, stay2_game_dates, status, fnb_plan',
+      'id, opponent_label, city, arrival_date, departure_date, game_date, game_dates, total_rooms_requested, king_rooms_requested, suites_requested, stay2_arrival_date, stay2_departure_date, stay2_game_date, stay2_game_dates, status, fnb_plan',
     )
     .eq('client_id', clientId)
     .order('city', { ascending: true, nullsFirst: false })
@@ -44,6 +44,7 @@ export async function exportAllCitiesForClient(
         visit1_declined, visit1_decline_reason, visit2_declined, visit2_decline_reason,
         rfp_responses(
           best_king_rate, best_suite_rate, current_selling_rate, occupancy_tax, resort_fee,
+          standard_checkin_time,
           stay2_king_rate, stay2_suite_rate, general_comments,
           meeting_space_type, meeting_space_count,
           concession_answers(concession_item_id, answer_yes_no, answer_value, comment)
@@ -78,6 +79,7 @@ export async function exportAllCitiesForClient(
         current_selling_rate: r?.current_selling_rate ?? null,
         occupancy_tax: r?.occupancy_tax ?? null,
         resort_fee: r?.resort_fee ?? null,
+        standard_checkin_time: r?.standard_checkin_time ?? null,
         stay2_king_rate: r?.stay2_king_rate ?? null,
         stay2_suite_rate: r?.stay2_suite_rate ?? null,
         general_comments: r?.general_comments ?? null,
@@ -96,6 +98,8 @@ export async function exportAllCitiesForClient(
         game_date: trip.game_date,
         game_dates: trip.game_dates ?? null,
         total_rooms_requested: trip.total_rooms_requested,
+        king_rooms_requested: trip.king_rooms_requested ?? null,
+        suites_requested: trip.suites_requested ?? null,
         fnb_plan: trip.fnb_plan ?? null,
         stay2_arrival_date: trip.stay2_arrival_date,
         stay2_departure_date: trip.stay2_departure_date,
@@ -110,6 +114,7 @@ export async function exportAllCitiesForClient(
   await exportMultiCityConsolidatedXlsx(cityData, clientName, {
     logoUrl: client?.logo_url ?? null,
     season: client?.season ?? null,
+    gridColumns: (client as any)?.grid_columns ?? [],
   })
   return { count: cityData.length }
 }
