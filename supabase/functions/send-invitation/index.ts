@@ -145,7 +145,8 @@ function buildInviteHtml(p: {
     ? (() => { const d = new Date(p.arrivalDate); const y = d.getUTCFullYear(); return d.getUTCMonth() >= 6 ? `${y}-${y + 1}` : `${y - 1}-${y}` })()
     : '2026-2027')
   const deadlineText = p.responseDeadline ? fmt(p.responseDeadline) : 'as soon as possible'
-  const tripDesc = [p.teamName, p.city, p.opponentLabel ? `vs. ${p.opponentLabel}` : null].filter(Boolean).join(' · ')
+  // Trip heading — team then opponent only (city intentionally omitted).
+  const tripDesc = [p.teamName, p.opponentLabel ? `vs. ${p.opponentLabel}` : null].filter(Boolean).join(' · ')
   const roomParts = [
     p.kingRooms ? `${p.kingRooms} king rooms` : null,
     p.doubleRooms ? `${p.doubleRooms} double rooms` : null,
@@ -163,11 +164,6 @@ function buildInviteHtml(p: {
     `<a href="mailto:${p.senderEmail}" style="color:#1C1008;text-decoration:none">E: ${p.senderEmail}</a>`,
     `<a href="https://www.kjsportstravel.com" style="color:#1C1008;text-decoration:none">www.kjsportstravel.com</a>`,
   ].filter(Boolean).join('<br>')
-
-  const ccNamesText = p.ccRecipients.map((r) => r.name).join(', ').replace(/, ([^,]*)$/, ' & $1')
-  const ccBulletsHtml = p.ccRecipients
-    .map((r) => `<tr><td style="padding:2px 0;font-size:14px;color:#475569">• ${r.name} — <a href="mailto:${r.email}" style="color:#1C1008">${r.email}</a></td></tr>`)
-    .join('')
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -222,13 +218,9 @@ function buildInviteHtml(p: {
         <p style="margin:0 0 16px;font-size:14px;color:#475569;line-height:1.6">
           Hotel selections will be made based on overall value, including rates, concessions, and suite upgrade offerings.
         </p>
-        <p style="margin:0 0 12px;font-size:14px;color:#475569;line-height:1.6">
-          We kindly ask that you complete and return the attached RFP by <strong>${deadlineText}</strong>,
-          ${ccNamesText ? `and ensure ${ccNamesText} ${p.ccRecipients.length > 1 ? 'are' : 'is'} copied on your response.` : 'and reply directly to this email with your response.'}
+        <p style="margin:0 0 16px;font-size:14px;color:#475569;line-height:1.6">
+          We kindly ask that you complete and return the attached RFP by <strong>${deadlineText}</strong>.
         </p>
-        ${ccBulletsHtml ? `<table cellpadding="0" cellspacing="0" style="margin:0 0 20px">
-          ${ccBulletsHtml}
-        </table>` : ''}
         <p style="margin:0 0 24px;font-size:14px;color:#475569;line-height:1.6">
           Thank you in advance for your time and consideration. We look forward to the opportunity to work together during the ${seasonLabel} season.
         </p>
