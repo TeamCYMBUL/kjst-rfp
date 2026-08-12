@@ -114,12 +114,20 @@ export default function ClientsList() {
   const [exportingCities, setExportingCities] = useState(false)
   const [search, setSearch] = useState('')
   const [leagueFilter, setLeagueFilter] = useState<string>('all')
+  // "My teams" vs "All teams". Managers default to just the teams they're
+  // assigned to; they can flip to All any time.
+  const [scope, setScope] = useState<'all' | 'mine'>('all')
   const [error, setError] = useState<string | null>(null)
   const [showImport, setShowImport] = useState(false)
   // Submitted bids across the selected client's trips, and how many are unprinted
   // — drives the progressive batch-print buttons.
   const [proposalCounts, setProposalCounts] = useState<{ total: number; unprinted: number; awarded: number } | null>(null)
-  const { role, canEditClient } = useRole()
+  const { role, canEditClient, assignedClientIds } = useRole()
+
+  // Default managers to "My teams" once their assignments load.
+  useEffect(() => {
+    if (role === 'manager' && assignedClientIds.size > 0) setScope('mine')
+  }, [role, assignedClientIds])
 
   const loadClients = (keepSelected?: string) => {
     supabase
@@ -174,6 +182,7 @@ export default function ClientsList() {
 
   const filtered = clients.filter(
     (c) =>
+      (scope === 'all' || assignedClientIds.has(c.id)) &&
       (leagueFilter === 'all' || (c.league ?? '').toUpperCase() === leagueFilter) &&
       (c.team_name.toLowerCase().includes(search.toLowerCase()) ||
         (c.league ?? '').toLowerCase().includes(search.toLowerCase())),
@@ -237,6 +246,20 @@ export default function ClientsList() {
           <div className="flex w-full lg:w-72 shrink-0 flex-col border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-700">
             {/* Search */}
             <div className="border-b border-slate-200 dark:border-slate-700 px-4 py-3 space-y-2">
+              {assignedClientIds.size > 0 && (
+                <div className="flex rounded-lg border border-slate-200 dark:border-slate-600 p-0.5 text-xs font-medium">
+                  {(['mine', 'all'] as const).map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setScope(s)}
+                      className={`flex-1 rounded-md px-3 py-1.5 transition-colors ${scope === s ? 'bg-[#1C1008] text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+                    >
+                      {s === 'mine' ? 'My teams' : 'All teams'}
+                    </button>
+                  ))}
+                </div>
+              )}
               <input
                 type="text"
                 placeholder="Search teams..."
