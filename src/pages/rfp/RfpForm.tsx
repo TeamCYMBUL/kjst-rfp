@@ -671,14 +671,14 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
                       <td className="border border-slate-300 p-0">
                         <div className="flex items-center">
                           <span className="border-r border-slate-200 bg-slate-50 px-2 py-2 text-xs text-slate-400">$</span>
-                          <input type="number" min="0" step="0.01" className={rateInput}
+                          <input id="rate-king" type="number" min="0" step="0.01" className={rateInput}
                             value={resp.best_king_rate} placeholder="0.00" aria-required="true"
                             onChange={(e) => setResp((r) => ({ ...r, best_king_rate: e.target.value }))}
                             disabled={isReadOnly} />
                         </div>
                       </td>
                       <td className="border border-slate-300 p-0">
-                        <input type="text" className={rateInput} value={resp.current_selling_rate}
+                        <input id="rate-selling" type="text" className={rateInput} value={resp.current_selling_rate}
                           placeholder="e.g. $595"
                           onChange={(e) => setResp((r) => ({ ...r, current_selling_rate: e.target.value }))}
                           disabled={isReadOnly} />
@@ -686,7 +686,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
                       <td className="border border-slate-300 p-0">
                         <div className="flex items-center">
                           <span className="border-r border-slate-200 bg-slate-50 px-2 py-2 text-xs text-slate-400">$</span>
-                          <input type="number" min="0" step="0.01" className={rateInput}
+                          <input id="rate-suite" type="number" min="0" step="0.01" className={rateInput}
                             value={resp.best_suite_rate} placeholder="0.00"
                             onChange={(e) => setResp((r) => ({ ...r, best_suite_rate: e.target.value }))}
                             disabled={isReadOnly} />
@@ -695,7 +695,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
                     </>
                   )}
                   <td className="border border-slate-300 p-0">
-                    <input type="text" className={rateInput} value={resp.occupancy_tax}
+                    <input id="rate-occupancy" type="text" className={rateInput} value={resp.occupancy_tax}
                       placeholder="e.g. 16.9% + $5/night"
                       onChange={(e) => setResp((r) => ({ ...r, occupancy_tax: e.target.value }))}
                       disabled={isReadOnly} />
@@ -726,14 +726,14 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
                     <td className="border border-slate-300 p-0">
                       <div className="flex items-center">
                         <span className="border-r border-slate-200 bg-slate-50 px-2 py-2 text-xs text-slate-400">$</span>
-                        <input type="number" min="0" step="0.01" className={rateInput}
+                        <input id="rate-stay2-king" type="number" min="0" step="0.01" className={rateInput}
                           value={resp.stay2_king_rate} placeholder="0.00"
                           onChange={(e) => setResp((r) => ({ ...r, stay2_king_rate: e.target.value }))}
                           disabled={isReadOnly} />
                       </div>
                     </td>
                     <td className="border border-slate-300 p-0">
-                      <input type="text" className={rateInput} value={resp.stay2_selling_rate}
+                      <input id="rate-stay2-selling" type="text" className={rateInput} value={resp.stay2_selling_rate}
                         placeholder="e.g. $685"
                         onChange={(e) => setResp((r) => ({ ...r, stay2_selling_rate: e.target.value }))}
                         disabled={isReadOnly} />
@@ -741,7 +741,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
                     <td className="border border-slate-300 p-0">
                       <div className="flex items-center">
                         <span className="border-r border-slate-200 bg-slate-50 px-2 py-2 text-xs text-slate-400">$</span>
-                        <input type="number" min="0" step="0.01" className={rateInput}
+                        <input id="rate-stay2-suite" type="number" min="0" step="0.01" className={rateInput}
                           value={resp.stay2_suite_rate} placeholder="0.00"
                           onChange={(e) => setResp((r) => ({ ...r, stay2_suite_rate: e.target.value }))}
                           disabled={isReadOnly} />
@@ -1203,6 +1203,14 @@ export default function RfpForm() {
     setValidationError(null)
     setFieldErrors(new Set())
 
+    // Take the hotel straight to the offending field instead of a generic
+    // "scroll to top", so they can find and fix the mistake immediately.
+    const focusField = (id: string) => {
+      const el = document.getElementById(id) as HTMLElement | null
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      if (el) setTimeout(() => el.focus(), 350)
+    }
+
     if (!resp.completed_by_name.trim()) {
       setValidationError('Please enter the name of the person completing this form.')
       document.getElementById('rfp-completed-by')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -1217,7 +1225,7 @@ export default function RfpForm() {
     const isMultiScenario = scenarios.length > 1
     if (!visit1Declined && !isMultiScenario && !resp.best_king_rate.trim()) {
       setValidationError('Best Available King Rate is required before submitting.')
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+      focusField('rate-king')
       return
     }
     if (!visit1Declined && isMultiScenario) {
@@ -1232,23 +1240,23 @@ export default function RfpForm() {
 
     // Required: VS. Current Selling Rate
     if (!visit1Declined && !isMultiScenario && !resp.current_selling_rate.trim()) {
-      setValidationError('VS. Current Selling Rate is required before submitting. Please fill it in the Rates section at the top.')
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+      setValidationError('VS. Current Selling Rate is required before submitting.')
+      focusField('rate-selling')
       return
     }
 
     // Required: Occupancy Tax — one shared value for the property, not
     // per-visit, so it's still required as long as any visit is active
     if (!resp.occupancy_tax.trim()) {
-      setValidationError('Occupancy Tax is required before submitting. Please fill it in the Rates section at the top.')
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+      setValidationError('Occupancy Tax is required before submitting.')
+      focusField('rate-occupancy')
       return
     }
 
     // Required: Suite Rate (always)
     if (!visit1Declined && !isMultiScenario && !resp.best_suite_rate.trim()) {
-      setValidationError('Best Available Suite Rate is required before submitting. Please fill it in the Rates section at the top.')
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+      setValidationError('Best Available Suite Rate is required before submitting.')
+      focusField('rate-suite')
       return
     }
 
@@ -1256,18 +1264,18 @@ export default function RfpForm() {
     const hasStay2Val = Boolean(data?.invitation.trips.stay2_arrival_date)
     if (hasStay2Val && !visit2Declined) {
       if (!resp.stay2_king_rate.trim()) {
-        setValidationError('King Rate for Visit 2 is required before submitting. Please fill it in the Rates section at the top.')
-        window.scrollTo({ top: 0, behavior: 'smooth' })
+        setValidationError('King Rate for Visit 2 is required before submitting.')
+        focusField('rate-stay2-king')
         return
       }
       if (!resp.stay2_selling_rate.trim()) {
-        setValidationError('VS. Current Selling Rate for Visit 2 is required before submitting. Please fill it in the Rates section at the top.')
-        window.scrollTo({ top: 0, behavior: 'smooth' })
+        setValidationError('VS. Current Selling Rate for Visit 2 is required before submitting.')
+        focusField('rate-stay2-selling')
         return
       }
       if (!resp.stay2_suite_rate.trim()) {
-        setValidationError('Suite Rate for Visit 2 is required before submitting. Please fill it in the Rates section at the top.')
-        window.scrollTo({ top: 0, behavior: 'smooth' })
+        setValidationError('Suite Rate for Visit 2 is required before submitting.')
+        focusField('rate-stay2-suite')
         return
       }
     }

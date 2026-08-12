@@ -1463,7 +1463,7 @@ function HotelPanel({
                               <span className="font-medium text-slate-700 dark:text-slate-300">{ans.answer_value || '—'}</span>
                             )}
                             {ans.comment && (
-                              <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500 italic">"{ans.comment}"</p>
+                              <p className="mt-0.5 text-xs font-medium italic text-blue-700 dark:text-blue-400">"{ans.comment}"</p>
                             )}
                           </div>
                         </div>
