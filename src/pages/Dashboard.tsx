@@ -114,8 +114,8 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
             )}
             <Badge status={trip.status} />
             {trip.status === 'closed' && awardedHotel && (
-              <span className="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                🏆{awardedHotel}
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2.5 py-1 text-xs font-semibold leading-5 text-emerald-700 dark:text-emerald-300">
+                <span aria-hidden>🏆</span>{awardedHotel}
               </span>
             )}
             <DeadlineChip deadline={trip.response_deadline} />

@@ -2156,11 +2156,11 @@ export default function TripDetail() {
             <Badge status={trip.status} />
             {twoVisit ? (
               <>
-                {stay1Winner && <span className="rounded-full bg-amber-100 dark:bg-amber-900/20 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">🏆 Stay 1: {stay1Winner.hotel_name}</span>}
-                {stay2Winner && <span className="rounded-full bg-amber-100 dark:bg-amber-900/20 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">🏆 Stay 2: {stay2Winner.hotel_name}</span>}
+                {stay1Winner && <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/20 px-2.5 py-1 text-xs font-semibold leading-5 text-amber-700 dark:text-amber-300">🏆 Stay 1: {stay1Winner.hotel_name}</span>}
+                {stay2Winner && <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/20 px-2.5 py-1 text-xs font-semibold leading-5 text-amber-700 dark:text-amber-300">🏆 Stay 2: {stay2Winner.hotel_name}</span>}
               </>
             ) : (
-              awarded && <span className="rounded-full bg-amber-100 dark:bg-amber-900/20 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">🏆 {awarded.hotel_name}</span>
+              awarded && <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/20 px-2.5 py-1 text-xs font-semibold leading-5 text-amber-700 dark:text-amber-300">🏆 {awarded.hotel_name}</span>
             )}
             {isViewer && (
               <span className="rounded-full border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 px-2 py-0.5 text-xs text-slate-400 dark:text-slate-500">

@@ -743,10 +743,10 @@ export default function TripGrid() {
                       <div className="mt-1 flex flex-wrap items-center gap-1.5">
                         <Badge status={inv.status} label={inv.status === 'passed' ? passedLabel(inv.submitted_at) : undefined} />
                         {twoVisit && wonS1 && (
-                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">🏆 Stay 1</span>
+                          <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold leading-5 text-amber-700">🏆 Stay 1</span>
                         )}
                         {twoVisit && wonS2 && (
-                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">🏆 Stay 2</span>
+                          <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold leading-5 text-amber-700">🏆 Stay 2</span>
                         )}
                         {isLowest && !isAwarded && !isDimmed && (
                           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
