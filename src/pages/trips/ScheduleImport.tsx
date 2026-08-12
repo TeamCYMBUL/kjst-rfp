@@ -29,8 +29,8 @@ type MappedField = {
 
 const FIELDS: MappedField[] = [
   { key: 'opponent', label: 'Opponent', required: true, dbField: 'opponent_label' },
-  { key: 'city', label: 'City', required: true, dbField: 'city' },
-  { key: 'game_date', label: 'Game Date', required: false, dbField: 'game_date' },
+  { key: 'game_date', label: 'Game Date', required: true, dbField: 'game_date' },
+  { key: 'game_time', label: 'Game Time', required: false, dbField: 'game_time' },
   { key: 'arrival_date', label: 'Arrival Date', required: false, dbField: 'arrival_date' },
   { key: 'departure_date', label: 'Departure Date', required: false, dbField: 'departure_date' },
   { key: 'king_rooms', label: 'King Rooms', required: false, dbField: 'king_rooms_requested' },
@@ -39,9 +39,11 @@ const FIELDS: MappedField[] = [
 
 function autoDetect(header: string): string | null {
   const h = header.toLowerCase()
-  // 'city' before 'opponent' — catches "OPPONENT (City)" headers where values are city names
-  if (h.includes('city')) return 'city'
+  // A City column now feeds Opponent (the city is derived from it) — City is no
+  // longer its own mapped field.
+  if (h.includes('city')) return 'opponent'
   if (h.includes('opponent') || h.includes('team')) return 'opponent'
+  if (h.includes('time')) return 'game_time'
   if (h.includes('game')) return 'game_date'
   if (h.includes('arrival') || h.includes('check-in') || h.includes('chk-in') || h.trim() === 'in') return 'arrival_date'
   if (h.includes('departure') || h.includes('check-out') || h.includes('chk-out') || h.includes('checkout') || h.trim() === 'out') return 'departure_date'
@@ -299,8 +301,8 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
 
   const downloadTemplate = () => {
     const ws = XLSX.utils.aoa_to_sheet([
-      ['opponent', 'city', 'game_date', 'arrival_date', 'departure_date', 'king_rooms', 'suites'],
-      ['@ Boston Celtics', 'Boston', '2026-05-18', '2026-05-17', '2026-05-19', '25', '4'],
+      ['opponent', 'game_date', 'game_time', 'arrival_date', 'departure_date', 'king_rooms', 'suites'],
+      ['@ Boston Celtics', '2026-05-18', '7:30 PM', '2026-05-17', '2026-05-19', '25', '4'],
     ])
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Schedule')
@@ -313,13 +315,8 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
     return csvCol ? (row[csvCol] ?? '') : ''
   }
 
-  // Effective opponent: use mapped column, or auto-generate "@ City" from city column
-  const getEffectiveOpponent = (r: RawRow): string => {
-    const opp = getVal(r, 'opponent').trim()
-    if (opp) return opp
-    const rawCity = getVal(r, 'city').trim()
-    return rawCity ? parseCityValue(rawCity).opponentLabel : ''
-  }
+  // Effective opponent: the mapped Opponent value (City is derived from it now).
+  const getEffectiveOpponent = (r: RawRow): string => getVal(r, 'opponent').trim()
 
   const validRows = rows.filter((r) => {
     const city = getVal(r, 'city').trim()
@@ -357,28 +354,39 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
       arrival: string | null
       departure: string | null
       gameDates: string[]
+      gameTime: string | null
       kings: number | null
       doubles: number | null
       suites: number | null
       total: number | null
     }
     const visits: Visit[] = validRows.map((r) => {
-      const rawCity = getVal(r, 'city').trim()
-      const { city, opponentLabel } = rawCity ? parseCityValue(rawCity) : { city: '', opponentLabel: '' }
+      // City is no longer its own column — derive it from the Opponent value.
+      // "LOS ANGELES (DODGERS)" -> city "Los Angeles", opponent "@ Los Angeles Dodgers".
+      // "@ Boston" / "at Boston" / "vs. Boston" -> city "Boston".
       const rawOpp = getVal(r, 'opponent').trim()
+      let cityName = ''
+      let opponentLabel = rawOpp
+      if (/\(.+\)/.test(rawOpp)) {
+        const parsed = parseCityValue(rawOpp)
+        cityName = parsed.city
+        opponentLabel = parsed.opponentLabel
+      } else {
+        cityName = rawOpp.replace(/^\s*(@|vs\.?|at)\s+/i, '').trim()
+      }
       // Use arrival year as fallback for short game dates like "3/25"
       const arrival = parseDate(getVal(r, 'arrival_date'))
       const fallbackYear = arrival ? parseInt(arrival.slice(0, 4)) : undefined
       const rowKings = getVal(r, 'king_rooms').trim() ? Number(getVal(r, 'king_rooms').trim()) : null
       const rowSuites = getVal(r, 'suites').trim() ? Number(getVal(r, 'suites').trim()) : null
-      const cityName = city || rawOpp || ''
       return {
         cityKey: cityName.toLowerCase(),
         city: cityName,
-        opponentLabel: rawOpp || opponentLabel || '',
+        opponentLabel: opponentLabel || '',
         arrival,
         departure: parseDate(getVal(r, 'departure_date')),
         gameDates: parseGameDates(getVal(r, 'game_date'), fallbackYear),
+        gameTime: getVal(r, 'game_time').trim() || null,
         kings: rowKings ?? defaultKings,
         doubles: defaultDoubles,
         suites: rowSuites ?? defaultSuites,
@@ -420,6 +428,7 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
             : null,
           game_dates: v1.gameDates,
           game_date: v1.gameDates[0] ?? null,
+          game_time: v1.gameTime,
           king_rooms_requested: v1.kings,
           double_rooms_requested: v1.doubles,
           suites_requested: v1.suites,
@@ -428,6 +437,7 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
           stay2_departure_date: v2 ? v2.departure : null,
           stay2_game_dates: v2 ? v2.gameDates : [],
           stay2_game_date: v2 ? (v2.gameDates[0] ?? null) : null,
+          stay2_game_time: v2 ? v2.gameTime : null,
         }
         inserts.push(rec)
       }
