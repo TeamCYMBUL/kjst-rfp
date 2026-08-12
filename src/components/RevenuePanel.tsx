@@ -90,7 +90,6 @@ export function RevenuePanel() {
         className="flex w-full items-center justify-between gap-3 px-5 py-3.5 text-left"
       >
         <div className="flex items-center gap-2">
-          <span className="text-emerald-600 dark:text-emerald-400" aria-hidden>🔒</span>
           <span className="font-semibold text-emerald-900 dark:text-emerald-100">Revenue &amp; Commissions</span>
           <span className="rounded-full bg-emerald-600/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
             CYMBUL private
