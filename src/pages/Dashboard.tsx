@@ -423,8 +423,12 @@ export default function Dashboard() {
     ? displayedTrips.filter((t) => t.clients?.id === clientFilter)
     : displayedTrips
 
-  // Empty state: no non-closed trips at all
-  if (openTrips.length === 0 && closedCount === 0) {
+  // First-run onboarding takeover ONLY when the user has no trips at all across
+  // everything they can see. If they DO have trips but the current scope ("My
+  // teams") happens to be empty, we still render the normal dashboard below so
+  // the My teams / All teams toggle stays reachable (a manager whose assigned
+  // teams have no trips must still be able to flip to All teams).
+  if (trips.length === 0) {
     return (
       <div className="mx-auto max-w-2xl space-y-8">
         <div className="text-center">
@@ -612,7 +616,15 @@ export default function Dashboard() {
             )}
           </div>
         </div>
-        <ClientView key={clientFilter ?? 'all'} trips={clientFilteredTrips} />
+        {clientFilteredTrips.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-700 px-6 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+            {scope === 'mine' && assignedIds && assignedIds.length > 0
+              ? 'No trips for your teams yet. Switch to “All teams” above to see everyone’s trips, or create a trip.'
+              : showClosed ? 'No closed trips yet.' : 'No active or draft trips right now.'}
+          </div>
+        ) : (
+          <ClientView key={clientFilter ?? 'all'} trips={clientFilteredTrips} />
+        )}
       </div>
 
       {/* Log an award — pick the trip to jump into (then add the hotel, enter its
