@@ -12,7 +12,7 @@ export async function exportAllCitiesForClient(
   // Client branding for the grid header (logo + team name + season)
   const { data: client } = await supabase
     .from('clients')
-    .select('team_name, logo_url, season, grid_columns, fnb_headcount')
+    .select('team_name, logo_url, season, grid_columns, grid_layout, fnb_headcount')
     .eq('id', clientId)
     .maybeSingle()
 
@@ -115,6 +115,7 @@ export async function exportAllCitiesForClient(
     logoUrl: client?.logo_url ?? null,
     season: client?.season ?? null,
     gridColumns: (client as any)?.grid_columns ?? [],
+    gridLayout: (client as any)?.grid_layout ?? null,
     fnbHeadcount: (client as any)?.fnb_headcount ?? null,
   })
   return { count: cityData.length }

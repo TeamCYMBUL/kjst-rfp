@@ -954,13 +954,24 @@ export default function HotelsList() {
   // Collect unique leagues that actually exist in the data
   const availableLeagues = [...new Set(hotels.map((h) => h.league).filter(Boolean) as string[])].sort()
 
-  // Smarter search: normalize (lowercase, "&"→"and", strip punctuation) then
-  // require EVERY word to appear somewhere across name/chain/city/contact/email/
-  // notes. So word order doesn't matter ("chicago marriott" finds "Marriott …
-  // Chicago"), words can span fields, partial words match, and "&"/hyphens/commas
-  // don't break it.
+  // Smarter search. Normalize (lowercase, "&"→"and", strip punctuation), then
+  // require EVERY search word to match somewhere across name/chain/city/contact/
+  // email/notes. Each word matches by substring OR by typo tolerance (≤1 edit)
+  // against any word in the hotel's text. So word order doesn't matter ("chicago
+  // marriott" finds "Marriott … Chicago"), words can span fields, partial words
+  // match ("marr" → Marriott), and typos still hit ("marriot", "sheratn").
   const normalize = (s: string) =>
     s.toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+  // True if a and b differ by at most one insert/delete/substitution.
+  const withinOneEdit = (a: string, b: string): boolean => {
+    if (a === b) return true
+    const la = a.length, lb = b.length
+    if (Math.abs(la - lb) > 1) return false
+    let i = 0
+    while (i < la && i < lb && a[i] === b[i]) i++
+    if (la === lb) return a.slice(i + 1) === b.slice(i + 1) // substitution
+    return la < lb ? a.slice(i) === b.slice(i + 1) : a.slice(i + 1) === b.slice(i) // insert/delete
+  }
   const searchTokens = normalize(search).split(' ').filter(Boolean)
   const filtered = hotels.filter((h) => {
     if (leagueFilter && h.league !== leagueFilter) return false
@@ -968,7 +979,10 @@ export default function HotelsList() {
       const hay = normalize(
         [h.name, h.chain, h.city, h.contact_name, h.contact_email, h.notes].filter(Boolean).join(' '),
       )
-      if (!searchTokens.every((t) => hay.includes(t))) return false
+      const words = hay.split(' ')
+      const matches = (t: string) =>
+        hay.includes(t) || (t.length >= 4 && words.some((w) => withinOneEdit(w, t)))
+      if (!searchTokens.every(matches)) return false
     }
     return true
   })
