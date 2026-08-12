@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activity'
 import { awardStay as awardStayLib, undoAwardStay as undoAwardStayLib } from '../../lib/award'
 import { assertSaved } from '../../lib/saveGuard'
+import { makeHotelMatcher } from '../../lib/hotelSearch'
 import { StageTimeline } from '../../components/StageTimeline'
 import {
   TEAM_STAGES, TRIP_STAGES, resolveDone, teamAutoDone, tripAutoDone, currentStage,
@@ -362,36 +363,53 @@ function InviteForm({
   }, [leagueTab, allFetched])
 
   const applyLeagueFilter = (list: HotelSuggestion[], tab: LeagueTab) => {
-    if (tab === 'All') return list.slice(0, 8)
-    return list.filter((s) => (s.league ?? '').toUpperCase() === tab).slice(0, 8)
+    if (tab === 'All') return list.slice(0, 15)
+    return list.filter((s) => (s.league ?? '').toUpperCase() === tab).slice(0, 15)
   }
 
-  const search = async (q: string) => {
-    if (q.length < 2) { setAllFetched([]); setSuggestions([]); setShowSuggestions(false); return }
+  // Candidates are fetched ONCE (directory + invitation history) and cached, then
+  // filtered client-side with the smart matcher (word order, partial words, typos).
+  const cacheRef = useRef<{ hotels: any[]; history: any[] } | null>(null)
+  const loadCandidates = async () => {
+    if (cacheRef.current) return cacheRef.current
     const [dbRes, histRes] = await Promise.all([
-      supabase.from('hotels').select('name, contact_name, contact_email, league').ilike('name', `%${q}%`).limit(20),
-      supabase.from('rfp_invitations').select('hotel_name, hotel_contact_name, hotel_contact_email').ilike('hotel_name', `%${q}%`).order('hotel_name').limit(8),
+      supabase.from('hotels').select('name, chain, city, contact_name, contact_email, league').limit(3000),
+      supabase.from('rfp_invitations').select('hotel_name, hotel_contact_name, hotel_contact_email').order('created_at', { ascending: false }).limit(1000),
     ])
-    const dbSuggestions: HotelSuggestion[] = (dbRes.data ?? []).map((h: any) => ({
-      hotel_name: h.name as string,
-      hotel_contact_name: h.contact_name as string | null,
-      hotel_contact_email: h.contact_email as string | null,
-      league: (h.league as string | null) ?? null,
-      fromDatabase: true as const,
-    }))
+    cacheRef.current = { hotels: dbRes.data ?? [], history: histRes.data ?? [] }
+    return cacheRef.current
+  }
+  const search = async (q: string) => {
+    if (q.trim().length < 2) { setAllFetched([]); setSuggestions([]); setShowSuggestions(false); return }
+    const { hotels: dbAll, history: histAll } = await loadCandidates()
+    const match = makeHotelMatcher(q)
+    const dbSuggestions: HotelSuggestion[] = dbAll
+      .filter((h: any) => match([h.name, h.chain, h.city, h.contact_name, h.contact_email]))
+      .slice(0, 40)
+      .map((h: any) => ({
+        hotel_name: h.name as string,
+        hotel_contact_name: h.contact_name as string | null,
+        hotel_contact_email: h.contact_email as string | null,
+        league: (h.league as string | null) ?? null,
+        fromDatabase: true as const,
+      }))
     const seen = new Set<string>(dbSuggestions.map((s) => s.hotel_name.toLowerCase()))
-    const histUnique: HotelSuggestion[] = (histRes.data ?? []).filter((r: any) => {
-      const k = r.hotel_name.toLowerCase()
-      if (seen.has(k)) return false
-      seen.add(k)
-      return true
-    }).map((r: any) => ({
-      hotel_name: r.hotel_name as string,
-      hotel_contact_name: r.hotel_contact_name as string | null,
-      hotel_contact_email: r.hotel_contact_email as string | null,
-      league: null as string | null,
-      fromDatabase: false as const,
-    }))
+    const histUnique: HotelSuggestion[] = histAll
+      .filter((r: any) => match([r.hotel_name, r.hotel_contact_name, r.hotel_contact_email]))
+      .filter((r: any) => {
+        const k = String(r.hotel_name).toLowerCase()
+        if (seen.has(k)) return false
+        seen.add(k)
+        return true
+      })
+      .slice(0, 20)
+      .map((r: any) => ({
+        hotel_name: r.hotel_name as string,
+        hotel_contact_name: r.hotel_contact_name as string | null,
+        hotel_contact_email: r.hotel_contact_email as string | null,
+        league: null as string | null,
+        fromDatabase: false as const,
+      }))
     const merged = [...dbSuggestions, ...histUnique]
     setAllFetched(merged)
     const filtered = applyLeagueFilter(merged, leagueTab)
