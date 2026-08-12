@@ -777,7 +777,8 @@ export async function exportMultiCityConsolidatedXlsx(
       case 'total_per_night':
         return perNight != null ? Math.round(perNight) : null
       case 'est_total_cost':
-        return perNight != null ? Math.round(perNight * nights) : null
+        // Full block estimate: per-room nightly total (rate + taxes/fees) × rooms × nights.
+        return perNight != null && totalRooms != null ? Math.round(perNight * totalRooms * nights) : null
       case 'forecasted_room_total':
         return roomTotal != null ? Math.round(roomTotal) : null
       case 'forecasted_fnb':
