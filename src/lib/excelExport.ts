@@ -922,8 +922,13 @@ export async function exportMultiCityConsolidatedXlsx(
             }
             fnb = any ? sum : null
           }
-          const roomCost = (bid && visit.index === 1 && kingRate != null && trip.total_rooms_requested != null)
-            ? kingRate * trip.total_rooms_requested * nights : null
+          // Exclude comped suites — they carry no room cost (consistent with the
+          // Est. Total Cost / Forecasted Room Total columns).
+          const paidRooms = trip.total_rooms_requested != null
+            ? Math.max(0, trip.total_rooms_requested - (Number.isFinite(compSuites) ? compSuites : 0))
+            : null
+          const roomCost = (bid && visit.index === 1 && kingRate != null && paidRooms != null)
+            ? kingRate * paidRooms * nights : null
           const roomsPlusFnb = (fnb != null || roomCost != null) ? (fnb ?? 0) + (roomCost ?? 0) : null
           vals.push(fnb, roomsPlusFnb)
         }
