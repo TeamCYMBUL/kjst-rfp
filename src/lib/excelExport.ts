@@ -557,6 +557,9 @@ export type GridSystemKey =
   | 'in_season'
   | 'postseason'
   | 'check_in_time'
+  | 'forecasted_room_total'
+  | 'forecasted_fnb'
+  | 'total_est_rooms_fnb'
 export type GridColumnSpec =
   | { type: 'system'; key: GridSystemKey; label: string; width?: number }
   | { type: 'item'; item_id: string; label: string; format?: 'yesno' | 'value' | 'currency'; width?: number }
@@ -623,16 +626,18 @@ export async function exportMultiCityConsolidatedXlsx(
   // F&B forecast columns appear only for teams whose trips carry an F&B plan
   // (per-person meal prices × person-meals). Appended after Notes so existing
   // column indices are untouched.
-  const fnbActive = cities.some(
+  // Per-team custom grid columns (explicitly bound; appended last so base indices
+  // are untouched). Order = the client's grid_columns config.
+  const gridCols = opts.gridColumns ?? []
+  // The legacy auto F&B pair applies ONLY to teams without explicit grid columns;
+  // configured teams express any F&B forecast explicitly via grid_columns.
+  const fnbActive = gridCols.length === 0 && cities.some(
     (c) => c.trip.fnb_plan && Object.values(c.trip.fnb_plan).some((v) => Number(v) > 0),
   )
   const FNB_COL_FORECAST = COLS.length // 0-based index of first appended col
   if (fnbActive) {
     COLS.push({ header: 'Forecasted F&B', width: 13 }, { header: 'Rooms + F&B', width: 14 })
   }
-  // Per-team custom grid columns (explicitly bound; appended last so base indices
-  // and the F&B block are untouched). Order = the client's grid_columns config.
-  const gridCols = opts.gridColumns ?? []
   const GRID_COL_START = COLS.length // 0-based index of first custom col
   for (const gc of gridCols) COLS.push({ header: gc.label, width: gc.width ?? 12 })
   const NCOL = COLS.length
@@ -715,7 +720,8 @@ export async function exportMultiCityConsolidatedXlsx(
     const isCur =
       gc.type === 'item'
         ? gc.format === 'currency'
-        : ['total_per_night', 'est_total_cost', 'avg_rate', 'suite_rate'].includes(gc.key)
+        : ['taxes_fees', 'total_per_night', 'est_total_cost', 'avg_rate', 'suite_rate',
+           'forecasted_room_total', 'forecasted_fnb', 'total_est_rooms_fnb'].includes(gc.key)
     if (isCur) gridCurrencyCols.add(GRID_COL_START + i + 1)
   })
   const asYesNo = (a?: { answer_yes_no: boolean | null }) =>
@@ -741,21 +747,43 @@ export async function exportMultiCityConsolidatedXlsx(
     const tax = firstNum(h.occupancy_tax) // percent
     const fee = firstNum(h.resort_fee) // per-night $
     const suite = visitIndex === 1 ? h.best_suite_rate : h.stay2_suite_rate
-    const perNight = kingRate != null ? kingRate * (1 + (tax ?? 0) / 100) + (fee ?? 0) : null
-    switch (gc.key) {
-      case 'taxes_fees': {
-        const t = h.occupancy_tax
-          ? String(h.occupancy_tax).includes('%') ? String(h.occupancy_tax) : `${h.occupancy_tax}%`
-          : ''
-        const f = h.resort_fee
-          ? String(h.resort_fee).trim().startsWith('$') ? String(h.resort_fee) : `$${h.resort_fee}`
-          : ''
-        return [t, f].filter(Boolean).join(' + ')
+    // Taxes & fees as a per-room DOLLAR amount (KJST-standard grid: rate × tax% + fee)
+    const taxesFeesAmt = kingRate != null ? kingRate * (tax ?? 0) / 100 + (fee ?? 0) : null
+    const perNight = kingRate != null ? kingRate + (taxesFeesAmt ?? 0) : null
+    // Paid rooms exclude complimentary suites (they carry no room revenue).
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '')
+    const compItem = items.find((i) => norm(i.label).includes('complimentaryonebedroomsuite'))
+    const compAns = compItem ? h.answers[compItem.id] : undefined
+    const compSuites = compAns?.answer_value ? Number(compAns.answer_value) : compAns?.answer_yes_no === true ? 1 : 0
+    const totalRooms = trip.total_rooms_requested ?? null
+    const paidRooms = totalRooms != null ? Math.max(0, totalRooms - (Number.isFinite(compSuites) ? compSuites : 0)) : null
+    const roomTotal = perNight != null && paidRooms != null ? perNight * paidRooms * nights : null
+    // Forecasted F&B = Σ (hotel's per-person price × the trip's person-meal counts)
+    let fnbTotal: number | null = null
+    const plan = trip.fnb_plan ?? {}
+    const planEntries = Object.entries(plan).filter(([, pm]) => Number(pm) > 0)
+    if (planEntries.length > 0) {
+      let sum = 0, any = false
+      for (const [itemId, pm] of planEntries) {
+        const raw = h.answers[itemId]?.answer_value
+        const price = raw ? parseFloat(String(raw).replace(/[^0-9.]/g, '')) : NaN
+        if (Number.isFinite(price)) { sum += price * Number(pm); any = true }
       }
+      fnbTotal = any ? sum : null
+    }
+    switch (gc.key) {
+      case 'taxes_fees':
+        return taxesFeesAmt != null ? Math.round(taxesFeesAmt) : null
       case 'total_per_night':
         return perNight != null ? Math.round(perNight) : null
       case 'est_total_cost':
         return perNight != null ? Math.round(perNight * nights) : null
+      case 'forecasted_room_total':
+        return roomTotal != null ? Math.round(roomTotal) : null
+      case 'forecasted_fnb':
+        return fnbTotal != null ? Math.round(fnbTotal) : null
+      case 'total_est_rooms_fnb':
+        return roomTotal != null || fnbTotal != null ? Math.round((roomTotal ?? 0) + (fnbTotal ?? 0)) : null
       case 'avg_rate': {
         const rs = [h.best_king_rate, h.stay2_king_rate].filter((x): x is number => x != null)
         return rs.length ? Math.round(rs.reduce((a, b) => a + b, 0) / rs.length) : null
