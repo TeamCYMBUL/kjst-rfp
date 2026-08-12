@@ -757,8 +757,9 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
           </div>
         )}
 
-        {/* ── Date Scenario Availability ── */}
-        {dateScenarios.length > 0 && (
+        {/* ── Date Scenario Availability ── REMOVED from the workflow (kept
+            hidden so any legacy trip's data is preserved but never shown). ── */}
+        {false && dateScenarios.length > 0 && (
           <div>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
               Date Scenario Availability
@@ -1303,19 +1304,17 @@ export default function RfpForm() {
       if (answers[item.id]?.answer_yes_no === true) {
         const detail = meetingSpaceDetails[item.id]
         const label = item.label.replace(/\[.*?\]/g, '…').slice(0, 50)
-        if (!detail?.name?.trim()) msErrors.push(`${label} — Name of space`)
-        if (!detail?.space_type) msErrors.push(`${label} — Type of space`)
-        if (!detail?.dimensions?.trim()) msErrors.push(`${label} — Dimensions`)
-        if (!detail?.wifi) msErrors.push(`${label} — Wi-Fi`)
+        if (!detail?.name?.trim()) msErrors.push(`${label} — Room name`)
+        if (!detail?.space_type) msErrors.push(`${label} — Type of room`)
+        if (!detail?.dimensions?.trim()) msErrors.push(`${label} — Size of room`)
       }
     }
     for (let idx = 0; idx < additionalSpaces.length; idx++) {
       const space = additionalSpaces[idx]
       const prefix = `Additional Space ${idx + 1}`
-      if (!space.name?.trim()) msErrors.push(`${prefix} — Name`)
-      if (!space.space_type) msErrors.push(`${prefix} — Type`)
-      if (!space.dimensions?.trim()) msErrors.push(`${prefix} — Dimensions`)
-      if (!space.wifi) msErrors.push(`${prefix} — Wi-Fi`)
+      if (!space.name?.trim()) msErrors.push(`${prefix} — Room name`)
+      if (!space.space_type) msErrors.push(`${prefix} — Type of room`)
+      if (!space.dimensions?.trim()) msErrors.push(`${prefix} — Size of room`)
     }
 
     // Named function-space fields (Meal Room / Treatment Room / Coaches
@@ -1799,7 +1798,7 @@ export default function RfpForm() {
                       <p className="text-xs font-medium text-slate-500 mb-3">Room details</p>
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div>
-                          <FieldLabel htmlFor={`msd-${item.id}-name`} required>Name of space</FieldLabel>
+                          <FieldLabel htmlFor={`msd-${item.id}-name`} required>Room name</FieldLabel>
                           <input
                             id={`msd-${item.id}-name`}
                             type="text"
@@ -1814,7 +1813,7 @@ export default function RfpForm() {
                           />
                         </div>
                         <div>
-                          <FieldLabel htmlFor={`msd-${item.id}-type`} required>Type of space</FieldLabel>
+                          <FieldLabel htmlFor={`msd-${item.id}-type`} required>Type of room</FieldLabel>
                           <select
                             id={`msd-${item.id}-type`}
                             className={inputCls}
@@ -1833,7 +1832,7 @@ export default function RfpForm() {
                           </select>
                         </div>
                         <div>
-                          <FieldLabel htmlFor={`msd-${item.id}-dim`} required>Dimensions (sq. ft.)</FieldLabel>
+                          <FieldLabel htmlFor={`msd-${item.id}-dim`} required>Size of room (sq. ft.)</FieldLabel>
                           <input
                             id={`msd-${item.id}-dim`}
                             type="text"
@@ -1847,55 +1846,22 @@ export default function RfpForm() {
                             placeholder="e.g. 3,200 sq. ft."
                           />
                         </div>
-                        <div>
-                          <FieldLabel htmlFor={`msd-${item.id}-fb`}>F&B minimum</FieldLabel>
-                          <input
-                            id={`msd-${item.id}-fb`}
-                            type="text"
-                            className={inputCls}
-                            value={detail.fb_minimum}
-                            onChange={(e) => {
-                              const v = e.target.value
-                              setMeetingSpaceDetails((prev) => ({ ...prev, [item.id]: { ...detail, fb_minimum: v } }))
-                            }}
-                            disabled={isReadOnly}
-                            placeholder="e.g. $500 or None"
-                          />
-                        </div>
-                        <div>
-                          <FieldLabel htmlFor={`msd-${item.id}-wifi`} required>Wi-Fi</FieldLabel>
-                          <select
-                            id={`msd-${item.id}-wifi`}
-                            className={inputCls}
-                            value={detail.wifi}
-                            onChange={(e) => {
-                              const v = e.target.value
-                              setMeetingSpaceDetails((prev) => ({ ...prev, [item.id]: { ...detail, wifi: v } }))
-                            }}
-                            disabled={isReadOnly}
-                          >
-                            <option value="">Select…</option>
-                            <option value="Complimentary">Complimentary</option>
-                            <option value="Available at cost">Available at cost</option>
-                            <option value="Not available">Not available</option>
-                          </select>
-                        </div>
                       </div>
-                      <div className="mt-3">
-                        <FieldLabel htmlFor={`msd-${item.id}-info`}>Additional info</FieldLabel>
-                        <textarea
-                          id={`msd-${item.id}-info`}
-                          className={`${inputCls} resize-none`}
-                          rows={2}
-                          value={detail.additional_info}
-                          onChange={(e) => {
-                            const v = e.target.value
-                            setMeetingSpaceDetails((prev) => ({ ...prev, [item.id]: { ...detail, additional_info: v } }))
-                          }}
-                          disabled={isReadOnly}
-                          placeholder="Any other details (AV equipment, pillars, natural light, etc.)"
-                        />
-                      </div>
+                    </div>
+                  )}
+                  {/* Counteroffer / comment box when the hotel answers No */}
+                  {ans.answer_yes_no === false && (
+                    <div className="mt-3">
+                      <FieldLabel htmlFor={`msc-${item.id}`}>Counteroffer / comment (optional)</FieldLabel>
+                      <textarea
+                        id={`msc-${item.id}`}
+                        className={`${inputCls} resize-none`}
+                        rows={2}
+                        value={ans.comment ?? ''}
+                        onChange={(e) => setAnswer(item.id, { comment: e.target.value })}
+                        disabled={isReadOnly}
+                        placeholder="If this is a 'no' to the extra complimentary items rather than the space itself, or you'd like to counter, note it here."
+                      />
                     </div>
                   )}
                 </div>
@@ -1931,7 +1897,7 @@ export default function RfpForm() {
                   <p className="text-sm font-semibold text-slate-700 mb-3">Additional Space {idx + 1}</p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                      <FieldLabel htmlFor={`add-${idx}-name`} required>Name of space</FieldLabel>
+                      <FieldLabel htmlFor={`add-${idx}-name`} required>Room name</FieldLabel>
                       <input
                         id={`add-${idx}-name`}
                         type="text"
@@ -1943,7 +1909,7 @@ export default function RfpForm() {
                       />
                     </div>
                     <div>
-                      <FieldLabel htmlFor={`add-${idx}-type`} required>Type of space</FieldLabel>
+                      <FieldLabel htmlFor={`add-${idx}-type`} required>Type of room</FieldLabel>
                       <select
                         id={`add-${idx}-type`}
                         className={inputCls}
@@ -1959,7 +1925,7 @@ export default function RfpForm() {
                       </select>
                     </div>
                     <div>
-                      <FieldLabel htmlFor={`add-${idx}-dim`} required>Dimensions (sq. ft.)</FieldLabel>
+                      <FieldLabel htmlFor={`add-${idx}-dim`} required>Size of room (sq. ft.)</FieldLabel>
                       <input
                         id={`add-${idx}-dim`}
                         type="text"
@@ -1970,45 +1936,6 @@ export default function RfpForm() {
                         placeholder="e.g. 800 sq. ft."
                       />
                     </div>
-                    <div>
-                      <FieldLabel htmlFor={`add-${idx}-fb`}>F&B minimum</FieldLabel>
-                      <input
-                        id={`add-${idx}-fb`}
-                        type="text"
-                        className={inputCls}
-                        value={space.fb_minimum}
-                        onChange={(e) => { const v = e.target.value; setAdditionalSpaces((prev) => prev.map((s, i) => i === idx ? { ...s, fb_minimum: v } : s)) }}
-                        disabled={isReadOnly}
-                        placeholder="e.g. $500 or None"
-                      />
-                    </div>
-                    <div>
-                      <FieldLabel htmlFor={`add-${idx}-wifi`} required>Wi-Fi</FieldLabel>
-                      <select
-                        id={`add-${idx}-wifi`}
-                        className={inputCls}
-                        value={space.wifi}
-                        onChange={(e) => { const v = e.target.value; setAdditionalSpaces((prev) => prev.map((s, i) => i === idx ? { ...s, wifi: v } : s)) }}
-                        disabled={isReadOnly}
-                      >
-                        <option value="">Select…</option>
-                        <option value="Complimentary">Complimentary</option>
-                        <option value="Available at cost">Available at cost</option>
-                        <option value="Not available">Not available</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="mt-3">
-                    <FieldLabel htmlFor={`add-${idx}-info`}>Additional info</FieldLabel>
-                    <textarea
-                      id={`add-${idx}-info`}
-                      className={`${inputCls} resize-none`}
-                      rows={2}
-                      value={space.additional_info}
-                      onChange={(e) => { const v = e.target.value; setAdditionalSpaces((prev) => prev.map((s, i) => i === idx ? { ...s, additional_info: v } : s)) }}
-                      disabled={isReadOnly}
-                      placeholder="Any other details (AV equipment, pillars, natural light, etc.)"
-                    />
                   </div>
                 </div>
               ))}
