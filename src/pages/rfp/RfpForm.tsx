@@ -308,7 +308,7 @@ function ConcessionRow({
                 <span className="rounded-r-lg border border-l-0 border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">%</span>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {['10', '7', '5', '0'].map((pct) => (
+                {['15', '12', '10', '7'].map((pct) => (
                   <button
                     key={pct}
                     type="button"
