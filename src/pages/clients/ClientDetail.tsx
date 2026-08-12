@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { assertSaved } from '../../lib/saveGuard'
 import type { Client, Trip } from '../../lib/types'
 import { formatDate } from '../../lib/format'
 import { exportAllCitiesForClient } from '../../lib/exportAllCities'
@@ -222,7 +223,12 @@ export default function ClientDetail() {
   }
 
   const deleteCustomItem = async (itemId: string) => {
-    await supabase.from('concession_items').update({ archived: true }).eq('id', itemId)
+    try {
+      assertSaved(await supabase.from('concession_items').update({ archived: true }).eq('id', itemId).select('id'), 'remove this item')
+    } catch (e) {
+      setItemError(e instanceof Error ? e.message : String(e))
+      return
+    }
     setCustomItems((prev) => (prev ?? []).filter((i) => i.id !== itemId))
   }
 

@@ -84,7 +84,7 @@ function YesNoCell({ value, comment }: { value: boolean | null; comment?: string
         )}
       </div>
       {expanded && comment && (
-        <p className="mt-1 text-xs italic text-slate-500">{comment}</p>
+        <p className="mt-1 text-xs italic font-medium text-blue-700 dark:text-blue-400">{comment}</p>
       )}
     </div>
   )
@@ -132,7 +132,7 @@ function ValueCell({
         )}
       </div>
       {expanded && answer.comment && (
-        <p className="mt-1 text-xs italic text-slate-500">{answer.comment}</p>
+        <p className="mt-1 text-xs italic font-medium text-blue-700 dark:text-blue-400">{answer.comment}</p>
       )}
     </div>
   )

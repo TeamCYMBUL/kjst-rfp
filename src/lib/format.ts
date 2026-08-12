@@ -56,12 +56,11 @@ export function formatMeetingSpaceNotes(raw: string | null | undefined): string 
   const fmtSpace = (s: any): string | null => {
     if (!s || typeof s !== 'object') return null
     const parts: string[] = []
+    // Meeting spaces show only Room name · Type · Size (F&B/Wi-Fi/additional
+    // were removed from the form; also suppress them for any legacy data).
     if (s.name) parts.push(String(s.name))
     if (s.space_type) parts.push(MEETING_SPACE_TYPE_LABELS[s.space_type] ?? String(s.space_type))
     if (s.dimensions) parts.push(`Size: ${s.dimensions}`)
-    if (s.fb_minimum) parts.push(`F&B min: ${s.fb_minimum}`)
-    if (s.wifi) parts.push(`Wi-Fi: ${s.wifi}`)
-    if (s.additional_info) parts.push(String(s.additional_info))
     return parts.length ? parts.join(' · ') : null
   }
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { assertSaved } from '../../lib/saveGuard'
 import { useRole } from '../../lib/useRole'
 import type { DateScenario } from '../../lib/types'
 import type { Client, DefaultTerms, Trip, TripStatus } from '../../lib/types'
@@ -292,9 +293,10 @@ export default function TripForm() {
     }
 
     if (editing) {
-      const { error } = await supabase.from('trips').update(payload).eq('id', id)
-      if (error) {
-        setError(error.message)
+      try {
+        assertSaved(await supabase.from('trips').update(payload).eq('id', id).select('id'), 'save this trip')
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
         setSaving(false)
         return
       }
