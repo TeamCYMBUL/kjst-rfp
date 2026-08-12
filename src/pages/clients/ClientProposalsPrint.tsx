@@ -11,6 +11,7 @@ import {
   type ProposalConcessionItem as ConcessionItem,
   type ProposalAnswer as Answer,
 } from '../trips/proposalRender'
+import { buildProposalDoc, downloadDocx, type DocxHotel } from '../../lib/reportDocx'
 
 // Client-wide progressive batch print. Renders every submitted hotel bid across
 // ALL of one client's trips, grouped by trip. "all" prints the whole batch;
@@ -146,11 +147,29 @@ export default function ClientProposalsPrint() {
   const tripsWithBids = trips.filter((t) => invitations.some((inv) => inv.trip_id === t.id))
   const totalBids = invitations.length
 
+  const downloadWord = () => {
+    const subtitle = `Hotel Proposals — ${awardedMode ? 'Selected (Awarded) Hotels' : newMode ? 'New Since Last Print' : 'Full Copy'}`
+    const groups = tripsWithBids.map((trip) => ({
+      trip: { ...trip, team_name: trip.clients?.team_name ?? client?.team_name ?? 'Client' },
+      hotels: invitations.filter((inv) => inv.trip_id === trip.id).map((inv): DocxHotel => {
+        const resp = responses.find((r) => r.invitation_id === inv.id) ?? null
+        return { inv, resp, answers: resp ? answers.filter((a) => a.response_id === resp.id) : [], concessionItems }
+      }),
+    }))
+    downloadDocx(buildProposalDoc({ subtitle, groups }), `${client?.team_name ?? 'KJST'} Proposals.docx`)
+  }
+
   const PrintControls = (
     <div className="no-print" style={{ position: 'fixed', top: 16, right: 16, display: 'flex', gap: 8, zIndex: 100 }}>
       <button
-        onClick={() => window.print()}
+        onClick={downloadWord}
         style={{ background: PRIMARY, color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+      >
+        Download Word (.docx)
+      </button>
+      <button
+        onClick={() => window.print()}
+        style={{ background: 'white', color: PRIMARY, border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
       >
         Print / Save as PDF
       </button>

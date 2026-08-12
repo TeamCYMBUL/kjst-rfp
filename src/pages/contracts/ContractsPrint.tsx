@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { listAwardedContracts } from '../../lib/contractsApi'
 import type { AwardedContract, ContractStatus } from '../../lib/contractsApi'
+import { buildContractsDoc, downloadDocx } from '../../lib/reportDocx'
 
 const PRIMARY = '#1C1008'
 const STATUS_LABEL: Record<ContractStatus, string> = {
@@ -41,9 +42,29 @@ export default function ContractsPrint() {
 
       <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
         <Link to="/contracts" style={{ fontSize: 13, color: '#64748b', textDecoration: 'none' }}>← Back to Contracts</Link>
-        <button onClick={() => window.print()} style={{ background: PRIMARY, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-          Print / Save as PDF
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => downloadDocx(
+              buildContractsDoc({
+                dateStr: `Room agreements for awarded hotels · KJ Sports Travel · ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`,
+                groups: groups.map((g) => ({
+                  name: g.name,
+                  rows: g.items.map((r) => {
+                    const c = r.contract
+                    return { hotelName: r.hotel_name, city: r.trip?.city ?? null, statusLabel: c ? STATUS_LABEL[c.status] : 'Not requested', uploaded: c?.uploaded_at ? fmt(c.uploaded_at) : null, signed: c?.signed_at ? fmt(c.signed_at) : null }
+                  }),
+                })),
+              }),
+              'KJST Contracts Summary.docx',
+            )}
+            style={{ background: PRIMARY, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+          >
+            Download Word (.docx)
+          </button>
+          <button onClick={() => window.print()} style={{ background: '#fff', color: PRIMARY, border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
+            Print / Save as PDF
+          </button>
+        </div>
       </div>
 
       <div style={{ borderBottom: `2px solid ${PRIMARY}`, paddingBottom: 12, marginBottom: 20 }}>

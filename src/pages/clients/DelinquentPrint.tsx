@@ -7,6 +7,7 @@ import {
   overdueLabel,
   type DelinquentReport,
 } from '../../lib/delinquent'
+import { buildDelinquentDoc, downloadDocx } from '../../lib/reportDocx'
 
 const PRIMARY = '#1C1008'
 
@@ -45,7 +46,19 @@ export default function DelinquentPrint() {
       <style>{`@media print { .no-print { display: none !important; } @page { margin: 0.6in; size: landscape; } } * { box-sizing: border-box; }`}</style>
 
       <div className="no-print" style={{ position: 'fixed', top: 16, right: 16, display: 'flex', gap: 8, zIndex: 100 }}>
-        <button onClick={() => window.print()} style={{ background: PRIMARY, color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Print / Save as PDF</button>
+        <button
+          onClick={() => downloadDocx(
+            buildDelinquentDoc({
+              teamName: client.team_name,
+              season: client.season ?? null,
+              dateStr,
+              rows: rows.map((r) => ({ hotelName: r.hotelName, city: r.city, arrivalDate: r.arrivalDate, departureDate: r.departureDate, responseDeadline: r.responseDeadline, statusLabel: overdueLabel(r), contactName: r.contactName, contactEmail: r.contactEmail })),
+            }),
+            `${client.team_name} Delinquent Hotels.docx`,
+          )}
+          style={{ background: PRIMARY, color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+        >Download Word (.docx)</button>
+        <button onClick={() => window.print()} style={{ background: 'white', color: PRIMARY, border: '1px solid #cbd5e1', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>Print / Save as PDF</button>
         <button onClick={() => exportDelinquentXlsx(report)} style={{ background: 'white', color: PRIMARY, border: '1px solid #cbd5e1', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Export Excel</button>
         <Link to={`/clients/${clientId}`} style={{ background: 'white', color: PRIMARY, border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 500, textDecoration: 'none' }}>← Back to Client</Link>
       </div>

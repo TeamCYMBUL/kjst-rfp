@@ -11,6 +11,7 @@ import {
   type ProposalConcessionItem as ConcessionItem,
   type ProposalAnswer as Answer,
 } from './proposalRender'
+import { buildProposalDoc, downloadDocx, type DocxHotel } from '../../lib/reportDocx'
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -127,11 +128,30 @@ export default function ProposalPrint() {
     )
   }
 
+  const downloadWord = () => {
+    if (!trip) return
+    const hotels = invitations.map((inv): DocxHotel => {
+      const resp = responses.find((r) => r.invitation_id === inv.id) ?? null
+      return { inv, resp, answers: resp ? answers.filter((a) => a.response_id === resp.id) : [], concessionItems }
+    })
+    const t = { ...trip, team_name: trip.clients?.team_name ?? 'Client' }
+    downloadDocx(
+      buildProposalDoc({ subtitle: 'Hotel Proposal — Full Copy', groups: [{ trip: t, hotels }] }),
+      `${trip.clients?.team_name ?? 'KJST'} ${trip.opponent_label ?? 'Trip'} Proposal.docx`,
+    )
+  }
+
   const PrintControls = (
     <div className="no-print" style={{ position: 'fixed', top: 16, right: 16, display: 'flex', gap: 8, zIndex: 100 }}>
       <button
-        onClick={() => window.print()}
+        onClick={downloadWord}
         style={{ background: PRIMARY, color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+      >
+        Download Word (.docx)
+      </button>
+      <button
+        onClick={() => window.print()}
+        style={{ background: 'white', color: PRIMARY, border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
       >
         Print / Save as PDF
       </button>
