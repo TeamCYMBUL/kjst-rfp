@@ -60,6 +60,18 @@ type RespState = {
 
 // ── Small presentational helpers ──────────────────────────────────────────────
 
+// Square-footage helpers for the "room size below requested" hint. requestedSqFt
+// pulls the "N sq. ft." figure out of a meeting-space item's label; firstNum
+// pulls the first number the hotel typed into the size field.
+function requestedSqFt(label: string | null | undefined): number | null {
+  const m = (label ?? '').match(/([\d,]+)\s*sq/i)
+  return m ? Number(m[1].replace(/,/g, '')) : null
+}
+function firstNum(str: string | null | undefined): number | null {
+  const m = (str ?? '').replace(/,/g, '').match(/\d+(?:\.\d+)?/)
+  return m ? Number(m[0]) : null
+}
+
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
     <h2 className="mb-4 border-b border-slate-200 pb-2 text-base font-semibold text-slate-700">
@@ -280,8 +292,10 @@ function ConcessionRow({
             {item.label}<span className="ml-0.5 text-red-500">*</span>
           </p>
           {hasRequestedValue && (
-            <p className="mt-0.5 text-xs text-slate-400">
-              Requested: <span className="font-medium text-slate-500">{item.requested_value}</span>
+            <p className="mt-1.5">
+              <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
+                Requested: <span className="font-bold">{item.requested_value}</span>
+              </span>
             </p>
           )}
         </div>
@@ -1484,7 +1498,11 @@ export default function RfpForm() {
     item.label.toLowerCase().includes('complimentary meeting space')
   const isNamedFunctionSpaceItem = (item: ConcessionItem) =>
     item.answer_type === 'yes_no' &&
-    item.label.toLowerCase().includes('function space')
+    item.label.toLowerCase().includes('function space') &&
+    // A "meeting space" item that merely mentions "function space" in its body
+    // (e.g. a Treatment Room described as a "Treatment Room/Function space") is a
+    // meeting-space item, not a separate function space — don't list it twice.
+    !item.label.toLowerCase().includes('complimentary meeting space')
 
   const allConcessionItems = data.items.filter(
     (i) => i.section === 'concessions' || i.section === 'facilities',
@@ -1845,6 +1863,15 @@ export default function RfpForm() {
                             disabled={isReadOnly}
                             placeholder="e.g. 3,200 sq. ft."
                           />
+                          {(() => {
+                            const req = requestedSqFt(item.label)
+                            const off = firstNum(detail.dimensions)
+                            return req && off && off < req * 0.9 ? (
+                              <p className="mt-1 text-xs font-semibold text-amber-700">
+                                Below the requested {req.toLocaleString()} sq. ft. — please confirm or note a counteroffer.
+                              </p>
+                            ) : null
+                          })()}
                         </div>
                       </div>
                     </div>

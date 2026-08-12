@@ -253,6 +253,17 @@ export default function TripForm() {
       setError("You don't have permission to create or edit trips for this team.")
       return
     }
+    // Guardrail: never let a check-out land on or before check-in (a typo the
+    // hotel would otherwise receive). Applies to both visits.
+    const badRange = (arr: string, dep: string) => arr.trim() && dep.trim() && dep.trim() <= arr.trim()
+    if (badRange(fields.arrival_date, fields.departure_date)) {
+      setError('Check-out date must be after the check-in date. Please fix the dates before saving.')
+      return
+    }
+    if (badRange(fields.stay2_arrival_date, fields.stay2_departure_date)) {
+      setError('Visit 2 check-out date must be after its check-in date. Please fix the dates before saving.')
+      return
+    }
     setSaving(true)
     setError(null)
 
