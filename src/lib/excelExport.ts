@@ -713,6 +713,27 @@ export async function exportMultiCityConsolidatedXlsx(
     const m = String(s ?? '').match(/[\d,]+(\.\d+)?/)
     return m ? parseFloat(m[0].replace(/,/g, '')) : null
   }
+  // Best-effort parse of the free-text tax/fee fields into a % and a $/night fee.
+  // Rules chosen to be MORE accurate without ever guessing wildly high:
+  //  • Tax %: sum the %-tagged numbers only when joined by "+" (clear additive
+  //    intent, e.g. "15.7% + 2.3%"); otherwise take the first % (so "18% (15.7%
+  //    & 2.3%)" stays 18, not 36). Bare number with no % or $ = a percent.
+  //  • Fees: pull any "$N" embedded in the tax field, plus the resort fee —
+  //    but a resort fee that says waived / n/a / none / optional counts as $0
+  //    (fixes phantom fees like "Waived (normally $45)").
+  const parseTaxFee = (occText: any, feeText: any): { pct: number; fee: number } => {
+    const occ = String(occText ?? '')
+    const pcts = [...occ.matchAll(/(\d+(?:\.\d+)?)\s*%/g)].map((m) => parseFloat(m[1]))
+    let pct = 0
+    if (pcts.length) pct = occ.includes('+') ? pcts.reduce((a, b) => a + b, 0) : pcts[0]
+    else if (!occ.includes('$')) pct = firstNum(occ) ?? 0 // bare number = percent
+    const embeddedFee = [...occ.matchAll(/\$\s*(\d+(?:\.\d+)?)/g)]
+      .map((m) => parseFloat(m[1])).reduce((a, b) => a + b, 0)
+    const feeStr = String(feeText ?? '')
+    const waived = /waiv|n\/?a|none|no\s*(resort|fee)|opt.?out|optional/i.test(feeStr)
+    const resortFee = waived ? 0 : firstNum(feeStr) ?? 0
+    return { pct, fee: embeddedFee + resortFee }
+  }
   // Estimated room-block cost for a stay, incl. taxes/fees, tiered by room type:
   //   • comped suites            → free (removed)
   //   • suite upgrades + kings   → King rate
@@ -781,8 +802,7 @@ export async function exportMultiCityConsolidatedXlsx(
       if (gc.format === 'value') return a.answer_value ?? asYesNo(a)
       return asYesNo(a)
     }
-    const tax = firstNum(h.occupancy_tax) // percent
-    const fee = firstNum(h.resort_fee) // per-night $
+    const { pct: tax, fee } = parseTaxFee(h.occupancy_tax, h.resort_fee)
     const suite = visitIndex === 1 ? h.best_suite_rate : h.stay2_suite_rate
     // Taxes & fees as a per-room DOLLAR amount (KJST-standard grid: rate × tax% + fee)
     const taxesFeesAmt = kingRate != null ? kingRate * (tax ?? 0) / 100 + (fee ?? 0) : null
@@ -830,8 +850,14 @@ export async function exportMultiCityConsolidatedXlsx(
       case 'total_est_rooms_fnb':
         return roomTotal != null || fnbTotal != null ? Math.round((roomTotal ?? 0) + (fnbTotal ?? 0)) : null
       case 'avg_rate': {
-        const rs = [h.best_king_rate, h.stay2_king_rate].filter((x): x is number => x != null)
-        return rs.length ? Math.round(rs.reduce((a, b) => a + b, 0) / rs.length) : null
+        // Blended effective rate per room (KJST house formula): comped suites are
+        // free, so King rate × paid rooms ÷ total rooms. Falls back to King rate.
+        if (kingRate == null) return null
+        if (totalRooms && totalRooms > 0) {
+          const paid = Math.max(0, totalRooms - (Number.isFinite(compSuites) ? compSuites : 0))
+          return Math.round((kingRate * paid) / totalRooms)
+        }
+        return Math.round(kingRate)
       }
       case 'suite_rate':
         return suite != null ? suite : null
@@ -968,9 +994,10 @@ export async function exportMultiCityConsolidatedXlsx(
           // Tiered room cost (same engine as the Est. Total Cost column): comped
           // suites free, upgrades + kings at King, overflow suites at Suite rate.
           const suiteUg2 = suiteUg != null && Number.isFinite(suiteUg) ? suiteUg : 0
+          const legacyTaxFee = parseTaxFee(h.occupancy_tax, h.resort_fee)
           const roomCost = (bid && visit.index === 1)
             ? roomBlockTotal({
-                kingRate, suiteRate: h.best_suite_rate, tax: firstNum(h.occupancy_tax), fee: firstNum(h.resort_fee),
+                kingRate, suiteRate: h.best_suite_rate, tax: legacyTaxFee.pct, fee: legacyTaxFee.fee,
                 nights, totalRooms: trip.total_rooms_requested ?? null,
                 kingsReq: trip.king_rooms_requested ?? null, suitesReq: trip.suites_requested ?? null,
                 comp: compSuites, upgrades: suiteUg2,
