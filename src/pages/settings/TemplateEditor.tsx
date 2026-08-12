@@ -30,6 +30,7 @@ type TemplateItem = {
   answer_type: AnswerType
   requested_value: string | null
   allow_comment: boolean
+  optional: boolean
 }
 
 type EditState = {
@@ -37,6 +38,7 @@ type EditState = {
   answer_type: AnswerType
   requested_value: string
   allow_comment: boolean
+  optional: boolean
 }
 
 const TABS: { key: ActiveTab; label: string }[] = [
@@ -71,7 +73,7 @@ const TYPE_COLORS: Record<AnswerType, string> = {
 }
 
 function blankEdit(): EditState {
-  return { label: '', answer_type: 'yes_no', requested_value: '', allow_comment: true }
+  return { label: '', answer_type: 'yes_no', requested_value: '', allow_comment: true, optional: false }
 }
 
 function ItemForm({
@@ -133,6 +135,18 @@ function ItemForm({
         />
         <label htmlFor={`allow_comment_${uid}`} className="text-sm text-slate-600">
           Allow counteroffer / comment field
+        </label>
+      </div>
+      <div className="flex items-center gap-2 sm:col-span-2">
+        <input
+          id={`optional_${uid}`}
+          type="checkbox"
+          checked={value.optional}
+          onChange={(e) => onChange({ ...value, optional: e.target.checked })}
+          className="h-4 w-4 rounded border-slate-300 text-[#1C1008]"
+        />
+        <label htmlFor={`optional_${uid}`} className="text-sm text-slate-600">
+          Optional — hotels can submit the RFP without answering this
         </label>
       </div>
     </div>
@@ -341,7 +355,7 @@ export default function TemplateEditor() {
     setLoading(true)
     let q = supabase
       .from('concession_items')
-      .select('id, sort_order, section, label, answer_type, requested_value, allow_comment')
+      .select('id, sort_order, section, label, answer_type, requested_value, allow_comment, optional')
       .eq('archived', false)
     q = selectedClientId ? q.eq('client_id', selectedClientId) : q.is('client_id', null)
     const { data, error } = await q.order('sort_order')
@@ -389,6 +403,7 @@ export default function TemplateEditor() {
       answer_type: item.answer_type,
       requested_value: item.requested_value ?? '',
       allow_comment: item.allow_comment,
+      optional: item.optional,
     })
     setShowAdd(false)
   }
@@ -405,6 +420,7 @@ export default function TemplateEditor() {
             answer_type: editState.answer_type,
             requested_value: editState.requested_value.trim() || null,
             allow_comment: editState.allow_comment,
+            optional: editState.optional,
           })
           .eq('id', editingId)
           .select('id'),
@@ -426,6 +442,7 @@ export default function TemplateEditor() {
                 answer_type: editState.answer_type,
                 requested_value: editState.requested_value.trim() || null,
                 allow_comment: editState.allow_comment,
+                optional: editState.optional,
               }
             : i,
         ),
@@ -475,9 +492,10 @@ export default function TemplateEditor() {
         answer_type: addState.answer_type,
         requested_value: addState.requested_value.trim() || null,
         allow_comment: addState.allow_comment,
+        optional: addState.optional,
         archived: false,
       })
-      .select('id, sort_order, section, label, answer_type, requested_value, allow_comment')
+      .select('id, sort_order, section, label, answer_type, requested_value, allow_comment, optional')
       .single()
     setAdding(false)
     if (error) {
@@ -619,6 +637,9 @@ export default function TemplateEditor() {
                     )}
                     {!item.allow_comment && (
                       <span className="text-xs text-slate-400">No comment field</span>
+                    )}
+                    {item.optional && (
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">Optional</span>
                     )}
                   </div>
                 </div>
