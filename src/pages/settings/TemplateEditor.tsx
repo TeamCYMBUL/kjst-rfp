@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { Button, Card, ErrorNote, Loading, PageHeader, TextField } from '../../components/ui'
 import { useRole } from '../../lib/useRole'
 import { useAuth } from '../../auth/AuthContext'
+import { assertSaved } from '../../lib/saveGuard'
 
 type ActiveTab = 'header' | 'concessions' | 'facilities' | 'in_season_tournament' | 'postseason'
 type Section = 'concessions' | 'facilities' | 'in_season_tournament' | 'postseason'
@@ -386,19 +387,27 @@ export default function TemplateEditor() {
   const saveEdit = async () => {
     if (!editingId || !editState.label.trim()) return
     setSaving(true)
-    const { error } = await supabase
-      .from('concession_items')
-      .update({
-        label: editState.label.trim(),
-        answer_type: editState.answer_type,
-        requested_value: editState.requested_value.trim() || null,
-        allow_comment: editState.allow_comment,
-      })
-      .eq('id', editingId)
+    try {
+      assertSaved(
+        await supabase
+          .from('concession_items')
+          .update({
+            label: editState.label.trim(),
+            answer_type: editState.answer_type,
+            requested_value: editState.requested_value.trim() || null,
+            allow_comment: editState.allow_comment,
+          })
+          .eq('id', editingId)
+          .select('id'),
+        'save this item',
+      )
+    } catch (e) {
+      setSaving(false)
+      setError(e instanceof Error ? e.message : String(e))
+      return
+    }
     setSaving(false)
-    if (error) {
-      setError(error.message)
-    } else {
+    {
       setItems((prev) =>
         prev.map((i) =>
           i.id === editingId
@@ -425,16 +434,17 @@ export default function TemplateEditor() {
       )
     )
       return
-    const { error } = await supabase
-      .from('concession_items')
-      .update({ archived: true })
-      .eq('id', item.id)
-    if (error) {
-      setError(error.message)
-    } else {
-      setItems((prev) => prev.filter((i) => i.id !== item.id))
-      if (editingId === item.id) setEditingId(null)
+    try {
+      assertSaved(
+        await supabase.from('concession_items').update({ archived: true }).eq('id', item.id).select('id'),
+        'remove this item',
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      return
     }
+    setItems((prev) => prev.filter((i) => i.id !== item.id))
+    if (editingId === item.id) setEditingId(null)
   }
 
   // ── Add ─────────────────────────────────────────────────────────────────────

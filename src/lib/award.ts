@@ -8,6 +8,7 @@
 // have one stay = Stay 1.
 import { supabase } from './supabase'
 import { logActivity } from './activity'
+import { assertSaved } from './saveGuard'
 
 export type AwardCtx = {
   tripId: string
@@ -24,7 +25,10 @@ export async function awardStay(
 ): Promise<void> {
   const patch =
     stay === 1 ? { status: 'awarded', awarded_stay1: true } : { status: 'awarded', awarded_stay2: true }
-  await supabase.from('rfp_invitations').update(patch).eq('id', invitationId)
+  assertSaved(
+    await supabase.from('rfp_invitations').update(patch).eq('id', invitationId).select('id'),
+    'award this hotel',
+  )
 
   // Re-read the trip's award state to decide whether every stay is now set.
   const { data: fresh } = await supabase
@@ -46,10 +50,16 @@ export async function awardStay(
       .eq('status', 'submitted')
       .eq('awarded_stay1', false)
       .eq('awarded_stay2', false)
-    await supabase.from('trips').update({ status: 'closed' }).eq('id', ctx.tripId)
+    assertSaved(
+      await supabase.from('trips').update({ status: 'closed' }).eq('id', ctx.tripId).select('id'),
+      'close this trip',
+    )
   } else {
     // Keep the trip open until the other stay is decided.
-    await supabase.from('trips').update({ status: 'collecting' }).eq('id', ctx.tripId)
+    assertSaved(
+      await supabase.from('trips').update({ status: 'collecting' }).eq('id', ctx.tripId).select('id'),
+      'update this trip',
+    )
   }
 
   void logActivity({
@@ -69,6 +79,12 @@ export async function undoAwardStay(
   const stillWinsOtherStay = stay === 1 ? inv.awarded_stay2 : inv.awarded_stay1
   const patch: Record<string, unknown> = stay === 1 ? { awarded_stay1: false } : { awarded_stay2: false }
   if (!stillWinsOtherStay) patch.status = 'submitted'
-  await supabase.from('rfp_invitations').update(patch).eq('id', inv.id)
-  await supabase.from('trips').update({ status: 'collecting' }).eq('id', ctx.tripId)
+  assertSaved(
+    await supabase.from('rfp_invitations').update(patch).eq('id', inv.id).select('id'),
+    'undo this award',
+  )
+  assertSaved(
+    await supabase.from('trips').update({ status: 'collecting' }).eq('id', ctx.tripId).select('id'),
+    'reopen this trip',
+  )
 }

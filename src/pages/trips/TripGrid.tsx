@@ -494,6 +494,8 @@ export default function TripGrid() {
     try {
       await awardStayLib(awardCtx, invitationId, hotelName, stay)
       await loadData()
+    } catch (e) {
+      alert(`Award did not save: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setSaving(false)
     }
@@ -507,6 +509,8 @@ export default function TripGrid() {
       const inv = invitations.find((i) => i.id === invitationId)
       await undoAwardStayLib(awardCtx, { id: invitationId, awarded_stay1: inv?.awarded_stay1, awarded_stay2: inv?.awarded_stay2 }, stay)
       await loadData()
+    } catch (e) {
+      alert(`Undo did not save: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setSaving(false)
     }

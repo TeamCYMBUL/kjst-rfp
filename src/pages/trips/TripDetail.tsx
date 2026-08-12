@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activity'
 import { awardStay as awardStayLib, undoAwardStay as undoAwardStayLib } from '../../lib/award'
+import { assertSaved } from '../../lib/saveGuard'
 import { StageTimeline } from '../../components/StageTimeline'
 import {
   TEAM_STAGES, TRIP_STAGES, resolveDone, teamAutoDone, tripAutoDone, currentStage,
@@ -900,14 +901,22 @@ function HotelPanel({
     setSavingContact(true)
     const newName = editName.trim() || null
     const newEmail = editEmail.trim() || null
-    await supabase.from('rfp_invitations').update({
-      hotel_contact_name: newName,
-      hotel_contact_email: newEmail,
-    }).eq('id', inv.id)
-    setSavingContact(false)
-    setEditingContact(false)
-    // Update parent state in-place — no page reload needed
-    onContactUpdated(inv.id, newName, newEmail)
+    try {
+      assertSaved(
+        await supabase.from('rfp_invitations').update({
+          hotel_contact_name: newName,
+          hotel_contact_email: newEmail,
+        }).eq('id', inv.id).select('id'),
+        'save the hotel contact',
+      )
+      setEditingContact(false)
+      // Update parent state in-place — no page reload needed
+      onContactUpdated(inv.id, newName, newEmail)
+    } catch (e) {
+      alert(`Contact did not save: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setSavingContact(false)
+    }
   }
 
   useEffect(() => {
@@ -1618,8 +1627,16 @@ export default function TripDetail() {
     setFnbSaving(true)
     const clean: Record<string, number> = {}
     for (const [k, v] of Object.entries(next)) if (Number(v) > 0) clean[k] = Number(v)
-    await supabase.from('trips').update({ fnb_plan: clean }).eq('id', id!)
-    setFnbSaving(false)
+    try {
+      assertSaved(
+        await supabase.from('trips').update({ fnb_plan: clean }).eq('id', id!).select('id'),
+        'save the F&B plan',
+      )
+    } catch (e) {
+      alert(`F&B plan did not save: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setFnbSaving(false)
+    }
   }
 
   useEffect(() => {
@@ -1851,22 +1868,32 @@ export default function TripDetail() {
     const label = two ? ` for Stay ${stay}` : ''
     if (!confirm(`Award "${inv.hotel_name}"${label}? You can undo it at any time.`)) return
     setAwardingId(inv.id)
-    await awardStayLib({ tripId: id!, twoVisit: two, clientId: trip?.client_id ?? null }, inv.id, inv.hotel_name, stay)
-    await refreshTrip()
-    setAwardingId(null)
-    loadInvites()
+    try {
+      await awardStayLib({ tripId: id!, twoVisit: two, clientId: trip?.client_id ?? null }, inv.id, inv.hotel_name, stay)
+      await refreshTrip()
+      loadInvites()
+    } catch (e) {
+      alert(`Award did not save: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setAwardingId(null)
+    }
   }
   const undoAwardFromTable = async (inv: Invitation, stay: 1 | 2) => {
     const two = !!trip?.stay2_arrival_date
     setAwardingId(inv.id)
-    await undoAwardStayLib(
-      { tripId: id!, twoVisit: two, clientId: trip?.client_id ?? null },
-      { id: inv.id, awarded_stay1: inv.awarded_stay1, awarded_stay2: inv.awarded_stay2 },
-      stay,
-    )
-    await refreshTrip()
-    setAwardingId(null)
-    loadInvites()
+    try {
+      await undoAwardStayLib(
+        { tripId: id!, twoVisit: two, clientId: trip?.client_id ?? null },
+        { id: inv.id, awarded_stay1: inv.awarded_stay1, awarded_stay2: inv.awarded_stay2 },
+        stay,
+      )
+      await refreshTrip()
+      loadInvites()
+    } catch (e) {
+      alert(`Undo did not save: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setAwardingId(null)
+    }
   }
 
   // Reopen a submitted hotel's proposal so they can revise it (e.g. dates changed).
