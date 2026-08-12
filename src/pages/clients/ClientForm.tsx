@@ -25,6 +25,7 @@ const blank = {
   primary_contact_phone: '',
   primary_contact_email: '',
   assigned_to: '' as string, // profile id or ''
+  fnb_headcount: '' as string, // meal headcount for F&B forecast (blank = none)
 }
 
 type StaffProfile = { id: string; full_name: string | null; email: string | null }
@@ -110,6 +111,7 @@ export default function ClientForm() {
             primary_contact_phone: c.primary_contact_phone ?? '',
             primary_contact_email: c.primary_contact_email ?? '',
             assigned_to: c.assigned_to ?? '',
+            fnb_headcount: (c as any).fnb_headcount != null ? String((c as any).fnb_headcount) : '',
           })
           setLogoUrl(c.logo_url ?? null)
           setSampleMenus(Array.isArray((c as any).sample_menus) ? (c as any).sample_menus : [])
@@ -213,6 +215,7 @@ export default function ClientForm() {
       logo_url: logoUrl ?? null,
       sample_menus: sampleMenus,
       assigned_to: fields.assigned_to || null,
+      fnb_headcount: fields.fnb_headcount.trim() === '' ? null : Math.max(0, Math.round(Number(fields.fnb_headcount))) || null,
       always_cc_enabled: alwaysCc.enabled,
       always_cc_name: clean(alwaysCc.name) ?? null,
       always_cc_email: clean(alwaysCc.email) ?? null,
@@ -534,6 +537,23 @@ export default function ClientForm() {
           <p className="mb-4 text-xs text-slate-400 dark:text-slate-500">
             Upload your example menus / F&amp;B pricing sheets for this team. Hotels see them on the RFP form and in the invitation email, so they know the format you expect. Leave empty for teams that don't need F&amp;B.
           </p>
+
+          <div className="mb-5 max-w-xs">
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
+              F&amp;B meal headcount
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={fields.fnb_headcount}
+              onChange={set('fnb_headcount')}
+              placeholder="e.g. 35"
+              className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#1C1008]/30"
+            />
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+              How many people eat team meals. Used to forecast F&amp;B cost on every trip's grid (headcount &times; meal price). Leave blank for teams without F&amp;B.
+            </p>
+          </div>
 
           {sampleMenus.length > 0 && (
             <ul className="mb-3 space-y-2">

@@ -1640,7 +1640,7 @@ export default function TripDetail() {
   }
 
   useEffect(() => {
-    supabase.from('trips').select('*, clients(id, team_name, league, progress_steps)').eq('id', id!).single()
+    supabase.from('trips').select('*, clients(id, team_name, league, progress_steps, fnb_headcount)').eq('id', id!).single()
       .then(({ data, error }) => {
         if (error) setError(error.message)
         else {
@@ -2448,8 +2448,14 @@ export default function TripDetail() {
 
       {/* ── F&B forecast plan — only for teams whose RFP collects per-person meal prices ── */}
       {!isViewer && concessionItems.some((c) => c.answer_type === 'currency' && /breakfast|lunch|brunch|dinner|\bmeal\b|menu|per person/i.test(c.label)) && (() => {
-        const currencyItems = concessionItems.filter((c) => c.answer_type === 'currency')
+        const currencyItems = concessionItems.filter((c) => c.answer_type === 'currency' && /breakfast|lunch|brunch|dinner|\bmeal\b/i.test(c.label))
         const activeCount = currencyItems.filter((c) => Number(fnbPlan[c.id]) > 0).length
+        const fnbHeadcount = (trip as any)?.clients?.fnb_headcount as number | null | undefined
+        const nightsBetween = (a?: string | null, b?: string | null) =>
+          a && b ? Math.max(0, Math.round((+new Date(b) - +new Date(a)) / 86400000)) : 0
+        const fnbNights = nightsBetween((trip as any)?.arrival_date, (trip as any)?.departure_date)
+        const fnbGameDates = Math.max(1, ((trip as any)?.game_dates?.length) || ((trip as any)?.game_date ? 1 : 1))
+        const suggestFor = (label: string) => (/\bgame\b/i.test(label) ? fnbGameDates : (fnbNights || 1))
         return (
           <div className="mx-6 mt-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
             <button
@@ -2459,9 +2465,11 @@ export default function TripDetail() {
               <div>
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">F&amp;B forecast plan</p>
                 <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                  {activeCount > 0
-                    ? `${activeCount} meal${activeCount !== 1 ? 's' : ''} set — the grid auto-computes each hotel's Forecasted F&B`
-                    : 'Set person-meals per meal to auto-compute F&B totals on the grid'}
+                  {fnbHeadcount
+                    ? (activeCount > 0
+                        ? `Headcount ${fnbHeadcount} (from client) × ${activeCount} meal${activeCount !== 1 ? 's' : ''} × each hotel's price → Forecasted F&B on the grid`
+                        : `Headcount ${fnbHeadcount} (from client). Set how many of each meal to compute F&B on the grid`)
+                    : 'Set an F&B headcount on the client page first, then how many of each meal here'}
                 </p>
               </div>
               <span className="text-xs text-slate-400">{fnbSaving ? 'Saving…' : fnbOpen ? '▲' : '▼'}</span>
@@ -2469,8 +2477,7 @@ export default function TripDetail() {
             {fnbOpen && (
               <div className="border-t border-slate-100 dark:border-slate-700 px-5 py-4">
                 <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-                  For each meal, enter <strong>person-meals</strong> = headcount × how many of that meal over the stay.
-                  Leave non-meal items (e.g. baggage) blank. The grid multiplies each hotel's entered price by this number.
+                  Enter <strong>how many of each meal</strong> the team eats over the stay (a suggested count from the trip dates is shown in each box). Headcount ({fnbHeadcount ?? 'not set — add on the client page'}) is applied automatically, so the grid shows headcount × count × each hotel's price.
                 </p>
                 <div className="space-y-2">
                   {currencyItems.map((c) => (
@@ -2485,7 +2492,7 @@ export default function TripDetail() {
                           setFnbPlan((p) => ({ ...p, [c.id]: v }))
                         }}
                         onBlur={() => saveFnbPlan(fnbPlan)}
-                        placeholder="—"
+                        placeholder={String(suggestFor(c.label))}
                         className="w-28 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-right text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#1C1008]/30"
                       />
                     </div>

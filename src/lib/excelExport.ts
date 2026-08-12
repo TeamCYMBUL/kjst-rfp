@@ -599,6 +599,7 @@ export async function exportMultiCityConsolidatedXlsx(
     season?: string | null
     filename?: string
     gridColumns?: GridColumnSpec[]
+    fnbHeadcount?: number | null
   } = {},
 ): Promise<void> {
   const mod: any = await import('exceljs')
@@ -629,6 +630,7 @@ export async function exportMultiCityConsolidatedXlsx(
   // Per-team custom grid columns (explicitly bound; appended last so base indices
   // are untouched). Order = the client's grid_columns config.
   const gridCols = opts.gridColumns ?? []
+  const fnbHeadcount = Number(opts.fnbHeadcount) || 0 // client-level F&B headcount
   // The legacy auto F&B pair applies ONLY to teams without explicit grid columns;
   // configured teams express any F&B forecast explicitly via grid_columns.
   const fnbActive = gridCols.length === 0 && cities.some(
@@ -794,6 +796,7 @@ export async function exportMultiCityConsolidatedXlsx(
     nights: number,
     trip: ConsolidatedCity['trip'],
     items: ConcessionItem[],
+    headcount: number,
   ): string | number | null => {
     if (gc.type === 'item') {
       const a = h.answers[gc.item_id]
@@ -822,16 +825,18 @@ export async function exportMultiCityConsolidatedXlsx(
       kingsReq: trip.king_rooms_requested ?? null, suitesReq: trip.suites_requested ?? null,
       comp: compSuites, upgrades: suiteUpgrades,
     })
-    // Forecasted F&B = Σ (hotel's per-person price × the trip's person-meal counts)
+    // Forecasted F&B = headcount × Σ (hotel's per-person price × meal count over
+    // the stay). Meal counts come from the trip's fnb_plan; headcount is the
+    // client-level default. Needs both a headcount and at least one meal set.
     let fnbTotal: number | null = null
     const plan = trip.fnb_plan ?? {}
-    const planEntries = Object.entries(plan).filter(([, pm]) => Number(pm) > 0)
-    if (planEntries.length > 0) {
+    const planEntries = Object.entries(plan).filter(([, c]) => Number(c) > 0)
+    if (headcount > 0 && planEntries.length > 0) {
       let sum = 0, any = false
-      for (const [itemId, pm] of planEntries) {
+      for (const [itemId, count] of planEntries) {
         const raw = h.answers[itemId]?.answer_value
         const price = raw ? parseFloat(String(raw).replace(/[^0-9.]/g, '')) : NaN
-        if (Number.isFinite(price)) { sum += price * Number(pm); any = true }
+        if (Number.isFinite(price)) { sum += price * Number(count) * headcount; any = true }
       }
       fnbTotal = any ? sum : null
     }
@@ -840,11 +845,14 @@ export async function exportMultiCityConsolidatedXlsx(
         return taxesFeesAmt != null ? Math.round(taxesFeesAmt) : null
       case 'total_per_night':
         return perNight != null ? Math.round(perNight) : null
-      case 'est_total_cost':
       case 'forecasted_room_total':
         // Tiered block estimate (see roomBlockTotal): comped suites free,
         // upgrades + kings at King rate, overflow suites at the Suite rate.
         return roomTotal
+      case 'est_total_cost':
+        // Rooms (tiered) + F&B forecast. F&B is 0 when the team has no meal
+        // plan or client headcount, so this stays rooms-only for most teams.
+        return roomTotal != null || fnbTotal != null ? Math.round((roomTotal ?? 0) + (fnbTotal ?? 0)) : null
       case 'forecasted_fnb':
         return fnbTotal != null ? Math.round(fnbTotal) : null
       case 'total_est_rooms_fnb':
@@ -1010,7 +1018,7 @@ export async function exportMultiCityConsolidatedXlsx(
         // Per-team custom grid columns — populated only for genuine bids (blank
         // on sold-out / non-responding rows, matching the rate columns).
         for (const gc of gridCols) {
-          vals.push(bid ? gridColValue(gc, h, visit.index, kingRate, nights, trip, items) : null)
+          vals.push(bid ? gridColValue(gc, h, visit.index, kingRate, nights, trip, items, fnbHeadcount) : null)
         }
         first = false
 

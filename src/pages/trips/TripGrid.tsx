@@ -337,7 +337,7 @@ export default function TripGrid() {
 
     const { data: tripData, error: tripErr } = await supabase
       .from('trips')
-      .select('*, clients(id, team_name, organization_id)')
+      .select('*, clients(id, team_name, organization_id, fnb_headcount)')
       .eq('id', id)
       .single()
 
@@ -923,15 +923,16 @@ export default function TripGrid() {
               {/* ── Food & Beverage forecast (auto-computed from the trip's F&B plan) ── */}
               {(() => {
                 const plan = ((trip as any)?.fnb_plan ?? {}) as Record<string, number>
-                const entries = Object.entries(plan).filter(([, pm]) => Number(pm) > 0)
-                if (entries.length === 0) return null
-                const totalPersonMeals = entries.reduce((n, [, pm]) => n + Number(pm), 0)
+                const entries = Object.entries(plan).filter(([, c]) => Number(c) > 0)
+                const headcount = Number((trip as any)?.clients?.fnb_headcount) || 0
+                if (entries.length === 0 || headcount <= 0) return null
+                const totalMeals = entries.reduce((n, [, c]) => n + Number(c), 0)
                 const parsePrice = (v: unknown) => (v == null || v === '') ? NaN : parseFloat(String(v).replace(/[^0-9.]/g, ''))
                 const fnbFor = (invId: string): number | null => {
                   let total = 0, any = false
-                  for (const [itemId, pm] of entries) {
+                  for (const [itemId, c] of entries) {
                     const price = parsePrice(answerMaps[invId]?.[itemId]?.answer_value)
-                    if (Number.isFinite(price)) { total += price * Number(pm); any = true }
+                    if (Number.isFinite(price)) { total += price * Number(c) * headcount; any = true }
                   }
                   return any ? total : null
                 }
@@ -955,7 +956,7 @@ export default function TripGrid() {
                     <tr className="border-b border-slate-100">
                       <td className="sticky left-0 w-64 bg-white px-4 py-2 align-top text-xs font-medium text-slate-500">
                         Forecasted F&amp;B Total
-                        <span className="text-slate-400"> ({totalPersonMeals} person-meals)</span>
+                        <span className="text-slate-400"> ({headcount} ppl × {totalMeals} meal{totalMeals !== 1 ? 's' : ''})</span>
                       </td>
                       {invitations.map((inv) => cell(money(fnbFor(inv.id)), inv, true))}
                     </tr>
