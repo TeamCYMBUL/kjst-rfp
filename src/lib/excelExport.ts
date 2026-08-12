@@ -713,6 +713,43 @@ export async function exportMultiCityConsolidatedXlsx(
     const m = String(s ?? '').match(/[\d,]+(\.\d+)?/)
     return m ? parseFloat(m[0].replace(/,/g, '')) : null
   }
+  // Estimated room-block cost for a stay, incl. taxes/fees, tiered by room type:
+  //   • comped suites            → free (removed)
+  //   • suite upgrades + kings   → King rate
+  //   • any remaining suites     → Additional Suite rate
+  // Falls back to the simple all-at-King estimate when the trip's room counts
+  // don't reconcile (kings + suites ≠ total) or a needed suite rate is missing,
+  // so a bad room-count entry never produces a confidently-wrong total.
+  const roomBlockTotal = (p: {
+    kingRate: number | null; suiteRate: number | null; tax: number | null; fee: number | null
+    nights: number; totalRooms: number | null; kingsReq: number | null; suitesReq: number | null
+    comp: number; upgrades: number
+  }): number | null => {
+    if (p.kingRate == null) return null
+    const withTax = (rate: number) => rate * (1 + (p.tax ?? 0) / 100) + (p.fee ?? 0)
+    const kingNight = withTax(p.kingRate)
+    const suiteNight = p.suiteRate != null ? withTax(p.suiteRate) : null
+    const comp = Number.isFinite(p.comp) ? Math.max(0, p.comp) : 0
+    const reconciles =
+      p.kingsReq != null && p.suitesReq != null && p.totalRooms != null &&
+      p.kingsReq + p.suitesReq === p.totalRooms
+    if (reconciles) {
+      const availSuites = Math.max(0, p.suitesReq! - comp) // suites left after comps
+      const upg = Math.min(Math.max(0, p.upgrades), availSuites) // upgrades ⊆ paid suites
+      const overflow = availSuites - upg // suites billed at the suite rate
+      if (overflow > 0 && suiteNight == null) {
+        // No suite rate to price overflow suites → safe fallback (all at King).
+        const paid = Math.max(0, p.totalRooms! - comp)
+        return Math.round(kingNight * paid * p.nights)
+      }
+      const kingUnits = p.kingsReq! + upg // kings + suite-upgrades, both at King rate
+      return Math.round((kingUnits * kingNight + overflow * (suiteNight ?? 0)) * p.nights)
+    }
+    // Fallback: counts don't reconcile → all paid rooms at the King rate.
+    if (p.totalRooms == null) return null
+    const paid = Math.max(0, p.totalRooms - comp)
+    return Math.round(kingNight * paid * p.nights)
+  }
   // Currency custom columns get $ formatting; all custom columns are centered.
   const gridCurrencyCols = new Set<number>() // 1-based excel column index
   gridCols.forEach((gc, i) => {
@@ -755,9 +792,16 @@ export async function exportMultiCityConsolidatedXlsx(
     const compItem = items.find((i) => norm(i.label).includes('complimentaryonebedroomsuite'))
     const compAns = compItem ? h.answers[compItem.id] : undefined
     const compSuites = compAns?.answer_value ? Number(compAns.answer_value) : compAns?.answer_yes_no === true ? 1 : 0
+    const upgItem = items.find((i) => norm(i.label).includes('suiteupgrade'))
+    const upgAns = upgItem ? h.answers[upgItem.id] : undefined
+    const suiteUpgrades = upgAns?.answer_value ? Number(upgAns.answer_value) : 0
     const totalRooms = trip.total_rooms_requested ?? null
-    const paidRooms = totalRooms != null ? Math.max(0, totalRooms - (Number.isFinite(compSuites) ? compSuites : 0)) : null
-    const roomTotal = perNight != null && paidRooms != null ? perNight * paidRooms * nights : null
+    // Tiered block cost: comped suites free, upgrades+kings at King, overflow at Suite rate.
+    const roomTotal = roomBlockTotal({
+      kingRate, suiteRate: suite, tax, fee, nights, totalRooms,
+      kingsReq: trip.king_rooms_requested ?? null, suitesReq: trip.suites_requested ?? null,
+      comp: compSuites, upgrades: suiteUpgrades,
+    })
     // Forecasted F&B = Σ (hotel's per-person price × the trip's person-meal counts)
     let fnbTotal: number | null = null
     const plan = trip.fnb_plan ?? {}
@@ -777,11 +821,10 @@ export async function exportMultiCityConsolidatedXlsx(
       case 'total_per_night':
         return perNight != null ? Math.round(perNight) : null
       case 'est_total_cost':
-        // Block estimate, excluding comped suites (they carry no room cost):
-        // (rate + taxes/fees) × (rooms − comp suites) × nights.
-        return perNight != null && paidRooms != null ? Math.round(perNight * paidRooms * nights) : null
       case 'forecasted_room_total':
-        return roomTotal != null ? Math.round(roomTotal) : null
+        // Tiered block estimate (see roomBlockTotal): comped suites free,
+        // upgrades + kings at King rate, overflow suites at the Suite rate.
+        return roomTotal
       case 'forecasted_fnb':
         return fnbTotal != null ? Math.round(fnbTotal) : null
       case 'total_est_rooms_fnb':
@@ -922,13 +965,17 @@ export async function exportMultiCityConsolidatedXlsx(
             }
             fnb = any ? sum : null
           }
-          // Exclude comped suites — they carry no room cost (consistent with the
-          // Est. Total Cost / Forecasted Room Total columns).
-          const paidRooms = trip.total_rooms_requested != null
-            ? Math.max(0, trip.total_rooms_requested - (Number.isFinite(compSuites) ? compSuites : 0))
+          // Tiered room cost (same engine as the Est. Total Cost column): comped
+          // suites free, upgrades + kings at King, overflow suites at Suite rate.
+          const suiteUg2 = suiteUg != null && Number.isFinite(suiteUg) ? suiteUg : 0
+          const roomCost = (bid && visit.index === 1)
+            ? roomBlockTotal({
+                kingRate, suiteRate: h.best_suite_rate, tax: firstNum(h.occupancy_tax), fee: firstNum(h.resort_fee),
+                nights, totalRooms: trip.total_rooms_requested ?? null,
+                kingsReq: trip.king_rooms_requested ?? null, suitesReq: trip.suites_requested ?? null,
+                comp: compSuites, upgrades: suiteUg2,
+              })
             : null
-          const roomCost = (bid && visit.index === 1 && kingRate != null && paidRooms != null)
-            ? kingRate * paidRooms * nights : null
           const roomsPlusFnb = (fnb != null || roomCost != null) ? (fnb ?? 0) + (roomCost ?? 0) : null
           vals.push(fnb, roomsPlusFnb)
         }
