@@ -9,7 +9,12 @@ export const TIMELINE_ADMIN_EMAIL = 'info@cymbul.co'
 // logged explicitly. Everything else (trip_created, invite_sent, bid_received,
 // bid_declined, build_saved) is derived from base-table timestamps by the
 // get_lifecycle_timeline() RPC and needs no logging.
-export type LoggedEventType = 'schedule_imported' | 'reminder_sent' | 'awarded' | 'proposal_sent'
+export type LoggedEventType =
+  | 'schedule_imported' | 'reminder_sent' | 'awarded' | 'proposal_sent'
+  // Deletion audit trail. FK columns (trip_id/client_id) are intentionally left
+  // null on these — the FKs are NO ACTION, so referencing a row we're about to
+  // delete would block the delete. The deleted entity's id + name live in detail.
+  | 'trip_deleted' | 'invitation_deleted' | 'client_deleted'
 
 type LogArgs = {
   event_type: LoggedEventType

@@ -243,6 +243,20 @@ export default function TimelinePage() {
       })
   }, [allowed, clientId])
 
+  // Deletion audit trail (owner-only). Read straight from activity_events since
+  // the lifecycle RPC only surfaces non-deletion events.
+  const [deletions, setDeletions] = useState<{ at: string; event_type: string; detail: Record<string, unknown> | null; actor: { full_name: string | null } | null }[]>([])
+  useEffect(() => {
+    if (!allowed) return
+    supabase
+      .from('activity_events')
+      .select('at, event_type, detail, actor:profiles(full_name)')
+      .in('event_type', ['trip_deleted', 'invitation_deleted', 'client_deleted'])
+      .order('at', { ascending: false })
+      .limit(50)
+      .then(({ data }) => setDeletions((data ?? []) as unknown as typeof deletions))
+  }, [allowed])
+
   const cycles = useMemo(() => buildCycles(events), [events])
 
   const metrics = useMemo(() => {
@@ -328,6 +342,34 @@ export default function TimelinePage() {
             ))}
           </select>
         </div>
+      </div>
+
+      {/* Deletion audit trail — who removed a trip, invitation, or client */}
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4">
+        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Recent deletions</h2>
+        <p className="mb-3 mt-0.5 text-xs text-slate-400 dark:text-slate-500">Who removed a trip, hotel invitation, or client — most recent first.</p>
+        {deletions.length === 0 ? (
+          <p className="text-sm text-slate-400 dark:text-slate-500">No deletions recorded.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100 dark:divide-slate-700">
+            {deletions.map((d, i) => {
+              const det = (d.detail ?? {}) as Record<string, any>
+              const label = d.event_type === 'trip_deleted' ? 'Trip deleted' : d.event_type === 'invitation_deleted' ? 'Hotel invitation deleted' : 'Client deleted'
+              const name = det.hotel_name || det.opponent_label || det.team_name || 'item'
+              const team = det.team_name && det.team_name !== name ? ` · ${det.team_name}` : ''
+              return (
+                <li key={i} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2 text-sm">
+                  <span className="text-slate-700 dark:text-slate-200">
+                    <span className="font-semibold text-red-600 dark:text-red-400">{label}:</span> {String(name)}{team}
+                  </span>
+                  <span className="text-xs text-slate-400 dark:text-slate-500">
+                    {d.actor?.full_name || 'Unknown'} · {new Date(d.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        )}
       </div>
 
       {error && <ErrorNote message={error} />}

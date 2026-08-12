@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { assertSaved } from '../../lib/saveGuard'
+import { logActivity } from '../../lib/activity'
 import type { Client, Trip } from '../../lib/types'
 import { formatDate } from '../../lib/format'
 import { exportAllCitiesForClient } from '../../lib/exportAllCities'
@@ -245,6 +246,7 @@ export default function ClientDetail() {
   const remove = async () => {
     if (!confirm('Delete this client? This cannot be undone.')) return
     setDeleting(true)
+    await logActivity({ event_type: 'client_deleted', detail: { client_id: id, team_name: client?.team_name ?? null } })
     const { error } = await supabase.from('clients').delete().eq('id', id)
     if (error) {
       setError(error.message)

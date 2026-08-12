@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { logActivity } from '../../lib/activity'
 import { formatDate } from '../../lib/format'
 import { Badge, Card, EmptyState, ErrorNote, LinkButton, Loading, PageHeader } from '../../components/ui'
 import { useRole } from '../../lib/useRole'
@@ -41,6 +42,8 @@ export default function TripsList() {
 
   const handleDelete = async (id: string) => {
     setDeletingId(id)
+    const row = rows?.find((r) => r.id === id)
+    await logActivity({ event_type: 'trip_deleted', detail: { trip_id: id, opponent_label: row?.opponent_label ?? null, city: row?.city ?? null, team_name: row?.clients?.team_name ?? null } })
     const { error } = await supabase.from('trips').delete().eq('id', id)
     if (error) {
       setError(error.message)

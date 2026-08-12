@@ -1989,6 +1989,7 @@ export default function TripDetail() {
   const removeInvite = async (inv: Invitation, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!confirm(`Remove "${inv.hotel_name}" from this RFP?\n\nThis deletes their invitation and any submitted bid. This cannot be undone.`)) return
+    await logActivity({ event_type: 'invitation_deleted', detail: { invitation_id: inv.id, hotel_name: inv.hotel_name, trip_id: id, opponent_label: trip?.opponent_label ?? null, city: trip?.city ?? null, team_name: trip?.clients?.team_name ?? null } })
     await supabase.from('rfp_invitations').delete().eq('id', inv.id)
     if (selectedId === inv.id) setSelectedId(null)
     loadInvites()
@@ -1997,6 +1998,7 @@ export default function TripDetail() {
   // Remove a hotel from this RFP entirely (table row — no MouseEvent needed, stopPropagation handled by td)
   const removeInviteFromTable = async (inv: Invitation) => {
     if (!confirm(`Remove "${inv.hotel_name}" from this RFP?\n\nThis deletes their invitation and any submitted bid. This cannot be undone.`)) return
+    await logActivity({ event_type: 'invitation_deleted', detail: { invitation_id: inv.id, hotel_name: inv.hotel_name, trip_id: id, opponent_label: trip?.opponent_label ?? null, city: trip?.city ?? null, team_name: trip?.clients?.team_name ?? null } })
     await supabase.from('rfp_invitations').delete().eq('id', inv.id)
     if (selectedId === inv.id) setSelectedId(null)
     loadInvites()
@@ -2049,6 +2051,7 @@ export default function TripDetail() {
   const removeTrip = async () => {
     if (!confirm('Delete this trip and all its invitations? This cannot be undone.')) return
     setDeleting(true)
+    await logActivity({ event_type: 'trip_deleted', detail: { trip_id: id, opponent_label: trip?.opponent_label ?? null, city: trip?.city ?? null, team_name: trip?.clients?.team_name ?? null } })
     const { error } = await supabase.from('trips').delete().eq('id', id!)
     if (error) { setError(error.message); setDeleting(false) }
     else navigate('/')
