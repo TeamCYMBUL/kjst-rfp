@@ -321,6 +321,10 @@ export default function Dashboard() {
   const [hasClients, setHasClients] = useState(false)
   const [showClosed, setShowClosed] = useState(false)
   const [clientFilter, setClientFilter] = useState<string | null>(null)
+  // Dashboard scope: managers default to just the teams they're assigned to,
+  // with a My teams / All teams toggle. assignedIds === null → owner (sees all).
+  const [assignedIds, setAssignedIds] = useState<string[] | null>(null)
+  const [scope, setScope] = useState<'all' | 'mine'>('all')
   // "Log an award" launcher — pick a trip to jump into and log an off-platform award.
   const [awardOpen, setAwardOpen] = useState(false)
   const [awardClient, setAwardClient] = useState('')
@@ -352,6 +356,9 @@ export default function Dashboard() {
         const { data: asg } = await supabase.from('client_assignments').select('client_id').eq('staff_user_id', user.id)
         teamClientIds = [...new Set((asg ?? []).map((a: any) => a.client_id).filter(Boolean))]
       }
+      // Scope the whole dashboard to these teams (managers). Owner → null = all.
+      setAssignedIds(teamClientIds)
+      if (teamClientIds && teamClientIds.length) setScope('mine')
       let teamQ = supabase.from('clients').select('id, team_name, progress_steps')
       if (teamClientIds) teamQ = teamQ.in('id', teamClientIds.length ? teamClientIds : ['00000000-0000-0000-0000-000000000000'])
       const { data: teamClients } = await teamQ.order('team_name')
@@ -382,8 +389,14 @@ export default function Dashboard() {
   if (loading) return <Loading />
   if (error) return <ErrorNote message={error} />
 
+  // Scope the whole dashboard (list + stat cards) to the user's assigned teams
+  // when "My teams" is on. Owner / users with no assignments see everything.
+  const scopedTrips = scope === 'mine' && assignedIds && assignedIds.length
+    ? trips.filter((t) => t.clients && assignedIds.includes(t.clients.id))
+    : trips
+
   // Stats always exclude closed trips (regardless of showClosed toggle)
-  const openTrips = trips.filter((t) => t.status !== 'closed')
+  const openTrips = scopedTrips.filter((t) => t.status !== 'closed')
   const activeTrips = openTrips.filter((t) => t.status !== 'draft')
   const totalInvited = activeTrips.reduce((n, t) => n + t.rfp_invitations.length, 0)
   const totalSubmitted = activeTrips.reduce(
@@ -396,15 +409,15 @@ export default function Dashboard() {
     (n, t) => n + t.rfp_invitations.filter((i) => ['sent', 'opened'].includes(i.status)).length,
     0,
   )
-  const closedCount = trips.filter((t) => t.status === 'closed').length
+  const closedCount = scopedTrips.filter((t) => t.status === 'closed').length
 
   // What the list actually shows. "Show closed" flips to ONLY closed trips, so
   // open and closed are never mixed together.
-  const closedTrips = trips.filter((t) => t.status === 'closed')
+  const closedTrips = scopedTrips.filter((t) => t.status === 'closed')
   const displayedTrips = showClosed ? closedTrips : openTrips
 
-  // Distinct clients present in the fetched trips — no separate query needed
-  const clientOptions = [...new Map(trips.filter((t) => t.clients).map((t) => [t.clients!.id, t.clients!.team_name])).entries()]
+  // Distinct clients present in the (scoped) trips — no separate query needed
+  const clientOptions = [...new Map(scopedTrips.filter((t) => t.clients).map((t) => [t.clients!.id, t.clients!.team_name])).entries()]
     .sort((a, b) => a[1].localeCompare(b[1]))
   const clientFilteredTrips = clientFilter
     ? displayedTrips.filter((t) => t.clients?.id === clientFilter)
@@ -559,6 +572,20 @@ export default function Dashboard() {
             >
               🏆 Log an award
             </button>
+            {assignedIds && assignedIds.length > 0 && (
+              <div className="flex rounded-lg border border-slate-200 dark:border-slate-600 p-0.5 text-sm font-medium">
+                {(['mine', 'all'] as const).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setScope(s)}
+                    className={`rounded-md px-3 py-1.5 transition-colors ${scope === s ? 'bg-[#1C1008] text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+                  >
+                    {s === 'mine' ? 'My teams' : 'All teams'}
+                  </button>
+                ))}
+              </div>
+            )}
             {clientOptions.length > 0 && (
               <select
                 value={clientFilter ?? ''}
