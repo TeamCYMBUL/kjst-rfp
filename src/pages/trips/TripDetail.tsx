@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activity'
 import { awardStay as awardStayLib, undoAwardStay as undoAwardStayLib } from '../../lib/award'
 import { assertSaved } from '../../lib/saveGuard'
-import { makeHotelMatcher } from '../../lib/hotelSearch'
+import { makeHotelMatcher, normalizeSearch } from '../../lib/hotelSearch'
 import { StageTimeline } from '../../components/StageTimeline'
 import {
   TEAM_STAGES, TRIP_STAGES, resolveDone, teamAutoDone, tripAutoDone, currentStage,
@@ -383,9 +383,17 @@ function InviteForm({
     if (q.trim().length < 2) { setAllFetched([]); setSuggestions([]); setShowSuggestions(false); return }
     const { hotels: dbAll, history: histAll } = await loadCandidates()
     const match = makeHotelMatcher(q)
+    // Rank by relevance: name starts with the query, then name contains it,
+    // then everything else (matched on chain/city/contact). Alpha within a tier.
+    const nq = normalizeSearch(q)
+    const score = (name: string) => {
+      const n = normalizeSearch(name)
+      return n.startsWith(nq) ? 0 : n.includes(nq) ? 1 : 2
+    }
+    // NOTE: do NOT cap before the league filter, or a common chain (e.g. "four
+    // seasons") can fill the cap with other leagues and hide the ones you want.
     const dbSuggestions: HotelSuggestion[] = dbAll
       .filter((h: any) => match([h.name, h.chain, h.city, h.contact_name, h.contact_email]))
-      .slice(0, 40)
       .map((h: any) => ({
         hotel_name: h.name as string,
         hotel_contact_name: h.contact_name as string | null,
@@ -393,6 +401,7 @@ function InviteForm({
         league: (h.league as string | null) ?? null,
         fromDatabase: true as const,
       }))
+      .sort((a, b) => score(a.hotel_name) - score(b.hotel_name) || a.hotel_name.localeCompare(b.hotel_name))
     const seen = new Set<string>(dbSuggestions.map((s) => s.hotel_name.toLowerCase()))
     const histUnique: HotelSuggestion[] = histAll
       .filter((r: any) => match([r.hotel_name, r.hotel_contact_name, r.hotel_contact_email]))
@@ -402,7 +411,6 @@ function InviteForm({
         seen.add(k)
         return true
       })
-      .slice(0, 20)
       .map((r: any) => ({
         hotel_name: r.hotel_name as string,
         hotel_contact_name: r.hotel_contact_name as string | null,
