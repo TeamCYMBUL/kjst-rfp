@@ -1356,10 +1356,11 @@ export default function RfpForm() {
 
     // Hard block: every concession question must be answered before submitting
     const unansweredYesNo = (data?.items ?? []).filter(
-      (item) => item.answer_type === 'yes_no' && answers[item.id]?.answer_yes_no === null,
+      (item) => !(item as any).optional && item.answer_type === 'yes_no' && answers[item.id]?.answer_yes_no === null,
     )
     const unansweredValue = (data?.items ?? []).filter(
       (item) =>
+        !(item as any).optional &&
         item.answer_type !== 'yes_no' &&
         !item.label.includes('(if applicable)') &&
         !answers[item.id]?.answer_value?.trim(),

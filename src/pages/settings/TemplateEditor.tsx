@@ -198,19 +198,28 @@ function HeaderTab({ orgId, isViewer }: { orgId: string | null; isViewer: boolea
     if (!orgId) return
     setSaving(true)
     setError(null)
-    const { error } = await supabase.from('organizations').update({
-      name: org.name.trim() || null,
-      iata_number: org.iata_number.trim() || null,
-      season_label: org.season_label.trim() || null,
-      contact_name: org.contact_name.trim() || null,
-      contact_title: org.contact_title.trim() || null,
-      contact_address: org.contact_address.trim() || null,
-      contact_phone: org.contact_phone.trim() || null,
-      contact_email: org.contact_email.trim() || null,
-    }).eq('id', orgId)
-    setSaving(false)
-    if (error) setError(error.message)
-    else { setSaved(true); setTimeout(() => setSaved(false), 3000) }
+    try {
+      // .select() + assertSaved so an RLS-blocked (0-row) update surfaces as an
+      // error instead of silently reverting on the next reload.
+      assertSaved(
+        await supabase.from('organizations').update({
+          name: org.name.trim() || null,
+          iata_number: org.iata_number.trim() || null,
+          season_label: org.season_label.trim() || null,
+          contact_name: org.contact_name.trim() || null,
+          contact_title: org.contact_title.trim() || null,
+          contact_address: org.contact_address.trim() || null,
+          contact_phone: org.contact_phone.trim() || null,
+          contact_email: org.contact_email.trim() || null,
+        }).eq('id', orgId).select('id'),
+        'save the header & contact info',
+      )
+      setSaved(true); setTimeout(() => setSaved(false), 3000)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (loading) return <div className="px-6 py-10 text-center text-sm text-slate-400">Loading…</div>

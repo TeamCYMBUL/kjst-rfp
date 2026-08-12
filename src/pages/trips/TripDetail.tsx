@@ -2446,8 +2446,9 @@ export default function TripDetail() {
         )
       })()}
 
-      {/* ── F&B forecast plan — only for teams whose RFP collects per-person meal prices ── */}
-      {!isViewer && concessionItems.some((c) => c.answer_type === 'currency' && /breakfast|lunch|brunch|dinner|\bmeal\b|menu|per person/i.test(c.label)) && (() => {
+      {/* ── F&B forecast plan — retired: F&B now = client headcount × per-person
+           meal price (per-serving), computed on the grid; no per-trip meal counts. ── */}
+      {false && !isViewer && concessionItems.some((c) => c.answer_type === 'currency' && /breakfast|lunch|brunch|dinner|\bmeal\b|menu|per person/i.test(c.label)) && (() => {
         const currencyItems = concessionItems.filter((c) => c.answer_type === 'currency' && /breakfast|lunch|brunch|dinner|\bmeal\b/i.test(c.label))
         const activeCount = currencyItems.filter((c) => Number(fnbPlan[c.id]) > 0).length
         const fnbHeadcount = (trip as any)?.clients?.fnb_headcount as number | null | undefined

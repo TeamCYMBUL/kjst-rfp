@@ -562,7 +562,7 @@ export type GridSystemKey =
   | 'total_est_rooms_fnb'
 export type GridColumnSpec =
   | { type: 'system'; key: GridSystemKey; label: string; width?: number }
-  | { type: 'item'; item_id: string; label: string; format?: 'yesno' | 'value' | 'currency'; width?: number }
+  | { type: 'item'; item_id: string; label: string; format?: 'yesno' | 'value' | 'currency' | 'party'; width?: number }
 
 // Fetch a client logo and return an ExcelJS-embeddable buffer + extension.
 // Returns null on any failure (missing/SVG/unsupported/CORS) so the export
@@ -622,8 +622,8 @@ export async function exportMultiCityConsolidatedXlsx(
     { header: 'Comp Suite', width: 9 },
     { header: 'Suite UG', width: 9 },
     { header: 'Postseason Guaranteed', width: 14 },
-    { header: 'Notes', width: 55 },
   ]
+  // Notes is appended LAST (after the per-team custom columns) below.
   // F&B forecast columns appear only for teams whose trips carry an F&B plan
   // (per-person meal prices × person-meals). Appended after Notes so existing
   // column indices are untouched.
@@ -642,6 +642,8 @@ export async function exportMultiCityConsolidatedXlsx(
   }
   const GRID_COL_START = COLS.length // 0-based index of first custom col
   for (const gc of gridCols) COLS.push({ header: gc.label, width: gc.width ?? 12 })
+  const NOTES_IDX = COLS.length // Notes is always the final column
+  COLS.push({ header: 'Notes', width: 55 })
   const NCOL = COLS.length
 
   const wb = new ExcelJS.Workbook()
@@ -779,7 +781,7 @@ export async function exportMultiCityConsolidatedXlsx(
     CENTER_COLS.add(GRID_COL_START + i)
     const isCur =
       gc.type === 'item'
-        ? gc.format === 'currency'
+        ? gc.format === 'currency' || gc.format === 'party'
         : ['taxes_fees', 'total_per_night', 'est_total_cost', 'avg_rate', 'suite_rate',
            'forecasted_room_total', 'forecasted_fnb', 'total_est_rooms_fnb'].includes(gc.key)
     if (isCur) gridCurrencyCols.add(GRID_COL_START + i + 1)
@@ -802,6 +804,12 @@ export async function exportMultiCityConsolidatedXlsx(
       const a = h.answers[gc.item_id]
       if (!a) return ''
       if (gc.format === 'currency') return firstNum(a.answer_value)
+      // Party cost = headcount × the hotel's per-person price (one serving for
+      // the whole travelling party). Manager multiplies by # of meals at the end.
+      if (gc.format === 'party') {
+        const p = firstNum(a.answer_value)
+        return p != null && headcount > 0 ? Math.round(p * headcount) : null
+      }
       if (gc.format === 'value') return a.answer_value ?? asYesNo(a)
       return asYesNo(a)
     }
@@ -825,20 +833,19 @@ export async function exportMultiCityConsolidatedXlsx(
       kingsReq: trip.king_rooms_requested ?? null, suitesReq: trip.suites_requested ?? null,
       comp: compSuites, upgrades: suiteUpgrades,
     })
-    // Forecasted F&B = headcount × Σ (hotel's per-person price × meal count over
-    // the stay). Meal counts come from the trip's fnb_plan; headcount is the
-    // client-level default. Needs both a headcount and at least one meal set.
+    // Forecasted F&B = headcount × Σ (hotel's per-person price for each meal-price
+    // column this client shows). One round for the whole party — no meal counts;
+    // the travel manager multiplies by the number of meals at the end.
     let fnbTotal: number | null = null
-    const plan = trip.fnb_plan ?? {}
-    const planEntries = Object.entries(plan).filter(([, c]) => Number(c) > 0)
-    if (headcount > 0 && planEntries.length > 0) {
+    if (headcount > 0) {
       let sum = 0, any = false
-      for (const [itemId, count] of planEntries) {
-        const raw = h.answers[itemId]?.answer_value
-        const price = raw ? parseFloat(String(raw).replace(/[^0-9.]/g, '')) : NaN
-        if (Number.isFinite(price)) { sum += price * Number(count) * headcount; any = true }
+      for (const g of gridCols) {
+        if (g.type === 'item' && /breakfast|lunch|brunch|dinner/i.test(g.label)) {
+          const price = firstNum(h.answers[g.item_id]?.answer_value)
+          if (price != null) { sum += price; any = true }
+        }
       }
-      fnbTotal = any ? sum : null
+      fnbTotal = any ? sum * headcount : null
     }
     switch (gc.key) {
       case 'taxes_fees':
@@ -846,13 +853,11 @@ export async function exportMultiCityConsolidatedXlsx(
       case 'total_per_night':
         return perNight != null ? Math.round(perNight) : null
       case 'forecasted_room_total':
+      case 'est_total_cost':
         // Tiered block estimate (see roomBlockTotal): comped suites free,
         // upgrades + kings at King rate, overflow suites at the Suite rate.
+        // F&B is handled separately (party-cost columns), not folded in here.
         return roomTotal
-      case 'est_total_cost':
-        // Rooms (tiered) + F&B forecast. F&B is 0 when the team has no meal
-        // plan or client headcount, so this stays rooms-only for most teams.
-        return roomTotal != null || fnbTotal != null ? Math.round((roomTotal ?? 0) + (fnbTotal ?? 0)) : null
       case 'forecasted_fnb':
         return fnbTotal != null ? Math.round(fnbTotal) : null
       case 'total_est_rooms_fnb':
@@ -982,7 +987,6 @@ export async function exportMultiCityConsolidatedXlsx(
           bid && Number.isFinite(compSuites) && compSuites > 0 ? compSuites : null,
           bid && suiteUg != null && Number.isFinite(suiteUg) ? suiteUg : null,
           bid ? postGte : '',
-          noteFrags.join('\n'),
         ]
 
         // F&B forecast (Stay 1 only; per-person price × person-meals per meal item)
@@ -1020,6 +1024,7 @@ export async function exportMultiCityConsolidatedXlsx(
         for (const gc of gridCols) {
           vals.push(bid ? gridColValue(gc, h, visit.index, kingRate, nights, trip, items, fnbHeadcount) : null)
         }
+        vals.push(noteFrags.join('\n')) // Notes column is always last
         first = false
 
         const awardedRow = wonThisVisit && !struck
@@ -1034,7 +1039,7 @@ export async function exportMultiCityConsolidatedXlsx(
           if (awardedRow) {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AWARD_FILL } }
           }
-          cell.alignment = { vertical: 'top', wrapText: i === 12, horizontal: CENTER_COLS.has(i) ? 'center' : 'left' }
+          cell.alignment = { vertical: 'top', wrapText: i === NOTES_IDX, horizontal: CENTER_COLS.has(i) ? 'center' : 'left' }
         })
         row.getCell(4).numFmt = 'm/d/yy'
         row.getCell(5).numFmt = 'm/d/yy'
