@@ -954,9 +954,22 @@ export default function HotelsList() {
   // Collect unique leagues that actually exist in the data
   const availableLeagues = [...new Set(hotels.map((h) => h.league).filter(Boolean) as string[])].sort()
 
+  // Smarter search: normalize (lowercase, "&"→"and", strip punctuation) then
+  // require EVERY word to appear somewhere across name/chain/city/contact/email/
+  // notes. So word order doesn't matter ("chicago marriott" finds "Marriott …
+  // Chicago"), words can span fields, partial words match, and "&"/hyphens/commas
+  // don't break it.
+  const normalize = (s: string) =>
+    s.toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const searchTokens = normalize(search).split(' ').filter(Boolean)
   const filtered = hotels.filter((h) => {
     if (leagueFilter && h.league !== leagueFilter) return false
-    if (search && ![h.name, h.chain, h.city, h.contact_name].some((v) => v?.toLowerCase().includes(search.toLowerCase()))) return false
+    if (searchTokens.length) {
+      const hay = normalize(
+        [h.name, h.chain, h.city, h.contact_name, h.contact_email, h.notes].filter(Boolean).join(' '),
+      )
+      if (!searchTokens.every((t) => hay.includes(t))) return false
+    }
     return true
   })
 
