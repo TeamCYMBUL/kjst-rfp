@@ -114,6 +114,7 @@ function buildInviteHtml(p: {
   hotelName: string
   contactName: string | null
   teamName: string | null
+  season: string | null
   city: string | null
   opponentLabel: string | null
   arrivalDate: string | null
@@ -138,7 +139,11 @@ function buildInviteHtml(p: {
   sampleMenusHtml: string
 }): string {
   const teamName = p.teamName ?? 'our client'
-  const seasonYear = p.arrivalDate ? new Date(p.arrivalDate).getUTCFullYear() : 2027
+  // Full season label (e.g. "2026-2027"), not a single year. Prefer the client's
+  // stored season; otherwise derive a range from the arrival date.
+  const seasonLabel = p.season || (p.arrivalDate
+    ? (() => { const d = new Date(p.arrivalDate); const y = d.getUTCFullYear(); return d.getUTCMonth() >= 6 ? `${y}-${y + 1}` : `${y - 1}-${y}` })()
+    : '2026-2027')
   const deadlineText = p.responseDeadline ? fmt(p.responseDeadline) : 'as soon as possible'
   const tripDesc = [p.teamName, p.city, p.opponentLabel ? `vs. ${p.opponentLabel}` : null].filter(Boolean).join(' · ')
   const roomParts = [
@@ -190,7 +195,7 @@ function buildInviteHtml(p: {
         <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6">I hope this email finds you well.</p>
         <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6">
           We are reaching out on behalf of the <strong>${teamName}</strong> to request pricing and availability
-          for the ${seasonYear} season. Please use the link below to view specific dates and requirements and submit your response.
+          for the ${seasonLabel} season. Please use the link below to view specific dates and requirements and submit your response.
         </p>
         <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:24px">
           <tr><td style="padding:20px 24px">
@@ -225,7 +230,7 @@ function buildInviteHtml(p: {
           ${ccBulletsHtml}
         </table>` : ''}
         <p style="margin:0 0 24px;font-size:14px;color:#475569;line-height:1.6">
-          Thank you in advance for your time and consideration. We look forward to the opportunity to work together during the ${seasonYear} season.
+          Thank you in advance for your time and consideration. We look forward to the opportunity to work together during the ${seasonLabel} season.
         </p>
         <table cellpadding="0" cellspacing="0" style="margin-bottom:16px">
           <tr><td style="background:#1C1008;border-radius:8px">
@@ -284,7 +289,7 @@ Deno.serve(async (req: Request) => {
     .from('rfp_invitations')
     .select(`id, hotel_name, hotel_contact_name, hotel_contact_email, token, status,
       trips ( city, opponent_label, arrival_date, departure_date, game_date, game_dates, stay2_arrival_date, stay2_departure_date, stay2_game_date, stay2_game_dates, response_deadline, king_rooms_requested, double_rooms_requested, suites_requested, total_rooms_requested,
-        clients ( id, team_name, always_cc_enabled, always_cc_name, always_cc_email, sample_menus ) )`)
+        clients ( id, team_name, season, always_cc_enabled, always_cc_name, always_cc_email, sample_menus ) )`)
     .eq('id', invitation_id)
     .single()
 
@@ -314,6 +319,7 @@ Deno.serve(async (req: Request) => {
     hotelName: inv.hotel_name,
     contactName: inv.hotel_contact_name,
     teamName: client?.team_name ?? null,
+    season: client?.season ?? null,
     city: trip?.city ?? null,
     opponentLabel: trip?.opponent_label ?? null,
     arrivalDate: trip?.arrival_date ?? null,
