@@ -124,10 +124,13 @@ export default function ClientsList() {
   const [proposalCounts, setProposalCounts] = useState<{ total: number; unprinted: number; awarded: number } | null>(null)
   const { role, canEditClient, assignedClientIds } = useRole()
 
-  // Default managers to "My teams" once their assignments load.
+  // Default anyone with assigned teams (managers AND admins) to "My teams" once
+  // assignments load — consistent with the Dashboard. Users with no assignments
+  // (e.g. the owner) have no "My teams", so they stay on All and see the toggle
+  // hidden.
   useEffect(() => {
-    if (role === 'manager' && assignedClientIds.size > 0) setScope('mine')
-  }, [role, assignedClientIds])
+    if (assignedClientIds.size > 0) setScope('mine')
+  }, [assignedClientIds])
 
   const loadClients = (keepSelected?: string) => {
     supabase
