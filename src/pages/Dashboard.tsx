@@ -182,16 +182,13 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
       return d !== null && d >= 0 && d <= 7
     })
 
-  // Default collapsed so the page stays short with many clients. Auto-open when
-  // there's only one group (nothing to collapse) or a client has an urgent deadline.
-  // Parent remounts this with a key when the client filter changes, so defaults recompute.
+  // Start collapsed on load for a clean page — the manager opens what they want.
+  // Only auto-open when a single group is shown (e.g. filtered to one client),
+  // where there is nothing to collapse. Parent remounts with a key on filter
+  // change, so this recomputes.
   const [openKeys, setOpenKeys] = useState<Set<string>>(() => {
     const s = new Set<string>()
-    if (sorted.length === 1) {
-      sorted.forEach(([k]) => s.add(k))
-    } else {
-      sorted.forEach(([k, g]) => { if (isUrgent(g)) s.add(k) })
-    }
+    if (sorted.length === 1) sorted.forEach(([k]) => s.add(k))
     return s
   })
 
@@ -329,8 +326,9 @@ export default function Dashboard() {
   const [awardOpen, setAwardOpen] = useState(false)
   const [awardClient, setAwardClient] = useState('')
   // Collapsible "Your teams · setup" — remembers the choice across visits.
-  const [teamsOpen, setTeamsOpen] = useState(() => localStorage.getItem('kjst_teams_collapsed') !== '1')
-  const toggleTeams = () => setTeamsOpen((v) => { localStorage.setItem('kjst_teams_collapsed', v ? '1' : '0'); return !v })
+  // Start collapsed on every load for a clean landing; the manager expands it.
+  const [teamsOpen, setTeamsOpen] = useState(false)
+  const toggleTeams = () => setTeamsOpen((v) => !v)
   useEffect(() => {
     const load = async () => {
       const [tripsRes, clientsRes] = await Promise.all([
