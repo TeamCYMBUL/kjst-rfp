@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { formatDate, countVisits } from '../lib/format'
@@ -31,7 +31,7 @@ type DashTrip = {
   arrival_date: string | null
   stay2_arrival_date: string | null
   response_deadline: string | null
-  clients: { id: string; team_name: string } | null
+  clients: { id: string; team_name: string; league: string | null } | null
   rfp_invitations: { id: string; status: string; hotel_name: string; sent_at: string | null; submitted_at: string | null }[]
 }
 
@@ -176,8 +176,33 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
     if (!groups.has(key)) groups.set(key, { name, trips: [] })
     groups.get(key)!.trips.push(trip)
   }
-  // Sort groups alphabetically
-  const sorted = [...groups.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name))
+  // Bundle clients under a sport heading (e.g. all basketball teams together).
+  // League lives on the client; we roll leagues up to their sport so NBA + WNBA
+  // sit under one "Basketball" section, MLB under "Baseball", etc.
+  const leagueOf = (g: { trips: DashTrip[] }) =>
+    (g.trips[0]?.clients?.league ?? '').trim().toUpperCase()
+  const SPORT_BY_LEAGUE: Record<string, string> = {
+    NBA: 'Basketball', WNBA: 'Basketball', NBL: 'Basketball',
+    MLB: 'Baseball',
+    NHL: 'Hockey',
+    NFL: 'Football',
+    MLS: 'Soccer', NWSL: 'Soccer',
+  }
+  const SPORT_ORDER = ['Basketball', 'Baseball', 'Hockey', 'Football', 'Soccer', 'Other']
+  const sportOf = (g: { trips: DashTrip[] }) => SPORT_BY_LEAGUE[leagueOf(g)] ?? 'Other'
+  const sportRank = (s: string) => {
+    const i = SPORT_ORDER.indexOf(s)
+    return i === -1 ? SPORT_ORDER.length : i
+  }
+
+  // Order: by sport section, then by league within the sport, then team name.
+  const sorted = [...groups.entries()].sort((a, b) => {
+    const sr = sportRank(sportOf(a[1])) - sportRank(sportOf(b[1]))
+    if (sr !== 0) return sr
+    const lr = leagueOf(a[1]).localeCompare(leagueOf(b[1]))
+    if (lr !== 0) return lr
+    return a[1].name.localeCompare(b[1].name)
+  })
 
   // The soonest deadline coming due within a week for this client, so the chip
   // can show the actual date instead of a vague "Deadline soon".
@@ -225,7 +250,7 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
           </button>
         </div>
       )}
-      {sorted.map(([key, group]) => {
+      {sorted.map(([key, group], i) => {
         const allInvited = group.trips.reduce((n, t) => n + t.rfp_invitations.length, 0)
         const allSubmitted = group.trips.reduce(
           (n, t) => n + t.rfp_invitations.filter((i) => i.submitted_at != null).length,
@@ -234,9 +259,18 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
         const urgentDeadline = soonestUrgentDeadline(group)
         const groupDelinquent = group.trips.reduce((n, t) => n + delinquentCount(t), 0)
         const isOpen = openKeys.has(key)
+        // Show a sport heading above the first team of each sport section.
+        const sport = sportOf(group)
+        const showSportHeader = i === 0 || sportOf(sorted[i - 1][1]) !== sport
+        const league = leagueOf(group)
         return (
+          <Fragment key={key}>
+            {showSportHeader && (
+              <h2 className={`px-1 pb-0.5 text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 ${i === 0 ? '' : 'pt-3'}`}>
+                {sport}
+              </h2>
+            )}
           <div
-            key={key}
             className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
           >
             {/* Client header — click to expand/collapse */}
@@ -253,6 +287,11 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
                   ▸
                 </span>
                 <span className="text-base font-semibold text-slate-800 dark:text-slate-200">{group.name}</span>
+                {league && (
+                  <span className="rounded bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+                    {league}
+                  </span>
+                )}
                 {urgentDeadline && (
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                     ⏰ Deadline {formatDate(urgentDeadline)}
@@ -312,6 +351,7 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
               </div>
             )}
           </div>
+          </Fragment>
         )
       })}
     </div>
@@ -345,7 +385,7 @@ export default function Dashboard() {
         supabase
           .from('trips')
           .select(
-            'id, opponent_label, city, status, cancelled, arrival_date, stay2_arrival_date, response_deadline, clients(id, team_name), rfp_invitations(id, status, hotel_name, sent_at, submitted_at)',
+            'id, opponent_label, city, status, cancelled, arrival_date, stay2_arrival_date, response_deadline, clients(id, team_name, league), rfp_invitations(id, status, hotel_name, sent_at, submitted_at)',
           )
           .order('response_deadline', { ascending: true }),
         supabase.from('clients').select('id').limit(1),
