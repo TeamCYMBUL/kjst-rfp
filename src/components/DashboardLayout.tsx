@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useProfile } from '../hooks/useProfile'
 import { useRole } from '../lib/useRole'
-import { TIMELINE_ADMIN_EMAIL } from '../lib/activity'
+import { isTimelineAdmin } from '../lib/activity'
 
 
 function KJLogoMark({ dark = false }: { dark?: boolean }) {
@@ -148,9 +148,9 @@ export default function DashboardLayout() {
             RFP Template
           </NavLink>
 
-          {/* Timeline — restricted to the single timeline-admin account (not all
-              admins). Mirrors the SQL is_timeline_admin() gate on the data. */}
-          {user?.email === TIMELINE_ADMIN_EMAIL && (
+          {/* Timeline — restricted to the timeline-admin accounts (not all
+              staff). Mirrors the SQL is_timeline_admin() gate on the data. */}
+          {isTimelineAdmin(user?.email) && (
             <NavLink
               to="/timeline"
               className={({ isActive }) =>

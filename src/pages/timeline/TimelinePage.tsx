@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../auth/AuthContext'
-import { TIMELINE_ADMIN_EMAIL } from '../../lib/activity'
+import { isTimelineAdmin } from '../../lib/activity'
 import { humanizeDuration } from '../../lib/format'
 import { ErrorNote, Loading } from '../../components/ui'
 
@@ -244,7 +244,7 @@ const ALL_TYPES = Object.keys(EVENT_META) as TimelineEvent['event_type'][]
 
 export default function TimelinePage() {
   const { user, loading: authLoading } = useAuth()
-  const allowed = user?.email === TIMELINE_ADMIN_EMAIL
+  const allowed = isTimelineAdmin(user?.email)
   const [clients, setClients] = useState<{ id: string; team_name: string }[]>([])
   const [clientId, setClientId] = useState<string>('') // '' = all clients (global feed)
   const [events, setEvents] = useState<TimelineEvent[]>([])

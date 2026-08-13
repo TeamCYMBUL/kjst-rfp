@@ -1,8 +1,17 @@
 import { supabase } from './supabase'
 
-// The lifecycle Timeline is restricted to this single operator account (not all
-// admins). Mirrors the SQL is_timeline_admin() helper, which is the enforced
-// gate. Change in both places if this ever moves.
+// The lifecycle Timeline is restricted to these accounts (not all staff).
+// Mirrors the SQL is_timeline_admin() helper, which is the ENFORCED gate — keep
+// this list and that function in sync if it ever changes.
+export const TIMELINE_ADMIN_EMAILS = [
+  'info@cymbul.co',
+  'cgibson@kjsportstravel.com',
+  'acabrera@kjsportstravel.com',
+]
+export function isTimelineAdmin(email: string | null | undefined): boolean {
+  return TIMELINE_ADMIN_EMAILS.includes((email ?? '').trim().toLowerCase())
+}
+// Kept for existing imports.
 export const TIMELINE_ADMIN_EMAIL = 'info@cymbul.co'
 
 // Lifecycle moments that have no timestamp home on a base table and so must be
