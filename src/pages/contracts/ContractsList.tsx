@@ -9,6 +9,7 @@ import {
   listAwardedContracts, contractFileUrl, updateContractStatus, uploadSignedCopy, uploadContractStaff,
 } from '../../lib/contractsApi'
 import type { AwardedContract, ContractStatus } from '../../lib/contractsApi'
+import { ContractFactCheck } from './ContractFactCheck'
 
 const STATUS_LABEL: Record<ContractStatus, string> = {
   requested: 'Requested',
@@ -32,6 +33,7 @@ export default function ContractsList() {
   const [rows, setRows] = useState<AwardedContract[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [openId, setOpenId] = useState<string | null>(null) // which contract's fact-check panel is expanded
 
   const load = () => {
     setError(null)
@@ -135,12 +137,16 @@ export default function ContractsList() {
               const twoVisit = !!r.trip?.stay2_arrival_date
               const stayTxt = twoVisit ? (r.awarded_stay1 && r.awarded_stay2 ? ' · Stay 1 & 2' : r.awarded_stay1 ? ' · Stay 1' : ' · Stay 2') : ''
               const busy = busyId === (c?.id ?? r.invitation_id)
+              const canFactCheck = !!(c && c.file_path) // an agreement has been uploaded
+              const isOpen = openId === r.invitation_id
+              const hasIssues = c?.analysis?.overall === 'issues'
               // A hotel with no contract record hasn't been requested yet — say so
               // plainly rather than mislabeling it "Requested".
               const pillLabel = c ? STATUS_LABEL[c.status] : 'Not requested'
               const pillStyle = c ? STATUS_STYLE[c.status] : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
               return (
-                <div key={r.invitation_id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div key={r.invitation_id}>
+                <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-slate-800 dark:text-slate-200">{r.hotel_name}</span>
@@ -181,13 +187,25 @@ export default function ContractsList() {
                             <input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" onChange={(e) => onUploadContract(r, e.target.files?.[0] ?? null)} />
                           </label>
                         )}
+                        {canFactCheck && (
+                          <button
+                            onClick={() => setOpenId(isOpen ? null : r.invitation_id)}
+                            className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${
+                              hasIssues
+                                ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 hover:bg-red-100'
+                                : 'border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                            }`}
+                          >
+                            {hasIssues ? '⚠ Fact-check' : 'Fact-check'} {isOpen ? '▲' : '▾'}
+                          </button>
+                        )}
                         {c.signed_file_path && (
                           <button onClick={() => openFile(c.signed_file_path)} className="rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100">
                             View signed copy
                           </button>
                         )}
                         <select
-                          value={status}
+                          value={c.status}
                           disabled={busy}
                           onChange={(e) => setStatus(c.id, e.target.value as ContractStatus)}
                           className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-xs text-slate-700 dark:text-slate-300"
@@ -207,6 +225,8 @@ export default function ContractsList() {
                       </>
                     )}
                   </div>
+                </div>
+                {isOpen && canFactCheck && <ContractFactCheck row={r} />}
                 </div>
               )
             })}

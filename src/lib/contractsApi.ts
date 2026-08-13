@@ -8,6 +8,121 @@ const BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
 
 export type ContractStatus = 'requested' | 'uploaded' | 'in_review' | 'verified' | 'signed' | 'filed'
 
+// ── Fact-check: the winning bid summarised, and the analysis result shape ──────
+
+export type BidTerm = { label: string; value: string; note?: string | null }
+export type BidSummary = {
+  rates: BidTerm[]
+  roomBlock: BidTerm[]
+  dates: BidTerm[]
+  concessions: BidTerm[]
+  meetingSpaceNotes: string | null
+  generalComments: string | null
+}
+
+// One line of the fact-check: what the bid said vs what the contract says.
+export type ContractCheck = {
+  label: string
+  bid_value: string | null
+  contract_value: string | null
+  status: 'match' | 'mismatch' | 'missing' | 'extra'
+  note?: string | null
+}
+// Stored in contracts.analysis (jsonb). The AI fact-check writes this; the UI
+// renders it. Kept intentionally simple so a manual review can populate it too.
+export type ContractAnalysis = {
+  overall: 'match' | 'issues'
+  summary: string
+  checks: ContractCheck[]
+  model?: string
+}
+
+const money = (v: unknown): string | null => {
+  if (v == null || v === '') return null
+  const n = parseFloat(String(v).replace(/[^0-9.]/g, ''))
+  return isFinite(n) ? `$${n.toLocaleString()}` : String(v)
+}
+const asText = (v: unknown): string | null => (v == null || v === '' ? null : String(v))
+const fmtDate = (d: string | null | undefined) =>
+  d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : null
+
+// Everything the awarded hotel actually agreed to in its winning bid — the
+// source of truth the uploaded contract is checked against.
+export async function fetchBidSummary(invitationId: string): Promise<BidSummary> {
+  const { data: inv } = await supabase
+    .from('rfp_invitations')
+    .select(`
+      id, awarded_stay1, awarded_stay2,
+      trips ( city, arrival_date, departure_date, stay2_arrival_date, stay2_departure_date,
+               king_rooms_requested, double_rooms_requested, suites_requested, total_rooms_requested ),
+      rfp_responses ( id, best_king_rate, best_suite_rate, current_selling_rate, occupancy_tax, resort_fee,
+                       stay2_king_rate, stay2_suite_rate, meeting_space_notes, general_comments )
+    `)
+    .eq('id', invitationId)
+    .single()
+
+  const t = (Array.isArray((inv as any)?.trips) ? (inv as any).trips[0] : (inv as any)?.trips) ?? {}
+  const r = (Array.isArray((inv as any)?.rfp_responses) ? (inv as any).rfp_responses[0] : (inv as any)?.rfp_responses) ?? {}
+  const twoVisit = !!t.stay2_arrival_date
+
+  const rates: BidTerm[] = [
+    { label: 'King rate', value: money(r.best_king_rate) ?? '—' },
+    { label: 'Suite rate', value: money(r.best_suite_rate) ?? '—' },
+    { label: 'Selling rate', value: money(r.current_selling_rate) ?? '—' },
+    { label: 'Occupancy tax', value: asText(r.occupancy_tax) ?? '—' },
+    { label: 'Resort fee', value: asText(r.resort_fee) ?? '—' },
+    ...(twoVisit ? [
+      { label: 'King rate — Stay 2', value: money(r.stay2_king_rate) ?? '—' },
+      { label: 'Suite rate — Stay 2', value: money(r.stay2_suite_rate) ?? '—' },
+    ] : []),
+  ].filter((x) => x.value !== '—')
+
+  const roomBlock: BidTerm[] = [
+    { label: 'King rooms', value: asText(t.king_rooms_requested) ?? '—' },
+    { label: 'Double rooms', value: asText(t.double_rooms_requested) ?? '—' },
+    { label: 'Suites', value: asText(t.suites_requested) ?? '—' },
+    { label: 'Total rooms', value: asText(t.total_rooms_requested) ?? '—' },
+  ].filter((x) => x.value !== '—')
+
+  const dates: BidTerm[] = [
+    { label: 'Arrival', value: fmtDate(t.arrival_date) ?? '—' },
+    { label: 'Departure', value: fmtDate(t.departure_date) ?? '—' },
+    ...(twoVisit ? [
+      { label: 'Arrival — Stay 2', value: fmtDate(t.stay2_arrival_date) ?? '—' },
+      { label: 'Departure — Stay 2', value: fmtDate(t.stay2_departure_date) ?? '—' },
+    ] : []),
+  ].filter((x) => x.value !== '—')
+
+  // Concession answers the hotel gave (Yes/No or a value), so the contract can
+  // be checked against each committed term.
+  let concessions: BidTerm[] = []
+  if (r.id) {
+    const { data: ans } = await supabase
+      .from('concession_answers')
+      .select('answer_yes_no, answer_value, comment, concession_items ( label, sort_order )')
+      .eq('response_id', r.id)
+    concessions = (ans ?? [])
+      .map((a: any) => {
+        const item = Array.isArray(a.concession_items) ? a.concession_items[0] : a.concession_items
+        const value = a.answer_yes_no === true ? 'Yes' : a.answer_yes_no === false ? 'No' : asText(a.answer_value)
+        if (!item?.label || value == null) return null
+        return { label: item.label as string, value, note: a.comment ?? null, _sort: item.sort_order ?? 0 }
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) => a._sort - b._sort)
+      .map(({ label, value, note }: any) => ({ label, value, note })) as BidTerm[]
+  }
+
+  return {
+    rates,
+    roomBlock,
+    dates,
+    concessions,
+    meetingSpaceNotes: asText(r.meeting_space_notes),
+    generalComments: asText(r.general_comments),
+  }
+}
+
 // ── Public (hotel upload page) ────────────────────────────────────────────────
 
 export type ContractContext = {
@@ -52,7 +167,7 @@ export type ContractRow = {
   signed_file_path: string | null
   signed_file_name: string | null
   signed_at: string | null
-  analysis: unknown | null
+  analysis: ContractAnalysis | null
   analyzed_at: string | null
   staff_notes: string | null
 }
