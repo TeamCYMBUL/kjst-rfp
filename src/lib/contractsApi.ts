@@ -213,6 +213,18 @@ export async function listAwardedContracts(): Promise<AwardedContract[]> {
   })
 }
 
+// Run the AI fact-check: sends the uploaded contract + the bid to Claude and
+// stores the structured comparison on the contract row.
+export async function analyzeContract(contractId: string): Promise<ContractAnalysis> {
+  const { data, error } = await supabase.functions.invoke('contract-analyze', { body: { contract_id: contractId } })
+  if (error) {
+    let msg = error.message
+    try { const b = await (error as any).context?.json?.(); if (b?.error) msg = b.error } catch { /* ignore */ }
+    throw new Error(msg ?? 'Fact-check failed')
+  }
+  return (data as any).analysis as ContractAnalysis
+}
+
 // A short-lived signed URL to view/download a private contract file.
 export async function contractFileUrl(path: string): Promise<string | null> {
   const { data, error } = await supabase.storage.from('contracts').createSignedUrl(path, 60 * 10)

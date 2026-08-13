@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useProfile } from '../hooks/useProfile'
 import { useRole } from '../lib/useRole'
-import { isTimelineAdmin } from '../lib/activity'
+import { isTimelineAdmin, isContractsUser } from '../lib/activity'
 
 
 function KJLogoMark({ dark = false }: { dark?: boolean }) {
@@ -120,19 +120,21 @@ export default function DashboardLayout() {
             Hotels
           </NavLink>
 
-          {/* Contracts */}
-          <NavLink
-            to="/contracts"
-            className={({ isActive }) =>
-              `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-white/15 text-white'
-                  : 'text-white/60 hover:bg-white/10 hover:text-white'
-              }`
-            }
-          >
-            Contracts
-          </NavLink>
+          {/* Contracts — limited to specific accounts for now */}
+          {isContractsUser(user?.email) && (
+            <NavLink
+              to="/contracts"
+              className={({ isActive }) =>
+                `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-white/15 text-white'
+                    : 'text-white/60 hover:bg-white/10 hover:text-white'
+                }`
+              }
+            >
+              Contracts
+            </NavLink>
+          )}
 
           {/* RFP Template */}
           <NavLink

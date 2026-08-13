@@ -3,7 +3,7 @@
 // the uploaded contract matches — manually today, and via the AI analysis once
 // the Anthropic key is wired. Renders any stored `analysis` (jsonb) result.
 import { useEffect, useState } from 'react'
-import { fetchBidSummary } from '../../lib/contractsApi'
+import { fetchBidSummary, analyzeContract } from '../../lib/contractsApi'
 import type { AwardedContract, BidSummary, BidTerm, ContractAnalysis } from '../../lib/contractsApi'
 
 function TermList({ title, terms }: { title: string; terms: BidTerm[] }) {
@@ -65,11 +65,28 @@ function AnalysisResult({ analysis, analyzedAt }: { analysis: ContractAnalysis; 
   )
 }
 
-export function ContractFactCheck({ row }: { row: AwardedContract }) {
+export function ContractFactCheck({ row, onDone }: { row: AwardedContract; onDone?: () => void }) {
   const [bid, setBid] = useState<BidSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const analysis = row.contract?.analysis ?? null
+  const [analysis, setAnalysis] = useState<ContractAnalysis | null>(row.contract?.analysis ?? null)
+  const [running, setRunning] = useState(false)
+  const [runError, setRunError] = useState<string | null>(null)
+  const contractId = row.contract?.id ?? null
+
+  const runFactCheck = async () => {
+    if (!contractId) return
+    setRunning(true); setRunError(null)
+    try {
+      const result = await analyzeContract(contractId)
+      setAnalysis(result)
+      onDone?.()
+    } catch (e: any) {
+      setRunError(e.message ?? 'Fact-check failed')
+    } finally {
+      setRunning(false)
+    }
+  }
 
   useEffect(() => {
     let alive = true
@@ -83,24 +100,23 @@ export function ContractFactCheck({ row }: { row: AwardedContract }) {
 
   return (
     <div className="border-t border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/30 px-5 py-4">
-      {/* AI result (or the disabled run button until the key is added) */}
-      <div className="mb-4">
-        {analysis ? (
-          <AnalysisResult analysis={analysis} analyzedAt={row.contract?.analyzed_at ?? null} />
-        ) : (
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/40 px-3 py-2.5">
-            <button
-              disabled
-              title="AI fact-check turns on once the Anthropic API key is added"
-              className="cursor-not-allowed rounded-lg bg-slate-200 dark:bg-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400"
-            >
-              Run AI fact-check
-            </button>
-            <span className="text-xs text-slate-500 dark:text-slate-400">
-              AI cross-check against the bid turns on once the Anthropic key is added. For now, compare the bid below to the uploaded contract.
-            </span>
-          </div>
-        )}
+      {/* AI result + run/re-run control */}
+      <div className="mb-4 space-y-2">
+        {analysis && <AnalysisResult analysis={analysis} analyzedAt={row.contract?.analyzed_at ?? null} />}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={runFactCheck}
+            disabled={running || !contractId}
+            className="rounded-lg bg-[#1C1008] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#2a1a0f] disabled:opacity-50 transition-colors"
+          >
+            {running ? 'Analyzing…' : analysis ? 'Re-run AI fact-check' : 'Run AI fact-check'}
+          </button>
+          {running && <span className="text-xs text-slate-500 dark:text-slate-400">Reading the contract and comparing it to the bid…</span>}
+          {runError && <span className="text-xs text-red-600 dark:text-red-400">{runError}</span>}
+          {!analysis && !running && !runError && (
+            <span className="text-xs text-slate-500 dark:text-slate-400">Cross-checks the contract against the bid terms below and flags any discrepancies.</span>
+          )}
+        </div>
       </div>
 
       {/* The winning bid — the source of truth */}

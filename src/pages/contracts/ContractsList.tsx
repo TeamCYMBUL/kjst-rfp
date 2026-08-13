@@ -10,6 +10,8 @@ import {
 } from '../../lib/contractsApi'
 import type { AwardedContract, ContractStatus } from '../../lib/contractsApi'
 import { ContractFactCheck } from './ContractFactCheck'
+import { useAuth } from '../../auth/AuthContext'
+import { isContractsUser } from '../../lib/activity'
 
 const STATUS_LABEL: Record<ContractStatus, string> = {
   requested: 'Requested',
@@ -38,8 +40,11 @@ export default function ContractsList() {
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [openId, setOpenId] = useState<string | null>(null) // which contract's fact-check panel is expanded
+  const { user } = useAuth()
+  const allowed = isContractsUser(user?.email)
 
   const load = () => {
+    if (!allowed) return
     setError(null)
     listAwardedContracts()
       .then(setRows)
@@ -91,6 +96,14 @@ export default function ContractsList() {
     finally { setBusyId(null) }
   }
 
+  if (!allowed) {
+    return (
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-12 text-center">
+        <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Restricted</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">The Contracts page is limited to specific accounts right now.</p>
+      </div>
+    )
+  }
   if (error) return <ErrorNote message={error} />
   if (!rows) return <Loading />
 
@@ -233,7 +246,7 @@ export default function ContractsList() {
                     )}
                   </div>
                 </div>
-                {isOpen && canFactCheck && <ContractFactCheck row={r} />}
+                {isOpen && canFactCheck && <ContractFactCheck row={r} onDone={load} />}
                 </div>
               )
             })}

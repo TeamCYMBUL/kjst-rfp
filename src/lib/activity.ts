@@ -14,6 +14,17 @@ export function isTimelineAdmin(email: string | null | undefined): boolean {
 // Kept for existing imports.
 export const TIMELINE_ADMIN_EMAIL = 'info@cymbul.co'
 
+// The Contracts page is limited to these accounts for now (rolling out on the
+// Sharks contracts first). Add emails here to widen access.
+export const CONTRACTS_EMAILS = [
+  'info@cymbul.co',
+  'cgibson@kjsportstravel.com',
+  'acabrera@kjsportstravel.com',
+]
+export function isContractsUser(email: string | null | undefined): boolean {
+  return CONTRACTS_EMAILS.includes((email ?? '').trim().toLowerCase())
+}
+
 // Lifecycle moments that have no timestamp home on a base table and so must be
 // logged explicitly. Everything else (trip_created, invite_sent, bid_received,
 // bid_declined, build_saved) is derived from base-table timestamps by the
