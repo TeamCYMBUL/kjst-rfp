@@ -2222,12 +2222,7 @@ export default function TripDetail() {
                 2 visits
               </span>
             )}
-            <Badge status={trip.status} />
-            {(trip as any).cancelled && (
-              <span title="This trip is cancelled but kept posted." className="rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:text-amber-300">
-                Cancelled
-              </span>
-            )}
+            <Badge status={trip.status} cancelled={(trip as any).cancelled} />
             {twoVisit ? (
               <>
                 {stay1Winner && <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/20 px-2.5 py-1 text-xs font-semibold leading-5 text-amber-700 dark:text-amber-300">🏆 Stay 1: {stay1Winner.hotel_name}</span>}
@@ -2286,15 +2281,6 @@ export default function TripDetail() {
           {!isViewer && (
             <button onClick={doSendReminders} disabled={sendingReminders} title="Nudge every hotel that hasn't responded yet. Sending from here keeps all follow-ups in one place." className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors">
               {sendingReminders ? 'Sending…' : 'Send reminders'}
-            </button>
-          )}
-          {!isViewer && invites.some((i) => i.status === 'passed') && (
-            <button
-              onClick={() => setShowDeclineModal(true)}
-              disabled={sendingDeclines}
-              className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors"
-            >
-              {sendingDeclines ? 'Sending…' : 'Send Declines'}
             </button>
           )}
           {/* Per-trip client grid export removed (the client-level "Hotel Options"

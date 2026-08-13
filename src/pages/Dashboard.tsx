@@ -27,6 +27,7 @@ type DashTrip = {
   opponent_label: string | null
   city: string | null
   status: string
+  cancelled?: boolean
   arrival_date: string | null
   stay2_arrival_date: string | null
   response_deadline: string | null
@@ -112,7 +113,7 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
                 2 visits
               </span>
             )}
-            <Badge status={trip.status} />
+            <Badge status={trip.status} cancelled={trip.cancelled} />
             {trip.status === 'closed' && awardedHotel && (
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2.5 py-1 text-xs font-semibold leading-5 text-emerald-700 dark:text-emerald-300">
                 <span aria-hidden>🏆</span>{awardedHotel}
@@ -335,7 +336,7 @@ export default function Dashboard() {
         supabase
           .from('trips')
           .select(
-            'id, opponent_label, city, status, arrival_date, stay2_arrival_date, response_deadline, clients(id, team_name), rfp_invitations(id, status, hotel_name, sent_at, submitted_at)',
+            'id, opponent_label, city, status, cancelled, arrival_date, stay2_arrival_date, response_deadline, clients(id, team_name), rfp_invitations(id, status, hotel_name, sent_at, submitted_at)',
           )
           .order('response_deadline', { ascending: true }),
         supabase.from('clients').select('id').limit(1),
@@ -394,7 +395,7 @@ export default function Dashboard() {
     : trips
 
   // Stats always exclude closed trips (regardless of showClosed toggle)
-  const openTrips = scopedTrips.filter((t) => t.status !== 'closed')
+  const openTrips = scopedTrips.filter((t) => t.status !== 'closed' && !t.cancelled)
   const activeTrips = openTrips.filter((t) => t.status !== 'draft')
   const totalInvited = activeTrips.reduce((n, t) => n + t.rfp_invitations.length, 0)
   const totalSubmitted = activeTrips.reduce(
@@ -407,11 +408,11 @@ export default function Dashboard() {
     (n, t) => n + t.rfp_invitations.filter((i) => ['sent', 'opened'].includes(i.status)).length,
     0,
   )
-  const closedCount = scopedTrips.filter((t) => t.status === 'closed').length
+  const closedCount = scopedTrips.filter((t) => t.status === 'closed' || t.cancelled).length
 
   // What the list actually shows. "Show closed" flips to ONLY closed trips, so
   // open and closed are never mixed together.
-  const closedTrips = scopedTrips.filter((t) => t.status === 'closed')
+  const closedTrips = scopedTrips.filter((t) => t.status === 'closed' || t.cancelled)
   const displayedTrips = showClosed ? closedTrips : openTrips
 
   // Distinct clients present in the (scoped) trips — no separate query needed

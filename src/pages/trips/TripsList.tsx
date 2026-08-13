@@ -29,7 +29,7 @@ export default function TripsList() {
     supabase
       .from('trips')
       .select(
-        'id, opponent_label, city, arrival_date, departure_date, stay2_arrival_date, status, clients(team_name), rfp_invitations(id, status, hotel_name, submitted_at)',
+        'id, opponent_label, city, arrival_date, departure_date, stay2_arrival_date, status, cancelled, clients(team_name), rfp_invitations(id, status, hotel_name, submitted_at)',
       )
       .order('city', { ascending: true, nullsFirst: false })
       .then(({ data, error }) => {
@@ -135,7 +135,7 @@ export default function TripsList() {
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <Badge status={t.status} />
+                        <Badge status={t.status} cancelled={(t as any).cancelled} />
                         {t.status === 'closed' && (() => {
                           const winner = t.rfp_invitations.find((i) => i.status === 'awarded')?.hotel_name
                           return winner ? (

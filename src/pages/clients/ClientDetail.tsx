@@ -112,7 +112,7 @@ export default function ClientDetail() {
   const loadTrips = () => {
     supabase
       .from('trips')
-      .select('id, opponent_label, city, arrival_date, departure_date, game_date, game_dates, total_rooms_requested, stay2_arrival_date, stay2_departure_date, stay2_game_date, stay2_game_dates, status, rfp_invitations(status, hotel_name)')
+      .select('id, opponent_label, city, arrival_date, departure_date, game_date, game_dates, total_rooms_requested, stay2_arrival_date, stay2_departure_date, stay2_game_date, stay2_game_dates, status, cancelled, rfp_invitations(status, hotel_name)')
       .eq('client_id', id)
       .order('city', { ascending: true, nullsFirst: false })
       .then(({ data, error }) => {
@@ -362,7 +362,7 @@ export default function ClientDetail() {
                       </td>
                       <td className="py-2">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <Badge status={trip.status} />
+                          <Badge status={trip.status} cancelled={(trip as any).cancelled} />
                           {trip.status === 'closed' && (() => {
                             const winner = trip.rfp_invitations?.find((i) => i.status === 'awarded')?.hotel_name
                             return winner ? (

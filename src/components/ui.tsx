@@ -136,7 +136,15 @@ const badgeColors: Record<string, string> = {
   unavailable: 'bg-slate-100 text-slate-400',
 }
 
-export function Badge({ status, label }: { status: string; label?: string }) {
+export function Badge({ status, label, cancelled }: { status: string; label?: string; cancelled?: boolean }) {
+  // A cancelled trip reads as "Cancelled" — it replaces the live status entirely.
+  if (cancelled) {
+    return (
+      <span className="inline-flex rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-300">
+        Cancelled
+      </span>
+    )
+  }
   return (
     <span
       className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${

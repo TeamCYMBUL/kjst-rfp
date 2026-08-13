@@ -203,7 +203,7 @@ export default function ClientsList() {
   const totalTrips = clients.reduce((n, c) => n + countVisits(c.trips), 0)
 
   const selTrips = selected?.trips ?? []
-  const selActive = selTrips.filter((t) => !['closed', 'draft'].includes(t.status))
+  const selActive = selTrips.filter((t) => !['closed', 'draft'].includes(t.status) && !t.cancelled)
   const selClosed = selTrips.filter((t) => t.status === 'closed')
 
   const allTripIds = selTrips.map((t) => t.id)
@@ -338,7 +338,7 @@ export default function ClientsList() {
               ) : (
                 filtered.map((c) => {
                   const active = c.trips.filter(
-                    (t) => !['closed', 'draft'].includes(t.status),
+                    (t) => !['closed', 'draft'].includes(t.status) && !t.cancelled,
                   ).length
                   const isSelected = selected?.id === c.id
                   return (
@@ -709,12 +709,7 @@ export default function ClientsList() {
                                 </span>
                               ) : null
                             })()}
-                            {t.cancelled && (
-                              <span title="Cancelled but kept posted" className="rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-1 text-[11px] font-semibold leading-5 text-amber-800 dark:text-amber-300">
-                                Cancelled
-                              </span>
-                            )}
-                            <Badge status={t.status} />
+                            <Badge status={t.status} cancelled={t.cancelled} />
                           </div>
                           </Link>
                         </div>
