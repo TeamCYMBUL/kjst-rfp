@@ -843,17 +843,18 @@ export async function exportMultiCityConsolidatedXlsx(
     const upgAns = upgItem ? h.answers[upgItem.id] : undefined
     const suiteUpgrades = upgAns?.answer_value ? Number(upgAns.answer_value) : 0
     const totalRooms = trip.total_rooms_requested ?? null
-    // Paid room count for the block-revenue columns: the trip's own total room
-    // count minus the complimentary (zero-rated) rooms the hotel is giving.
-    const paidRooms = totalRooms != null
-      ? Math.max(0, totalRooms - (Number.isFinite(compSuites) ? compSuites : 0))
-      : null
-    // Tiered block cost: comped suites free, upgrades+kings at King, overflow at Suite rate.
-    const roomTotal = roomBlockTotal({
-      kingRate, suiteRate: suite, tax, fee, nights, totalRooms,
+    // ONE room-cost formula (roomBlockTotal) governs every team so the math is
+    // identical across the board: comped suites free, suite upgrades + kings at
+    // the King rate, any remaining suites at the Additional Suite rate, incl
+    // taxes/fees. Est. Total Cost, Forecasted Room Total, and the per-night /
+    // all-nights revenue columns ALL resolve through it — no team diverges.
+    const blockParams = {
+      kingRate, suiteRate: suite, tax, fee, totalRooms,
       kingsReq: trip.king_rooms_requested ?? null, suitesReq: trip.suites_requested ?? null,
       comp: compSuites, upgrades: suiteUpgrades,
-    })
+    }
+    const roomTotal = roomBlockTotal({ ...blockParams, nights })
+    const roomPerNight = roomBlockTotal({ ...blockParams, nights: 1 })
     // Forecasted F&B = headcount × Σ (hotel's per-person price for each meal-price
     // column this client shows). One round for the whole party — no meal counts;
     // the travel manager multiplies by the number of meals at the end.
@@ -877,12 +878,12 @@ export async function exportMultiCityConsolidatedXlsx(
       case 'total_per_night':
         return perNight != null ? Math.round(perNight) : null
       case 'revenue_per_night':
-        // Total room revenue for ONE night across the whole block, net of the
-        // complimentary rooms: (rate incl. tax) × paid rooms.
-        return perNight != null && paidRooms != null ? Math.round(perNight * paidRooms) : null
+        // Block room revenue for ONE night — same tiered comp/upgrade formula as
+        // Est. Total Cost, so every team's math is identical.
+        return roomPerNight
       case 'revenue_all_nights':
-        // Same block revenue carried across every night of the stay.
-        return perNight != null && paidRooms != null ? Math.round(perNight * paidRooms * nights) : null
+        // Same block revenue across all nights (=== Est. Total Cost numerically).
+        return roomTotal
       case 'forecasted_room_total':
       case 'est_total_cost':
         // Tiered block estimate (see roomBlockTotal): comped suites free,
