@@ -13,6 +13,7 @@ type TimelineEvent = {
   event_type:
     | 'schedule_imported'
     | 'trip_created'
+    | 'hotel_added'
     | 'invite_sent'
     | 'bid_received'
     | 'bid_declined'
@@ -20,6 +21,9 @@ type TimelineEvent = {
     | 'reminder_sent'
     | 'awarded'
     | 'proposal_sent'
+    | 'trip_deleted'
+    | 'invitation_deleted'
+    | 'client_deleted'
   client_id: string | null
   team_name: string | null
   trip_id: string | null
@@ -30,9 +34,10 @@ type TimelineEvent = {
   detail: Record<string, unknown> | null
 }
 
-const EVENT_META: Record<TimelineEvent['event_type'], { icon: string; label: string }> = {
+const EVENT_META: Record<TimelineEvent['event_type'], { icon: string; label: string; danger?: boolean }> = {
   schedule_imported: { icon: '', label: 'Schedule imported' },
   trip_created: { icon: '', label: 'Trip created' },
+  hotel_added: { icon: '', label: 'Hotel added' },
   invite_sent: { icon: '', label: 'Hotel invited' },
   bid_received: { icon: '', label: 'Bid received' },
   bid_declined: { icon: '', label: 'Hotel declined' },
@@ -40,6 +45,9 @@ const EVENT_META: Record<TimelineEvent['event_type'], { icon: string; label: str
   reminder_sent: { icon: '', label: 'Reminder sent' },
   awarded: { icon: '🏆', label: 'Awarded' },
   proposal_sent: { icon: '', label: 'Proposal sent to client' },
+  trip_deleted: { icon: '', label: 'Trip deleted', danger: true },
+  invitation_deleted: { icon: '', label: 'Hotel invitation deleted', danger: true },
+  client_deleted: { icon: '', label: 'Client deleted', danger: true },
 }
 
 function median(nums: number[]): number | null {
@@ -70,6 +78,7 @@ type TripCycle = {
   team_name: string | null
   city: string | null
   start: number | null // schedule import (client) or earliest trip_created
+  firstHotelAdded: number | null // first hotel added to the RFP (invitation created)
   firstInvite: number | null
   firstBid: number | null
   lastBid: number | null
@@ -99,6 +108,7 @@ function buildCycles(events: TimelineEvent[]): TripCycle[] {
         team_name: e.team_name,
         city: e.city,
         start: null,
+        firstHotelAdded: null,
         firstInvite: null,
         firstBid: null,
         lastBid: null,
@@ -123,6 +133,9 @@ function buildCycles(events: TimelineEvent[]): TripCycle[] {
         c.start = e.client_id && importByClient.has(e.client_id)
           ? Math.min(importByClient.get(e.client_id)!, at)
           : c.start === null ? at : Math.min(c.start, at)
+        break
+      case 'hotel_added':
+        c.firstHotelAdded = c.firstHotelAdded === null ? at : Math.min(c.firstHotelAdded, at)
         break
       case 'invite_sent':
         c.firstInvite = c.firstInvite === null ? at : Math.min(c.firstInvite, at)
@@ -243,45 +256,31 @@ export default function TimelinePage() {
       })
   }, [allowed, clientId])
 
-  // Deletion audit trail (owner-only). Read straight from activity_events since
-  // the lifecycle RPC only surfaces non-deletion events.
-  const [deletions, setDeletions] = useState<{ at: string; event_type: string; detail: Record<string, unknown> | null; actor: { full_name: string | null } | null }[]>([])
-  useEffect(() => {
-    if (!allowed) return
-    supabase
-      .from('activity_events')
-      .select('at, event_type, detail, actor:profiles(full_name)')
-      .in('event_type', ['trip_deleted', 'invitation_deleted', 'client_deleted'])
-      .order('at', { ascending: false })
-      .limit(50)
-      .then(({ data }) => setDeletions((data ?? []) as unknown as typeof deletions))
-  }, [allowed])
+  // Show the full activity log (past the default cap) when the operator asks.
+  const [showAll, setShowAll] = useState(false)
 
   const cycles = useMemo(() => buildCycles(events), [events])
 
   const metrics = useMemo(() => {
     const span = (a: number | null, b: number | null) => (a !== null && b !== null && b >= a ? b - a : null)
-    const sourcing: number[] = []
-    const buildTurn: number[] = []
-    const delivery: number[] = []
-    const kjstTotal: number[] = []
-    const lifecycle: number[] = []
+    const setup: number[] = []      // trip created/imported → first hotel added
+    const send: number[] = []       // first hotel added → first invite emailed
+    const award: number[] = []      // last bid received → hotel awarded
+    const lifecycle: number[] = []  // start → proposal sent (full lifecycle)
     for (const c of cycles) {
-      const s = span(c.start, c.firstInvite)
-      const b = span(c.lastBid, c.build)
-      const d = span(c.build, c.proposalSent)
-      if (s !== null) sourcing.push(s)
-      if (b !== null) buildTurn.push(b)
-      if (d !== null) delivery.push(d)
-      if (s !== null && b !== null && d !== null) kjstTotal.push(s + b + d)
+      const su = span(c.start, c.firstHotelAdded)
+      const sd = span(c.firstHotelAdded, c.firstInvite)
+      const aw = span(c.lastBid, c.awarded)
+      if (su !== null) setup.push(su)
+      if (sd !== null) send.push(sd)
+      if (aw !== null) award.push(aw)
       const lc = span(c.start, c.proposalSent)
       if (lc !== null) lifecycle.push(lc)
     }
     return {
-      sourcing: median(sourcing),
-      buildTurn: median(buildTurn),
-      delivery: median(delivery),
-      kjstTotal: median(kjstTotal),
+      setup: median(setup),
+      send: median(send),
+      award: median(award),
       lifecycle: median(lifecycle),
       hotelResponse: median(hotelResponseDurations(events)),
     }
@@ -344,34 +343,6 @@ export default function TimelinePage() {
         </div>
       </div>
 
-      {/* Deletion audit trail — who removed a trip, invitation, or client */}
-      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-4">
-        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Recent deletions</h2>
-        <p className="mb-3 mt-0.5 text-xs text-slate-400 dark:text-slate-500">Who removed a trip, hotel invitation, or client — most recent first.</p>
-        {deletions.length === 0 ? (
-          <p className="text-sm text-slate-400 dark:text-slate-500">No deletions recorded.</p>
-        ) : (
-          <ul className="divide-y divide-slate-100 dark:divide-slate-700">
-            {deletions.map((d, i) => {
-              const det = (d.detail ?? {}) as Record<string, any>
-              const label = d.event_type === 'trip_deleted' ? 'Trip deleted' : d.event_type === 'invitation_deleted' ? 'Hotel invitation deleted' : 'Client deleted'
-              const name = det.hotel_name || det.opponent_label || det.team_name || 'item'
-              const team = det.team_name && det.team_name !== name ? ` · ${det.team_name}` : ''
-              return (
-                <li key={i} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2 text-sm">
-                  <span className="text-slate-700 dark:text-slate-200">
-                    <span className="font-semibold text-red-600 dark:text-red-400">{label}:</span> {String(name)}{team}
-                  </span>
-                  <span className="text-xs text-slate-400 dark:text-slate-500">
-                    {d.actor?.full_name || 'Unknown'} · {new Date(d.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                  </span>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </div>
-
       {error && <ErrorNote message={error} />}
 
       {loading ? (
@@ -383,11 +354,10 @@ export default function TimelinePage() {
             <h2 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
               KJST cycle time <span className="font-normal text-slate-400">(median, what KJST controls)</span>
             </h2>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <Tile value={dur(metrics.kjstTotal)} label="KJST total" sublabel="sourcing + build + delivery" />
-              <Tile value={dur(metrics.sourcing)} label="Sourcing setup" sublabel="import → first invite" />
-              <Tile value={dur(metrics.buildTurn)} label="Build turnaround" sublabel="last bid → build saved" />
-              <Tile value={dur(metrics.delivery)} label="Delivery" sublabel="build → proposal sent" />
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <Tile value={dur(metrics.setup)} label="Set up hotels" sublabel="trip created → first hotel added" />
+              <Tile value={dur(metrics.send)} label="Send bids" sublabel="first hotel added → first invite" />
+              <Tile value={dur(metrics.award)} label="Award" sublabel="last bid → hotel awarded" />
             </div>
           </div>
 
@@ -417,10 +387,10 @@ export default function TimelinePage() {
                   <thead className="bg-slate-50 dark:bg-slate-800/60 text-left text-xs font-semibold text-slate-500 dark:text-slate-400">
                     <tr>
                       <th className="px-4 py-2">Trip</th>
-                      <th className="px-4 py-2">Sourcing</th>
+                      <th className="px-4 py-2">Set up hotels</th>
+                      <th className="px-4 py-2">Send bids</th>
                       <th className="px-4 py-2">Hotel wait</th>
-                      <th className="px-4 py-2">Build</th>
-                      <th className="px-4 py-2">Delivery</th>
+                      <th className="px-4 py-2">Award</th>
                       <th className="px-4 py-2">Status</th>
                     </tr>
                   </thead>
@@ -432,14 +402,14 @@ export default function TimelinePage() {
                       .sort((a, b) => (b.start ?? 0) - (a.start ?? 0))
                       .map((c) => {
                         const span = (x: number | null, y: number | null) => (x !== null && y !== null && y >= x ? y - x : null)
-                        const status = c.awarded ? 'Awarded' : c.proposalSent ? 'Proposal sent' : c.build ? 'Building' : c.firstBid ? 'Collecting bids' : c.firstInvite ? 'Invited' : 'Draft'
+                        const status = c.awarded ? 'Awarded' : c.proposalSent ? 'Proposal sent' : c.build ? 'Building' : c.firstBid ? 'Collecting bids' : c.firstInvite ? 'Invited' : c.firstHotelAdded ? 'Hotels added' : 'Draft'
                         return (
                           <tr key={c.trip_id} className="text-slate-700 dark:text-slate-200">
                             <td className="px-4 py-2 font-medium">{c.city || 'Trip'}</td>
-                            <td className="px-4 py-2 tabular-nums">{dur(span(c.start, c.firstInvite))}</td>
+                            <td className="px-4 py-2 tabular-nums">{dur(span(c.start, c.firstHotelAdded))}</td>
+                            <td className="px-4 py-2 tabular-nums">{dur(span(c.firstHotelAdded, c.firstInvite))}</td>
                             <td className="px-4 py-2 tabular-nums text-slate-400">{dur(span(c.firstInvite, c.firstBid))}</td>
-                            <td className="px-4 py-2 tabular-nums">{dur(span(c.lastBid, c.build))}</td>
-                            <td className="px-4 py-2 tabular-nums">{dur(span(c.build, c.proposalSent))}</td>
+                            <td className="px-4 py-2 tabular-nums">{dur(span(c.lastBid, c.awarded))}</td>
                             <td className="px-4 py-2 text-xs">{status}</td>
                           </tr>
                         )
@@ -481,10 +451,19 @@ export default function TimelinePage() {
               {feed.length === 0 && (
                 <div className="px-4 py-10 text-center text-sm text-slate-400">No activity to show.</div>
               )}
-              {feed.slice(0, 300).map((e, i) => {
+              {(showAll ? feed : feed.slice(0, 300)).map((e, i) => {
                 const meta = EVENT_META[e.event_type]
+                const det = (e.detail ?? {}) as Record<string, any>
+                // Deletion rows carry their subject in `detail` (the deleted row is
+                // gone), so team/name come from there rather than the joined tables.
+                const teamName = e.team_name || det.team_name || null
                 const parts: string[] = []
-                if (e.hotel_name) parts.push(e.hotel_name)
+                if (meta.danger) {
+                  const name = e.hotel_name || det.hotel_name || det.opponent_label || det.team_name
+                  if (name && name !== teamName) parts.push(String(name))
+                } else if (e.hotel_name) {
+                  parts.push(e.hotel_name)
+                }
                 if (e.event_type === 'schedule_imported' && e.detail?.count) parts.push(`${e.detail.count} trips`)
                 if (e.event_type === 'reminder_sent' && e.detail?.count) parts.push(`${e.detail.count} hotels`)
                 if (e.event_type === 'build_saved' && e.detail?.label) parts.push(String(e.detail.label))
@@ -494,11 +473,11 @@ export default function TimelinePage() {
                     <span className="mt-0.5 text-base leading-none" aria-hidden>{meta.icon}</span>
                     <div className="min-w-0 flex-1">
                       <div className="text-sm text-slate-700 dark:text-slate-200">
-                        <span className="font-medium">{meta.label}</span>
+                        <span className={`font-medium ${meta.danger ? 'text-red-600 dark:text-red-400' : ''}`}>{meta.label}</span>
                         {parts.length > 0 && <span className="text-slate-500 dark:text-slate-400"> · {parts.join(' · ')}</span>}
                       </div>
                       <div className="text-xs text-slate-400 dark:text-slate-500">
-                        {[e.team_name, e.city].filter(Boolean).join(' · ')}
+                        {[teamName, e.city].filter(Boolean).join(' · ')}
                         {e.actor_name ? ` · by ${e.actor_name}` : ''}
                       </div>
                     </div>
@@ -510,7 +489,12 @@ export default function TimelinePage() {
               })}
             </div>
             {feed.length > 300 && (
-              <p className="mt-2 text-xs text-slate-400">Showing the most recent 300 of {feed.length} events.</p>
+              <button
+                onClick={() => setShowAll((v) => !v)}
+                className="mt-2 text-xs font-medium text-[#1C1008] dark:text-slate-200 hover:underline"
+              >
+                {showAll ? `Show less (most recent 300)` : `Show all ${feed.length} events`}
+              </button>
             )}
           </div>
         </>
