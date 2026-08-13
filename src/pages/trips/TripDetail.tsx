@@ -2103,7 +2103,8 @@ export default function TripDetail() {
   const [regretOpen, setRegretOpen] = useState(false)
   const [regretMsg, setRegretMsg] = useState('')
   const [regretSending, setRegretSending] = useState(false)
-  const loserCount = (invites ?? []).filter((i) => i.status === 'submitted' && !(i as any).awarded_stay1 && !(i as any).awarded_stay2).length
+  // "Not selected" = bid in / passed but not awarded either visit.
+  const loserCount = (invites ?? []).filter((i) => ['submitted', 'passed'].includes(i.status) && !(i as any).awarded_stay1 && !(i as any).awarded_stay2).length
   const openRegret = () => {
     const tripRef = [trip?.clients?.team_name, trip?.city].filter(Boolean).join(' · ')
     setRegretMsg(

@@ -142,7 +142,7 @@ Deno.serve(async (req: Request) => {
     .from('rfp_invitations')
     .select('id, hotel_name, hotel_contact_name, hotel_contact_email, status, awarded_stay1, awarded_stay2')
     .eq('trip_id', trip_id)
-    .eq('status', 'submitted')
+    .in('status', ['submitted', 'passed'])
   const losers = (invs ?? []).filter((i: any) => !i.awarded_stay1 && !i.awarded_stay2 && i.hotel_contact_email)
 
   if (losers.length === 0) return Response.json({ ok: true, sent: 0, recipients: [] }, { headers: CORS })
