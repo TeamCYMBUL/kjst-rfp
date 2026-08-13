@@ -61,9 +61,6 @@ export default function ContractsPrint() {
           >
             Download Word (.docx)
           </button>
-          <button onClick={() => window.print()} style={{ background: '#fff', color: PRIMARY, border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
-            Print / Save as PDF
-          </button>
         </div>
       </div>
 

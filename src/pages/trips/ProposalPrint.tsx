@@ -104,14 +104,6 @@ export default function ProposalPrint() {
     load()
   }, [tripId, hotelParam])
 
-  // Auto-print after data loads
-  useEffect(() => {
-    if (!loading && trip) {
-      const t = setTimeout(() => window.print(), 400)
-      return () => clearTimeout(t)
-    }
-  }, [loading, trip])
-
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'system-ui, sans-serif', color: '#64748b' }}>
@@ -148,12 +140,6 @@ export default function ProposalPrint() {
         style={{ background: PRIMARY, color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
       >
         Download Word (.docx)
-      </button>
-      <button
-        onClick={() => window.print()}
-        style={{ background: 'white', color: PRIMARY, border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
-      >
-        Print / Save as PDF
       </button>
       {!fullDetailMode && (
         <Link

@@ -292,7 +292,11 @@ export default function TripForm() {
       king_rooms_requested: numOrNull(fields.king_rooms_requested),
       double_rooms_requested: numOrNull(fields.double_rooms_requested),
       suites_requested: numOrNull(fields.suites_requested),
-      total_rooms_requested: numOrNull(fields.total_rooms_requested),
+      // Total is always the sum of king + double + suites (never entered directly).
+      total_rooms_requested:
+        (Number(fields.king_rooms_requested) || 0) +
+          (Number(fields.double_rooms_requested) || 0) +
+          (Number(fields.suites_requested) || 0) || null,
       in_season_tournament_window: clean(fields.in_season_tournament_window),
       postseason_window: clean(fields.postseason_window),
       postseason_rooms_text: clean(fields.postseason_rooms_text),
@@ -566,12 +570,20 @@ export default function TripForm() {
               />
               <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Include coaches, staff, and executive suites.</p>
             </div>
-            <TextField
-              label="Total rooms"
-              type="number"
-              value={fields.total_rooms_requested}
-              onChange={set('total_rooms_requested')}
-            />
+            <div>
+              <TextField
+                label="Total rooms"
+                type="number"
+                value={String(
+                  (Number(fields.king_rooms_requested) || 0) +
+                    (Number(fields.double_rooms_requested) || 0) +
+                    (Number(fields.suites_requested) || 0),
+                )}
+                onChange={() => {}}
+                disabled
+              />
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Auto-summed from king + double + suites.</p>
+            </div>
           </div>
         </Card>
 

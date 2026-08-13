@@ -121,13 +121,6 @@ export default function ClientProposalsPrint() {
     load()
   }, [clientId, newMode])
 
-  useEffect(() => {
-    if (!loading && client) {
-      const t = setTimeout(() => window.print(), 500)
-      return () => clearTimeout(t)
-    }
-  }, [loading, client])
-
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'system-ui, sans-serif', color: '#64748b' }}>
@@ -166,12 +159,6 @@ export default function ClientProposalsPrint() {
         style={{ background: PRIMARY, color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
       >
         Download Word (.docx)
-      </button>
-      <button
-        onClick={() => window.print()}
-        style={{ background: 'white', color: PRIMARY, border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
-      >
-        Print / Save as PDF
       </button>
       <Link
         to={`/clients/${clientId}`}
