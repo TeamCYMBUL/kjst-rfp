@@ -41,10 +41,12 @@ export function RevenuePanel() {
     }
   }, [isOwner])
 
-  // Distinct clients for the filter chip row.
+  // Distinct clients for the filter chip row — from awarded AND pending trips,
+  // so a team with only pending bids is still selectable.
   const clientOptions = useMemo(() => {
     if (!data) return [] as Array<[string, string]>
-    return [...new Map(data.rows.map((r) => [r.clientId ?? r.clientName, r.clientName])).entries()].sort(
+    const all = [...data.rows, ...data.pendingRows]
+    return [...new Map(all.map((r) => [r.clientId ?? r.clientName, r.clientName])).entries()].sort(
       (a, b) => a[1].localeCompare(b[1]),
     )
   }, [data])
@@ -79,6 +81,37 @@ export function RevenuePanel() {
       commission: rows.reduce((s, r) => s + r.commission, 0),
     }
   }, [groups])
+
+  // Pending (not-yet-awarded) trips, valued at the average bid — same client
+  // filter as the awarded table so a team selection filters both sections.
+  const pendingGroups = useMemo(() => {
+    if (!data) return []
+    const rows = clientFilter ? data.pendingRows.filter((r) => (r.clientId ?? r.clientName) === clientFilter) : data.pendingRows
+    const byClient = new Map<string, CommissionRow[]>()
+    for (const r of rows) {
+      const k = r.clientId ?? r.clientName
+      if (!byClient.has(k)) byClient.set(k, [])
+      byClient.get(k)!.push(r)
+    }
+    return [...byClient.entries()]
+      .map(([k, rs]) => ({
+        key: k,
+        name: rs[0].clientName,
+        rows: rs.sort((a, b) => a.city.localeCompare(b.city)),
+        revenue: rs.reduce((s, r) => s + r.revenue, 0),
+        commission: rs.reduce((s, r) => s + r.commission, 0),
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+  }, [data, clientFilter])
+
+  const pendingShown = useMemo(() => {
+    const rows = pendingGroups.flatMap((g) => g.rows)
+    return {
+      trips: rows.length,
+      revenue: rows.reduce((s, r) => s + r.revenue, 0),
+      commission: rows.reduce((s, r) => s + r.commission, 0),
+    }
+  }, [pendingGroups])
 
   if (!isOwner) return null
 
@@ -250,9 +283,86 @@ export function RevenuePanel() {
                 </div>
               )}
 
+              {/* Revenue opportunity — trips with bids in but no winner yet */}
+              {pendingShown.trips > 0 && (
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Revenue opportunity</h3>
+                    <span className="rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                      bids in, not awarded yet
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {[
+                      { label: 'Revenue opportunity', value: usd(pendingShown.revenue) },
+                      { label: 'Projected commission', value: usd(pendingShown.commission), strong: true },
+                      { label: 'Pending trips', value: String(pendingShown.trips) },
+                    ].map((t) => (
+                      <div key={t.label} className="rounded-lg border border-amber-200/70 dark:border-amber-900/40 bg-white dark:bg-slate-900/40 px-4 py-3">
+                        <div className={`font-bold tabular-nums ${t.strong ? 'text-2xl text-amber-700 dark:text-amber-300' : 'text-xl text-slate-800 dark:text-slate-100'}`}>
+                          {t.value}
+                        </div>
+                        <div className="mt-0.5 text-xs font-medium text-slate-500 dark:text-slate-400">{t.label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/40">
+                    <table className="w-full min-w-[640px] text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-200 dark:border-slate-700 text-left text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                          <th className="py-2 pl-4 pr-3 font-medium">City</th>
+                          <th className="py-2 px-3 font-medium">Bids in</th>
+                          <th className="py-2 px-3 font-medium text-right">Rooms x Nights</th>
+                          <th className="py-2 px-3 font-medium text-right">Avg room revenue</th>
+                          <th className="py-2 px-3 font-medium text-right">Comm %</th>
+                          <th className="py-2 pr-4 pl-3 font-medium text-right">Proj. commission</th>
+                        </tr>
+                      </thead>
+                      {pendingGroups.map((g) => (
+                        <tbody key={g.key}>
+                          <tr className="bg-slate-50 dark:bg-slate-800/40">
+                            <td colSpan={6} className="px-4 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300">{g.name}</td>
+                          </tr>
+                          {g.rows.map((r) => {
+                            const nightsText = r.twoVisit ? `${r.nights1}n + ${r.nights2}n` : `${r.nights1}n`
+                            return (
+                              <tr key={r.invitationId} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+                                <td className="py-2 pl-4 pr-3 text-slate-700 dark:text-slate-300">{r.city || '—'}</td>
+                                <td className="py-2 px-3 text-slate-500 dark:text-slate-400">{r.hotelName}</td>
+                                <td className="py-2 px-3 text-right tabular-nums text-slate-500 dark:text-slate-400">{r.rooms} x {nightsText}</td>
+                                <td className="py-2 px-3 text-right tabular-nums text-slate-700 dark:text-slate-300">{r.revenue ? usd(r.revenue) : '—'}</td>
+                                <td className="py-2 px-3 text-right tabular-nums text-slate-500 dark:text-slate-400">{r.commissionPct ? `${r.commissionPct}%` : '—'}</td>
+                                <td className="py-2 pr-4 pl-3 text-right font-semibold tabular-nums text-amber-700 dark:text-amber-300">{r.commission ? usd(r.commission) : '—'}</td>
+                              </tr>
+                            )
+                          })}
+                          <tr className="border-b-2 border-slate-200 dark:border-slate-700">
+                            <td colSpan={3} className="px-4 py-1.5 text-right text-xs font-medium text-slate-400 dark:text-slate-500">{g.name} subtotal</td>
+                            <td className="py-1.5 px-3 text-right text-xs tabular-nums text-slate-600 dark:text-slate-300">{usd(g.revenue)}</td>
+                            <td></td>
+                            <td className="py-1.5 pr-4 pl-3 text-right text-xs font-semibold tabular-nums text-amber-700 dark:text-amber-300">{usd(g.commission)}</td>
+                          </tr>
+                        </tbody>
+                      ))}
+                      <tfoot>
+                        <tr className="bg-amber-50 dark:bg-amber-950/20">
+                          <td colSpan={3} className="px-4 py-2 text-right text-xs font-bold uppercase tracking-wide text-amber-800 dark:text-amber-200">Opportunity total</td>
+                          <td className="py-2 px-3 text-right font-bold tabular-nums text-amber-800 dark:text-amber-200">{usd(pendingShown.revenue)}</td>
+                          <td></td>
+                          <td className="py-2 pr-4 pl-3 text-right font-bold tabular-nums text-amber-800 dark:text-amber-200">{usd(pendingShown.commission)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               <p className="text-[11px] text-slate-400 dark:text-slate-500">
                 Room revenue = awarded king rate x room block x nights (excl. tax), per stay. Commission % is pulled from each
-                winning hotel&apos;s own bid. Visible only to {OWNER_EMAILS.join(' and ')}.
+                winning hotel&apos;s own bid. Revenue opportunity averages the room revenue of all bids in on a not-yet-awarded
+                trip. Visible only to {OWNER_EMAILS.join(' and ')}.
               </p>
             </>
           )}
