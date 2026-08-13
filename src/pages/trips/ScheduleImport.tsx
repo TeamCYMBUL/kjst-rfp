@@ -7,6 +7,7 @@ import { parseCalendarSchedulePdf } from '../../lib/parseCalendarPdf'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activity'
 import { useRole } from '../../lib/useRole'
+import { formatGameTime } from '../../lib/format'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl
 
@@ -386,7 +387,7 @@ export default function ScheduleImportModal({ isOpen, onClose, onImported, defau
         arrival,
         departure: parseDate(getVal(r, 'departure_date')),
         gameDates: parseGameDates(getVal(r, 'game_date'), fallbackYear),
-        gameTime: getVal(r, 'game_time').trim() || null,
+        gameTime: formatGameTime(getVal(r, 'game_time')),
         kings: rowKings ?? defaultKings,
         doubles: defaultDoubles,
         suites: rowSuites ?? defaultSuites,

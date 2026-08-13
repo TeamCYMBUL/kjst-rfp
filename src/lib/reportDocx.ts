@@ -235,7 +235,7 @@ function hotelBlock(h: DocxHotel): (Paragraph | Table)[] {
   return out
 }
 
-const footerPara = () => new Paragraph({ spacing: { before: 240 }, border: { top: rowLine }, children: [new TextRun({ text: 'Rates negotiated exclusively by KJ Sports Travel · team@kjsportstravel.com', font: BODY, size: 16, color: '94A3B8' })] })
+const footerPara = () => new Paragraph({ spacing: { before: 240 }, border: { top: rowLine }, children: [new TextRun({ text: 'Rates negotiated exclusively by KJ Sports Travel', font: BODY, size: 16, color: '94A3B8' })] })
 
 function pageBreakPara() { return new Paragraph({ children: [new PageBreak()] }) }
 
@@ -293,7 +293,7 @@ export function buildDelinquentDoc(input: { teamName: string; season: string | n
     new TableCell({ width: { size: widths[5], type: WidthType.DXA }, margins: { top: 80, bottom: 80, left: 100, right: 100 }, children: [new Paragraph({ children: [new TextRun({ text: r.contactName || '—', font: BODY, size: 18, color: INK })] }), ...(r.contactEmail ? [new Paragraph({ children: [new TextRun({ text: r.contactEmail, font: BODY, size: 16, color: MUTED })] })] : [])] }),
   ] }))
   children.push(new Table({ width: { size: CONTENT_W, type: WidthType.DXA }, columnWidths: widths, borders: { top: rowLine, bottom: rowLine, left: rowLine, right: rowLine, insideHorizontal: rowLine, insideVertical: { style: BorderStyle.NONE } }, rows: [headerRow, ...bodyRows] }))
-  children.push(new Paragraph({ spacing: { before: 160 }, children: [new TextRun({ text: `${input.rows.length} hotel${input.rows.length !== 1 ? 's' : ''} past deadline · KJ Sports Travel · team@kjsportstravel.com`, font: BODY, size: 16, color: '94A3B8' })] }))
+  children.push(new Paragraph({ spacing: { before: 160 }, children: [new TextRun({ text: `${input.rows.length} hotel${input.rows.length !== 1 ? 's' : ''} past deadline · KJ Sports Travel`, font: BODY, size: 16, color: '94A3B8' })] }))
   return docShell(children)
 }
 

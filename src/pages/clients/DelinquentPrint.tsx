@@ -116,7 +116,7 @@ export default function DelinquentPrint() {
         )}
 
         <div style={{ marginTop: 16, fontSize: 12, color: '#94a3b8' }}>
-          {rows.length} hotel{rows.length !== 1 ? 's' : ''} past deadline · KJ Sports Travel · team@kjsportstravel.com
+          {rows.length} hotel{rows.length !== 1 ? 's' : ''} past deadline · KJ Sports Travel
         </div>
       </div>
     </>

@@ -164,7 +164,7 @@ export function TripHeader({ trip, subtitle }: { trip: ProposalTrip; subtitle: s
 
 export const ProposalFooter = (
   <div style={{ border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '16px 32px', background: '#f8fafc', fontSize: 12, color: '#94a3b8' }}>
-    * Rates negotiated exclusively by KJ Sports Travel &nbsp;·&nbsp; team@kjsportstravel.com
+    * Rates negotiated exclusively by KJ Sports Travel
   </div>
 )
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { getRfp, respondRfp, declineRfp } from '../../lib/rfpApi'
 import { supabase } from '../../lib/supabase'
-import { formatDate } from '../../lib/format'
+import { formatDate, formatGameTime } from '../../lib/format'
 import type {
   AnswerPayload,
   ConcessionItem,
@@ -59,18 +59,6 @@ type RespState = {
 }
 
 // ── Small presentational helpers ──────────────────────────────────────────────
-
-// Square-footage helpers for the "room size below requested" hint. requestedSqFt
-// pulls the "N sq. ft." figure out of a meeting-space item's label; firstNum
-// pulls the first number the hotel typed into the size field.
-function requestedSqFt(label: string | null | undefined): number | null {
-  const m = (label ?? '').match(/([\d,]+)\s*sq/i)
-  return m ? Number(m[1].replace(/,/g, '')) : null
-}
-function firstNum(str: string | null | undefined): number | null {
-  const m = (str ?? '').replace(/,/g, '').match(/\d+(?:\.\d+)?/)
-  return m ? Number(m[0]) : null
-}
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
@@ -441,7 +429,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
     dep: trip.departure_date,
     nts: nightsFor(trip.arrival_date, trip.departure_date) ?? trip.nights,
     game: gameDatesText(trip.game_dates, trip.game_date),
-    time: trip.game_time,
+    time: formatGameTime(trip.game_time),
   })
   if (hasStay2) {
     const arr = trip.stay2_arrival_date
@@ -451,7 +439,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
       opponent: trip.opponent_label ? `${trip.opponent_label} (Visit 2)` : 'Visit 2',
       arr, dep, nts,
       game: gameDatesText(trip.stay2_game_dates, trip.stay2_game_date),
-      time: trip.stay2_game_time,
+      time: formatGameTime(trip.stay2_game_time),
     })
   }
 
@@ -1864,15 +1852,6 @@ export default function RfpForm() {
                             disabled={isReadOnly}
                             placeholder="e.g. 3,200 sq. ft."
                           />
-                          {(() => {
-                            const req = requestedSqFt(item.label)
-                            const off = firstNum(detail.dimensions)
-                            return req && off && off < req * 0.9 ? (
-                              <p className="mt-1 text-xs font-semibold text-amber-700">
-                                Below the requested {req.toLocaleString()} sq. ft. — please confirm or note a counteroffer.
-                              </p>
-                            ) : null
-                          })()}
                         </div>
                       </div>
                     </div>

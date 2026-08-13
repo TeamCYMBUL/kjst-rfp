@@ -11,7 +11,7 @@ import {
 } from '../../lib/rfpStages'
 import type { StageKey } from '../../lib/rfpStages'
 import type { Client, DateScenario, Invitation, Trip } from '../../lib/types'
-import { formatDate, generateToken, formatMeetingSpaceNotes, passedLabel } from '../../lib/format'
+import { formatDate, generateToken, formatMeetingSpaceNotes, passedLabel, formatGameTime } from '../../lib/format'
 import { fetchAllAnswersByResponseIds } from '../../lib/answers'
 import { PUBLIC_APP_URL } from '../../lib/config'
 import { sendInvitationEmail, sendReminderEmails, sendSingleReminderEmail, reopenRfp, sendContractRequest, sendRfpCopy, sendRegrets } from '../../lib/emailApi'
@@ -1536,7 +1536,7 @@ function TripInfoPanel({ trip }: { trip: Trip & { clients: Pick<Client, 'id' | '
           <InfoRow label={hasStay2 ? 'Stay 1 departure' : 'Departure'} value={fmt(trip.departure_date)} />
           {trip.nights != null && <InfoRow label="Nights" value={String(trip.nights)} />}
           <InfoRow label="Game date(s)" value={fmtGames((trip as any).game_dates, trip.game_date)} />
-          {trip.game_time && <InfoRow label="Game time" value={trip.game_time} />}
+          {trip.game_time && <InfoRow label="Game time" value={formatGameTime(trip.game_time) ?? ''} />}
           <InfoRow label="Response deadline" value={fmt(trip.response_deadline)} />
         </dl>
       </div>
@@ -1549,7 +1549,7 @@ function TripInfoPanel({ trip }: { trip: Trip & { clients: Pick<Client, 'id' | '
             {(((trip as any).stay2_game_dates as string[] | null)?.length || trip.stay2_game_date) && (
               <InfoRow label="Game date(s)" value={fmtGames((trip as any).stay2_game_dates, trip.stay2_game_date)} />
             )}
-            {trip.stay2_game_time && <InfoRow label="Game time" value={trip.stay2_game_time} />}
+            {trip.stay2_game_time && <InfoRow label="Game time" value={formatGameTime(trip.stay2_game_time) ?? ''} />}
           </dl>
         </div>
       )}

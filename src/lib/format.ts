@@ -142,3 +142,22 @@ export function countVisits(
 export function passedLabel(submittedAt: string | null | undefined): string {
   return submittedAt ? 'Passed' : 'Passed - Not Available'
 }
+
+// Game time may arrive from an Excel import as a time fraction of a day
+// (e.g. 0.79166… = 7:00 PM). Convert those to a readable "h:mm AM/PM"; pass any
+// already-formatted string through unchanged.
+export function formatGameTime(v: string | null | undefined): string | null {
+  if (v == null) return null
+  const s = String(v).trim()
+  if (!s) return null
+  const n = Number(s)
+  if (Number.isFinite(n) && n >= 0 && n < 1) {
+    const mins = Math.round(n * 24 * 60)
+    const h = Math.floor(mins / 60) % 24
+    const m = mins % 60
+    const ampm = h >= 12 ? 'PM' : 'AM'
+    const h12 = h % 12 === 0 ? 12 : h % 12
+    return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
+  }
+  return s
+}
