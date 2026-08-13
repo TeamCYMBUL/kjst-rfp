@@ -1628,9 +1628,6 @@ export default function TripDetail() {
   const [versions, setVersions] = useState<{id: string; version_label: string; created_at: string}[]>([])
   const [viewingVersion, setViewingVersion] = useState<{label: string; snapshot: any} | null>(null)
   const [savingVersion, setSavingVersion] = useState(false)
-  const [showDeclineModal, setShowDeclineModal] = useState(false)
-  const [sendingDeclines, setSendingDeclines] = useState(false)
-  const [declineToast, setDeclineToast] = useState<string | null>(null)
   const [confirmingScenario, setConfirmingScenario] = useState(false)
   const [confirmingScenarioSaving, setConfirmingScenarioSaving] = useState(false)
   // F&B forecast plan for this trip: { concession_item_id: person_meals }
@@ -2044,21 +2041,6 @@ export default function TripDetail() {
     }
   }
 
-  const sendDeclines = async () => {
-    if (!invites) return
-    const passed = invites.filter((i) => i.status === 'passed')
-    if (passed.length === 0) return
-    setSendingDeclines(true)
-    setShowDeclineModal(false)
-    await Promise.allSettled(
-      passed.map((inv) =>
-        supabase.functions.invoke('send-decline-email', { body: { invitation_id: inv.id } })
-      )
-    )
-    setSendingDeclines(false)
-    setDeclineToast(`Decline emails sent to ${passed.length} hotel${passed.length !== 1 ? 's' : ''}`)
-    setTimeout(() => setDeclineToast(null), 4000)
-  }
 
   const confirmScenario = async (scenario: DateScenario) => {
     setConfirmingScenarioSaving(true)
@@ -2860,14 +2842,6 @@ export default function TripDetail() {
         </div>
       )}
 
-      {/* ── Decline toast ── */}
-      {declineToast && (
-        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-slate-800 dark:bg-slate-100 px-5 py-3 text-sm font-medium text-white dark:text-slate-800 shadow-lg">
-          ✓{declineToast}
-        </div>
-      )}
-
-      {/* ── Decline confirmation modal ── */}
       {regretOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !regretSending && setRegretOpen(false)}>
           <div className="w-full max-w-lg rounded-xl bg-white dark:bg-slate-800 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -2892,40 +2866,6 @@ export default function TripDetail() {
           </div>
         </div>
       )}
-
-      {showDeclineModal && (() => {
-        const passed = invites.filter((i) => i.status === 'passed')
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-800 shadow-2xl p-6">
-              <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-2">Send decline emails?</h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
-                This will send a polite "thank you but we went elsewhere" email to <strong>{passed.length} hotel{passed.length !== 1 ? 's' : ''}</strong>:
-              </p>
-              <ul className="mb-4 space-y-1 rounded-lg bg-slate-50 dark:bg-slate-700/50 px-4 py-3">
-                {passed.map((inv) => (
-                  <li key={inv.id} className="text-sm text-slate-700 dark:text-slate-300">• {inv.hotel_name}</li>
-                ))}
-              </ul>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mb-5">This cannot be undone.</p>
-              <div className="flex gap-3 justify-end">
-                <button
-                  onClick={() => setShowDeclineModal(false)}
-                  className="rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-2 text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={sendDeclines}
-                  className="rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2d1e0e] transition-colors"
-                >
-                  Send {passed.length} Email{passed.length !== 1 ? 's' : ''}
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
 
       {/* ── Scenario confirmation modal ── */}
       {confirmingScenario && trip.date_scenarios?.length > 0 && (
