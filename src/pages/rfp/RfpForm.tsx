@@ -1492,6 +1492,14 @@ export default function RfpForm() {
     // (e.g. a Treatment Room described as a "Treatment Room/Function space") is a
     // meeting-space item, not a separate function space — don't list it twice.
     !item.label.toLowerCase().includes('complimentary meeting space')
+  // The Massage Room furniture-removal item belongs with the meeting-space group
+  // conceptually (the team sets it up alongside the treatment/meeting rooms), but
+  // its label doesn't say "meeting space" so it would otherwise fall into the
+  // general list. Pull it up under the Meeting Space heading as a plain Yes/No.
+  const isMeetingSpaceExtraItem = (item: ConcessionItem) =>
+    item.answer_type === 'yes_no' &&
+    !isMeetingSpaceYesNoItem(item) &&
+    item.label.toLowerCase().includes('furniture removal')
 
   const allConcessionItems = data.items.filter(
     (i) => i.section === 'concessions' || i.section === 'facilities',
@@ -1500,6 +1508,7 @@ export default function RfpForm() {
   const commissionItems = allConcessionItems.filter(isCommissionItem)
   const rebateItems = allConcessionItems.filter(isRebateItem)
   const meetingSpaceYesNoItems = allConcessionItems.filter(isMeetingSpaceYesNoItem)
+  const meetingSpaceExtraItems = allConcessionItems.filter(isMeetingSpaceExtraItem)
   const namedFunctionSpaceItems = allConcessionItems.filter(isNamedFunctionSpaceItem)
   const postseasonItems = data.items.filter((i) => i.section === 'postseason')
   const inSeasonItems = data.items.filter((i) => i.section === 'in_season_tournament')
@@ -1519,6 +1528,7 @@ export default function RfpForm() {
     ...commissionItems,
     ...rebateItems,
     ...meetingSpaceYesNoItems,
+    ...meetingSpaceExtraItems,
     ...namedFunctionSpaceItems,
   ].map((i) => i.id))
   const remainingItems = allConcessionItems.filter((i) => !specialItemIds.has(i.id))
@@ -1874,6 +1884,14 @@ export default function RfpForm() {
                 </div>
               )
             })}
+
+            {/* Meeting-space-adjacent Yes/No items (e.g. Massage Room furniture
+                removal) rendered as plain rows under the same heading. */}
+            {meetingSpaceExtraItems.length > 0 && (
+              <div className="border-t border-slate-100">
+                {renderItems(meetingSpaceExtraItems)}
+              </div>
+            )}
 
             {/* Additional spaces beyond the requested rooms */}
             <div className="mt-5 border-t border-slate-100 pt-5">
