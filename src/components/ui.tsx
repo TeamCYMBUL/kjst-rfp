@@ -140,7 +140,7 @@ export function Badge({ status, label, cancelled }: { status: string; label?: st
   // A cancelled trip reads as "Cancelled" — it replaces the live status entirely.
   if (cancelled) {
     return (
-      <span className="inline-flex rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-300">
+      <span className="inline-flex rounded-full bg-rose-100 dark:bg-rose-900/30 px-2.5 py-0.5 text-xs font-medium text-rose-700 dark:text-rose-300">
         Cancelled
       </span>
     )

@@ -48,6 +48,8 @@ function daysUntil(dateStr: string | null): number | null {
 // practice, so quiet-since-invited is the primary trigger.
 const STALE_DAYS = 3
 function delinquentCount(trip: DashTrip): number {
+  // A cancelled trip is done — never nag "awaiting reply" for its hotels.
+  if (trip.cancelled) return 0
   const dl = daysUntil(trip.response_deadline)
   const overdue = dl !== null && dl < 0
   return trip.rfp_invitations.filter((inv) => {
@@ -177,11 +179,18 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
   // Sort groups alphabetically
   const sorted = [...groups.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name))
 
-  const isUrgent = (g: { trips: DashTrip[] }) =>
-    g.trips.some((t) => {
-      const d = daysUntil(t.response_deadline)
-      return d !== null && d >= 0 && d <= 7
-    })
+  // The soonest deadline coming due within a week for this client, so the chip
+  // can show the actual date instead of a vague "Deadline soon".
+  const soonestUrgentDeadline = (g: { trips: DashTrip[] }): string | null => {
+    const upcoming = g.trips
+      .map((t) => t.response_deadline)
+      .filter((d): d is string => {
+        const n = daysUntil(d)
+        return n !== null && n >= 0 && n <= 7
+      })
+      .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+    return upcoming[0] ?? null
+  }
 
   // Start collapsed on load for a clean page — the manager opens what they want.
   // Only auto-open when a single group is shown (e.g. filtered to one client),
@@ -222,7 +231,7 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
           (n, t) => n + t.rfp_invitations.filter((i) => i.submitted_at != null).length,
           0,
         )
-        const hasUrgent = isUrgent(group)
+        const urgentDeadline = soonestUrgentDeadline(group)
         const groupDelinquent = group.trips.reduce((n, t) => n + delinquentCount(t), 0)
         const isOpen = openKeys.has(key)
         return (
@@ -244,9 +253,9 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
                   ▸
                 </span>
                 <span className="text-base font-semibold text-slate-800 dark:text-slate-200">{group.name}</span>
-                {hasUrgent && (
+                {urgentDeadline && (
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                    ⏰ Deadline soon
+                    ⏰ Deadline {formatDate(urgentDeadline)}
                   </span>
                 )}
                 {groupDelinquent > 0 && (
@@ -394,9 +403,12 @@ export default function Dashboard() {
     ? trips.filter((t) => t.clients && assignedIds.includes(t.clients.id))
     : trips
 
-  // Stats always exclude closed trips (regardless of showClosed toggle)
-  const openTrips = scopedTrips.filter((t) => t.status !== 'closed' && !t.cancelled)
-  const activeTrips = openTrips.filter((t) => t.status !== 'draft')
+  // A cancelled trip stays visible in the main list (so the team can still open
+  // it, review the bids that came in, and send declines) — it just isn't counted
+  // as active work. So: it shows in openTrips, but activeTrips (which drives the
+  // KPI stat cards) excludes it alongside drafts.
+  const openTrips = scopedTrips.filter((t) => t.status !== 'closed')
+  const activeTrips = openTrips.filter((t) => t.status !== 'draft' && !t.cancelled)
   const totalInvited = activeTrips.reduce((n, t) => n + t.rfp_invitations.length, 0)
   const totalSubmitted = activeTrips.reduce(
     (n, t) => n + t.rfp_invitations.filter((i) => i.submitted_at != null).length,
@@ -408,11 +420,11 @@ export default function Dashboard() {
     (n, t) => n + t.rfp_invitations.filter((i) => ['sent', 'opened'].includes(i.status)).length,
     0,
   )
-  const closedCount = scopedTrips.filter((t) => t.status === 'closed' || t.cancelled).length
+  const closedCount = scopedTrips.filter((t) => t.status === 'closed').length
 
   // What the list actually shows. "Show closed" flips to ONLY closed trips, so
   // open and closed are never mixed together.
-  const closedTrips = scopedTrips.filter((t) => t.status === 'closed' || t.cancelled)
+  const closedTrips = scopedTrips.filter((t) => t.status === 'closed')
   const displayedTrips = showClosed ? closedTrips : openTrips
 
   // Distinct clients present in the (scoped) trips — no separate query needed
