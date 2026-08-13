@@ -29,6 +29,10 @@ const STATUS_STYLE: Record<ContractStatus, string> = {
 }
 const NEXT_STATUS: ContractStatus[] = ['requested', 'uploaded', 'in_review', 'verified', 'signed', 'filed']
 
+// Teams the contract fact-check is enabled for. Rolling out on SJ Sharks first
+// (finalizing before the NBA teams); add team names here to expand.
+const FACT_CHECK_TEAMS = ['sj sharks']
+
 export default function ContractsList() {
   const [rows, setRows] = useState<AwardedContract[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -137,7 +141,10 @@ export default function ContractsList() {
               const twoVisit = !!r.trip?.stay2_arrival_date
               const stayTxt = twoVisit ? (r.awarded_stay1 && r.awarded_stay2 ? ' · Stay 1 & 2' : r.awarded_stay1 ? ' · Stay 1' : ' · Stay 2') : ''
               const busy = busyId === (c?.id ?? r.invitation_id)
-              const canFactCheck = !!(c && c.file_path) // an agreement has been uploaded
+              // Fact-check shows once an agreement is uploaded, and only for the
+              // teams it's rolled out to (SJ Sharks first).
+              const canFactCheck = !!(c && c.file_path) &&
+                FACT_CHECK_TEAMS.includes((r.client?.team_name ?? '').trim().toLowerCase())
               const isOpen = openId === r.invitation_id
               const hasIssues = c?.analysis?.overall === 'issues'
               // A hotel with no contract record hasn't been requested yet — say so
