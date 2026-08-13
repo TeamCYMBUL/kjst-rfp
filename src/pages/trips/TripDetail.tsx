@@ -1475,23 +1475,27 @@ function HotelPanel({
                       const ans = answerMap.get(item.id)!
                       const isYes = ans.answer_yes_no === true
                       return (
-                        <div key={item.id} className="flex items-start justify-between gap-4 text-sm">
-                          <span className="text-slate-600 dark:text-slate-300">{item.label}</span>
-                          <div className="text-right shrink-0">
-                            {/* Show what the hotel actually answered: a Yes/No if they gave one
-                                (covers legacy answers on items later switched to quantity), else
-                                the entered number. Keeps this panel in sync with the summary. */}
-                            {ans.answer_yes_no != null ? (
-                              <span className={`font-medium ${isYes ? 'text-emerald-600' : 'text-red-500'}`}>
-                                {isYes ? '✓Yes' : '✗No'}
-                              </span>
-                            ) : (
-                              <span className="font-medium text-slate-700 dark:text-slate-300">{ans.answer_value || '—'}</span>
-                            )}
-                            {ans.comment && (
-                              <p className="mt-0.5 text-xs font-medium italic text-blue-700 dark:text-blue-400">"{ans.comment}"</p>
-                            )}
+                        <div key={item.id} className="text-sm">
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="min-w-0 flex-1 whitespace-pre-line text-slate-600 dark:text-slate-300">{item.label}</span>
+                            <div className="shrink-0 text-right">
+                              {/* Show what the hotel actually answered: a Yes/No if they gave one
+                                  (covers legacy answers on items later switched to quantity), else
+                                  the entered number. Keeps this panel in sync with the summary. */}
+                              {ans.answer_yes_no != null ? (
+                                <span className={`font-medium ${isYes ? 'text-emerald-600' : 'text-red-500'}`}>
+                                  {isYes ? '✓Yes' : '✗No'}
+                                </span>
+                              ) : (
+                                <span className="font-medium text-slate-700 dark:text-slate-300">{ans.answer_value || '—'}</span>
+                              )}
+                            </div>
                           </div>
+                          {/* Counteroffer / comment on its own full-width line so a long note
+                              wraps normally instead of squeezing the label to one word per line. */}
+                          {ans.comment && (
+                            <p className="mt-1 whitespace-pre-line text-xs font-medium italic text-blue-700 dark:text-blue-400">"{ans.comment}"</p>
+                          )}
                         </div>
                       )
                     })}
