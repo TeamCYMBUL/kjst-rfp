@@ -548,7 +548,10 @@ export type ConsolidatedCity = {
 // columns. This is what makes the grid non-fuzzy: the binding is an id/key.
 export type GridSystemKey =
   | 'taxes_fees'
+  | 'tax_pct'
   | 'total_per_night'
+  | 'revenue_per_night'
+  | 'revenue_all_nights'
   | 'est_total_cost'
   | 'avg_rate'
   | 'suite_rate'
@@ -652,11 +655,13 @@ export async function exportMultiCityConsolidatedXlsx(
   // Per-column presentation derived from the spec.
   const specIsCurrency = (s: GridColumnSpec): boolean =>
     s.type === 'item' ? (s.format === 'currency' || s.format === 'party')
-      : s.type === 'system' ? ['taxes_fees', 'total_per_night', 'est_total_cost', 'avg_rate', 'suite_rate',
+      : s.type === 'system' ? ['taxes_fees', 'total_per_night', 'revenue_per_night', 'revenue_all_nights',
+          'est_total_cost', 'avg_rate', 'suite_rate',
           'forecasted_room_total', 'forecasted_fnb', 'total_est_rooms_fnb'].includes(s.key)
       : s.type === 'base' && s.key === 'rate'
   const specNumFmt = (s: GridColumnSpec): string | undefined =>
     s.type === 'base' && (s.key === 'game_date' || s.key === 'ci' || s.key === 'co') ? 'm/d/yy'
+      : s.type === 'system' && s.key === 'tax_pct' ? '0.#"%"'
       : specIsCurrency(s) ? '$#,##0' : undefined
   const specCenter = (s: GridColumnSpec): boolean =>
     s.type === 'base' ? !(s.key === 'city' || s.key === 'hotel' || s.key === 'notes') : true
@@ -838,6 +843,11 @@ export async function exportMultiCityConsolidatedXlsx(
     const upgAns = upgItem ? h.answers[upgItem.id] : undefined
     const suiteUpgrades = upgAns?.answer_value ? Number(upgAns.answer_value) : 0
     const totalRooms = trip.total_rooms_requested ?? null
+    // Paid room count for the block-revenue columns: the trip's own total room
+    // count minus the complimentary (zero-rated) rooms the hotel is giving.
+    const paidRooms = totalRooms != null
+      ? Math.max(0, totalRooms - (Number.isFinite(compSuites) ? compSuites : 0))
+      : null
     // Tiered block cost: comped suites free, upgrades+kings at King, overflow at Suite rate.
     const roomTotal = roomBlockTotal({
       kingRate, suiteRate: suite, tax, fee, nights, totalRooms,
@@ -861,8 +871,18 @@ export async function exportMultiCityConsolidatedXlsx(
     switch (gc.key) {
       case 'taxes_fees':
         return taxesFeesAmt != null ? Math.round(taxesFeesAmt) : null
+      case 'tax_pct':
+        // The occupancy-tax percentage the hotel quoted (fees are shown separately).
+        return tax != null && tax > 0 ? tax : null
       case 'total_per_night':
         return perNight != null ? Math.round(perNight) : null
+      case 'revenue_per_night':
+        // Total room revenue for ONE night across the whole block, net of the
+        // complimentary rooms: (rate incl. tax) × paid rooms.
+        return perNight != null && paidRooms != null ? Math.round(perNight * paidRooms) : null
+      case 'revenue_all_nights':
+        // Same block revenue carried across every night of the stay.
+        return perNight != null && paidRooms != null ? Math.round(perNight * paidRooms * nights) : null
       case 'forecasted_room_total':
       case 'est_total_cost':
         // Tiered block estimate (see roomBlockTotal): comped suites free,
