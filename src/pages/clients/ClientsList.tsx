@@ -7,6 +7,7 @@ import { PageHint } from '../../components/PageHint'
 import { useRole } from '../../lib/useRole'
 import ScheduleImportModal from '../trips/ScheduleImport'
 import { exportAllCitiesForClient } from '../../lib/exportAllCities'
+import { logActivity } from '../../lib/activity'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -122,6 +123,10 @@ export default function ClientsList() {
   // Submitted bids across the selected client's trips, and how many are unprinted
   // — drives the progressive batch-print buttons.
   const [proposalCounts, setProposalCounts] = useState<{ total: number; unprinted: number; awarded: number } | null>(null)
+  // Bulk trip selection + delete on the client panel.
+  const [selTripIds, setSelTripIds] = useState<Set<string>>(new Set())
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
   const { role, canEditClient, assignedClientIds } = useRole()
 
   // Default anyone with assigned teams (managers AND admins) to "My teams" once
@@ -155,6 +160,9 @@ export default function ClientsList() {
   }
 
   useEffect(() => { loadClients() }, [])
+
+  // Clear trip selection whenever the viewed client changes.
+  useEffect(() => { setSelTripIds(new Set()); setConfirmBulkDelete(false) }, [selected?.id])
 
   // Load proposal (bid) counts for the selected client, for the batch-print buttons.
   useEffect(() => {
@@ -196,6 +204,44 @@ export default function ClientsList() {
   const selTrips = selected?.trips ?? []
   const selActive = selTrips.filter((t) => !['closed', 'draft'].includes(t.status))
   const selClosed = selTrips.filter((t) => t.status === 'closed')
+
+  const allTripIds = selTrips.map((t) => t.id)
+  const allTripsSelected = allTripIds.length > 0 && allTripIds.every((id) => selTripIds.has(id))
+  const toggleTripSel = (id: string) =>
+    setSelTripIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const toggleAllTrips = () => setSelTripIds(allTripsSelected ? new Set() : new Set(allTripIds))
+
+  const bulkDeleteTrips = async () => {
+    if (!selected) return
+    const ids = [...selTripIds].filter((id) => allTripIds.includes(id))
+    if (ids.length === 0) return
+    setBulkDeleting(true)
+    setError(null)
+    try {
+      const byId = new Map(selected.trips.map((t) => [t.id, t]))
+      // Audit trail: one trip_deleted event per trip before it's removed.
+      for (const tid of ids) {
+        const t = byId.get(tid)
+        await logActivity({
+          event_type: 'trip_deleted', client_id: selected.id, trip_id: tid,
+          detail: { trip_id: tid, opponent_label: t?.opponent_label ?? null, city: t?.city ?? null, team_name: selected.team_name },
+        })
+      }
+      const { data, error } = await supabase.from('trips').delete().in('id', ids).select('id')
+      if (error) throw new Error(error.message)
+      const deleted = (data ?? []).length
+      if (deleted < ids.length) {
+        throw new Error(`Only ${deleted} of ${ids.length} trips were deleted — you may not have permission to delete some of them.`)
+      }
+      setSelTripIds(new Set())
+      setConfirmBulkDelete(false)
+      loadClients(selected.id)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -568,9 +614,33 @@ export default function ClientsList() {
 
               {/* Trips list */}
               <div className="px-6 py-5">
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                  Trips
-                </h3>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                    Trips
+                  </h3>
+                  {selTrips.length > 0 && canEditClient(selected.id) && (
+                    <div className="flex items-center gap-3">
+                      <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                        <input
+                          type="checkbox"
+                          checked={allTripsSelected}
+                          onChange={toggleAllTrips}
+                          className="h-4 w-4 rounded border-slate-300 text-[#1C1008]"
+                        />
+                        Select all
+                      </label>
+                      {selTripIds.size > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmBulkDelete(true)}
+                          className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700"
+                        >
+                          Delete selected ({selTripIds.size})
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
                 {selTrips.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-slate-200 dark:border-slate-600 p-8 text-center">
                     <p className="text-sm text-slate-400 dark:text-slate-500">No trips yet for this team.</p>
@@ -594,10 +664,19 @@ export default function ClientsList() {
                         ),
                       )
                       .map((t) => (
-                        <Link
-                          key={t.id}
+                        <div key={t.id} className="flex items-center gap-2">
+                          {canEditClient(selected.id) && (
+                            <input
+                              type="checkbox"
+                              checked={selTripIds.has(t.id)}
+                              onChange={() => toggleTripSel(t.id)}
+                              aria-label={`Select ${t.opponent_label || 'trip'}`}
+                              className="h-4 w-4 shrink-0 rounded border-slate-300 text-[#1C1008]"
+                            />
+                          )}
+                          <Link
                           to={`/trips/${t.id}`}
-                          className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-3 transition-colors hover:border-[#1C1008]/20 hover:bg-slate-50 dark:hover:bg-slate-700"
+                          className="flex flex-1 items-center justify-between rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-3 transition-colors hover:border-[#1C1008]/20 hover:bg-slate-50 dark:hover:bg-slate-700"
                         >
                           <div>
                             <div className="flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-200">
@@ -631,7 +710,8 @@ export default function ClientsList() {
                             })()}
                             <Badge status={t.status} />
                           </div>
-                        </Link>
+                          </Link>
+                        </div>
                       ))}
                   </div>
                 )}
@@ -655,6 +735,46 @@ export default function ClientsList() {
             loadClients(selected.id)
           }}
         />
+      )}
+
+      {/* Confirm bulk trip deletion */}
+      {confirmBulkDelete && selected && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => !bulkDeleting && setConfirmBulkDelete(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl bg-white dark:bg-slate-800 p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Delete {selTripIds.size} trip{selTripIds.size !== 1 ? 's' : ''}?
+            </h3>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+              This permanently deletes {selTripIds.size === 1 ? 'this trip' : 'these trips'} for{' '}
+              <strong>{selected.team_name}</strong>, along with every hotel invitation and submitted bid on{' '}
+              {selTripIds.size === 1 ? 'it' : 'them'}. This cannot be undone.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmBulkDelete(false)}
+                disabled={bulkDeleting}
+                className="rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={bulkDeleteTrips}
+                disabled={bulkDeleting}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {bulkDeleting ? 'Deleting…' : `Delete ${selTripIds.size} trip${selTripIds.size !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
