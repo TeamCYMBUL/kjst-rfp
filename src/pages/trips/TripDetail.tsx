@@ -14,7 +14,7 @@ import type { Client, DateScenario, Invitation, Trip } from '../../lib/types'
 import { formatDate, generateToken, formatMeetingSpaceNotes, passedLabel } from '../../lib/format'
 import { fetchAllAnswersByResponseIds } from '../../lib/answers'
 import { PUBLIC_APP_URL } from '../../lib/config'
-import { sendInvitationEmail, sendReminderEmails, sendSingleReminderEmail, reopenRfp, sendContractRequest, sendRfpCopy } from '../../lib/emailApi'
+import { sendInvitationEmail, sendReminderEmails, sendSingleReminderEmail, reopenRfp, sendContractRequest, sendRfpCopy, sendRegrets } from '../../lib/emailApi'
 import { Badge, ErrorNote, LinkButton, Loading } from '../../components/ui'
 import { exportSingleHotelXlsx } from '../../lib/excelExport'
 import { useRole } from '../../lib/useRole'
@@ -2083,6 +2083,45 @@ export default function TripDetail() {
     else navigate('/')
   }
 
+  // Cancel a trip but keep it posted (e.g. the game was called off).
+  const [cancelling, setCancelling] = useState(false)
+  const toggleCancelled = async () => {
+    const next = !(trip as any)?.cancelled
+    if (next && !confirm('Mark this trip as CANCELLED? It stays posted here, and you can then notify the hotels that bid. You can reactivate it any time.')) return
+    setCancelling(true)
+    try {
+      assertSaved(
+        await supabase.from('trips').update({ cancelled: next, cancelled_at: next ? new Date().toISOString() : null }).eq('id', id!).select('id'),
+        next ? 'cancel the trip' : 'reactivate the trip',
+      )
+      setTrip((t) => (t ? ({ ...t, cancelled: next } as any) : t))
+    } catch (e) { alert(e instanceof Error ? e.message : String(e)) }
+    finally { setCancelling(false) }
+  }
+
+  // Notify the submitted hotels that did NOT win (the "losers").
+  const [regretOpen, setRegretOpen] = useState(false)
+  const [regretMsg, setRegretMsg] = useState('')
+  const [regretSending, setRegretSending] = useState(false)
+  const loserCount = (invites ?? []).filter((i) => i.status === 'submitted' && !(i as any).awarded_stay1 && !(i as any).awarded_stay2).length
+  const openRegret = () => {
+    const tripRef = [trip?.clients?.team_name, trip?.city].filter(Boolean).join(' · ')
+    setRegretMsg(
+      (trip as any)?.cancelled
+        ? `Thank you for taking the time to submit a proposal for ${tripRef}. Unfortunately, this trip has been cancelled, so we will not be moving forward with a booking at this time. We sincerely appreciate your effort and look forward to the opportunity to work together on a future trip.`
+        : `Thank you for taking the time to submit a proposal for ${tripRef}. After careful review, we have decided to move forward with another property for this particular trip. We sincerely appreciate your effort and the opportunity, and we look forward to the possibility of working together in the future.`,
+    )
+    setRegretOpen(true)
+  }
+  const sendRegretEmails = async () => {
+    setRegretSending(true)
+    const res = await sendRegrets(id!, { message: regretMsg })
+    setRegretSending(false)
+    if ('error' in res) { alert(res.error); return }
+    setRegretOpen(false)
+    alert(`Notified ${res.sent} hotel${res.sent !== 1 ? 's' : ''} that were not selected.`)
+  }
+
   const saveVersion = async () => {
     const label = window.prompt('Version label:', `Updated ${new Date().toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'})}`)
     if (!label) return
@@ -2183,6 +2222,11 @@ export default function TripDetail() {
               </span>
             )}
             <Badge status={trip.status} />
+            {(trip as any).cancelled && (
+              <span title="This trip is cancelled but kept posted." className="rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                Cancelled
+              </span>
+            )}
             {twoVisit ? (
               <>
                 {stay1Winner && <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/20 px-2.5 py-1 text-xs font-semibold leading-5 text-amber-700 dark:text-amber-300">🏆 Stay 1: {stay1Winner.hotel_name}</span>}
@@ -2282,6 +2326,29 @@ export default function TripDetail() {
             <LinkButton to={`/trips/${id}/edit`} variant="secondary">
               Edit
             </LinkButton>
+          )}
+          {trip && canEditClient(trip.client_id) && loserCount > 0 && (
+            <button
+              onClick={openRegret}
+              title="Email every hotel that submitted a bid but wasn't selected (or all bidders, if this trip is cancelled)."
+              className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+            >
+              Notify not selected ({loserCount})
+            </button>
+          )}
+          {trip && canEditClient(trip.client_id) && (
+            <button
+              onClick={toggleCancelled}
+              disabled={cancelling}
+              title="Cancel this trip but keep it posted (e.g. the game was called off). You can reactivate it any time."
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-40 ${
+                (trip as any).cancelled
+                  ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300'
+                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+              }`}
+            >
+              {cancelling ? 'Saving…' : (trip as any).cancelled ? 'Reactivate trip' : 'Cancel trip'}
+            </button>
           )}
           {trip && canEditClient(trip.client_id) && (
             <button
@@ -2814,6 +2881,31 @@ export default function TripDetail() {
       )}
 
       {/* ── Decline confirmation modal ── */}
+      {regretOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !regretSending && setRegretOpen(false)}>
+          <div className="w-full max-w-lg rounded-xl bg-white dark:bg-slate-800 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Notify hotels not selected ({loserCount})
+            </h3>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Emails every hotel that submitted a bid but wasn't awarded{(trip as any)?.cancelled ? ' (all bidders, since this trip is cancelled)' : ''}. Sent as you, CC'ing the assigned managers &amp; Jon. Edit the message below.
+            </p>
+            <textarea
+              value={regretMsg}
+              onChange={(e) => setRegretMsg(e.target.value)}
+              rows={7}
+              className="mt-3 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#1C1008]/30"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setRegretOpen(false)} disabled={regretSending} className="rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">Cancel</button>
+              <button type="button" onClick={sendRegretEmails} disabled={regretSending || !regretMsg.trim()} className="rounded-lg bg-[#1C1008] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2d1e0e] disabled:opacity-50">
+                {regretSending ? 'Sending…' : `Send to ${loserCount} hotel${loserCount !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showDeclineModal && (() => {
         const passed = invites.filter((i) => i.status === 'passed')
         return (

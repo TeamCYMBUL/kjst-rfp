@@ -18,6 +18,7 @@ type ClientTrip = {
   stay2_arrival_date: string | null
   city: string | null
   status: string
+  cancelled?: boolean
   rfp_invitations: { status: string; hotel_name: string }[] | null
 }
 
@@ -141,7 +142,7 @@ export default function ClientsList() {
     supabase
       .from('clients')
       .select(
-        'id, team_name, league, season, logo_url, primary_contact_name, primary_contact_title, primary_contact_email, primary_contact_phone, assigned_to, profiles(full_name, email), trips(id, opponent_label, arrival_date, stay2_arrival_date, city, status, rfp_invitations(status, hotel_name))',
+        'id, team_name, league, season, logo_url, primary_contact_name, primary_contact_title, primary_contact_email, primary_contact_phone, assigned_to, profiles(full_name, email), trips(id, opponent_label, arrival_date, stay2_arrival_date, city, status, cancelled, rfp_invitations(status, hotel_name))',
       )
       .order('team_name')
       .then(({ data, error }) => {
@@ -708,6 +709,11 @@ export default function ClientsList() {
                                 </span>
                               ) : null
                             })()}
+                            {t.cancelled && (
+                              <span title="Cancelled but kept posted" className="rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-1 text-[11px] font-semibold leading-5 text-amber-800 dark:text-amber-300">
+                                Cancelled
+                              </span>
+                            )}
                             <Badge status={t.status} />
                           </div>
                           </Link>

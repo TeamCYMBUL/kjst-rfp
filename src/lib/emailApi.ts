@@ -88,6 +88,19 @@ export async function sendRfpCopy(
   return res.json()
 }
 
+/** Notify all submitted-but-not-selected hotels for a trip (the "losers"). */
+export async function sendRegrets(
+  trip_id: string,
+  opts?: { message?: string },
+): Promise<{ ok: true; sent: number; recipients: string[] } | { error: string }> {
+  const res = await fetch(`${FN_BASE}/send-regrets`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ trip_id, message: opts?.message ?? undefined, base_url: PUBLIC_APP_URL }),
+  })
+  return res.json()
+}
+
 /** Send reminder emails to all non-submitted hotels for a trip. */
 export async function sendReminderEmails(
   trip_id: string,
