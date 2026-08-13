@@ -158,6 +158,20 @@ function buildCycles(events: TimelineEvent[]): TripCycle[] {
   return [...byTrip.values()]
 }
 
+// Start of the "Send bids" clock for a trip. Normally that's when the first
+// hotel was added. But the schedule went live at a fixed time and bids couldn't
+// go out before it, so if the trip's first invite landed at/after go-live we
+// time from go-live (ignoring overnight staging). A trip whose first invite
+// predates go-live (sent early by permission) is timed from when hotels were
+// added, as usual.
+function sendAnchor(c: TripCycle, goLive: number | null): number | null {
+  if (c.firstHotelAdded === null) return null
+  if (goLive !== null && c.firstInvite !== null && c.firstInvite >= goLive) {
+    return Math.max(c.firstHotelAdded, goLive)
+  }
+  return c.firstHotelAdded
+}
+
 // Hotel response latency (invite_sent -> bid_received), paired by trip + hotel.
 // This is the hotel's clock, not KJST's — reported separately, never against KJST.
 function hotelResponseDurations(events: TimelineEvent[]): number[] {
@@ -244,6 +258,19 @@ export default function TimelinePage() {
     })
   }, [])
 
+  // Schedule go-live time. Bids couldn't be sent before this, so the "Send bids"
+  // stage is timed from go-live (not from when hotels were staged the night
+  // before). A team allowed to send early (e.g. the Wizards) is timed normally
+  // from when its hotels were added, since its first invite predates go-live.
+  const [goLive, setGoLive] = useState<number | null>(null)
+  useEffect(() => {
+    supabase.from('app_config').select('value').eq('key', 'schedule_go_live').maybeSingle()
+      .then(({ data }) => {
+        const v = data?.value ? new Date(data.value).getTime() : NaN
+        setGoLive(Number.isFinite(v) ? v : null)
+      })
+  }, [])
+
   useEffect(() => {
     if (!allowed) return
     setLoading(true); setError(null)
@@ -269,7 +296,7 @@ export default function TimelinePage() {
     const lifecycle: number[] = []  // start → proposal sent (full lifecycle)
     for (const c of cycles) {
       const su = span(c.start, c.firstHotelAdded)
-      const sd = span(c.firstHotelAdded, c.firstInvite)
+      const sd = span(sendAnchor(c, goLive), c.firstInvite)
       const aw = span(c.lastBid, c.awarded)
       if (su !== null) setup.push(su)
       if (sd !== null) send.push(sd)
@@ -284,7 +311,7 @@ export default function TimelinePage() {
       lifecycle: median(lifecycle),
       hotelResponse: median(hotelResponseDurations(events)),
     }
-  }, [cycles, events])
+  }, [cycles, events, goLive])
 
   const out = useMemo(() => outstanding(events), [events])
 
@@ -407,7 +434,7 @@ export default function TimelinePage() {
                           <tr key={c.trip_id} className="text-slate-700 dark:text-slate-200">
                             <td className="px-4 py-2 font-medium">{c.city || 'Trip'}</td>
                             <td className="px-4 py-2 tabular-nums">{dur(span(c.start, c.firstHotelAdded))}</td>
-                            <td className="px-4 py-2 tabular-nums">{dur(span(c.firstHotelAdded, c.firstInvite))}</td>
+                            <td className="px-4 py-2 tabular-nums">{dur(span(sendAnchor(c, goLive), c.firstInvite))}</td>
                             <td className="px-4 py-2 tabular-nums text-slate-400">{dur(span(c.firstInvite, c.firstBid))}</td>
                             <td className="px-4 py-2 tabular-nums">{dur(span(c.lastBid, c.awarded))}</td>
                             <td className="px-4 py-2 text-xs">{status}</td>
