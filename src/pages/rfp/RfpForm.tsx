@@ -2160,20 +2160,20 @@ export default function RfpForm() {
                           <div className="grid gap-3 sm:grid-cols-2">
                             <div>
                               <FieldLabel htmlFor={`nfs-${item.id}-${space.key}-name`} required>Room name at your property</FieldLabel>
-                              <input
+                              <RoomNameField
                                 id={`nfs-${item.id}-${space.key}-name`}
-                                type="text"
-                                className={inputCls}
                                 value={detail.name}
-                                onChange={(e) => {
-                                  const v = e.target.value
-                                  setNamedSpaceDetails((prev) => ({
-                                    ...prev,
-                                    [item.id]: { ...forItem, [space.key]: { ...detail, spaceLabel: space.label, name: v } },
-                                  }))
-                                }}
+                                rooms={prefill?.rooms ?? []}
                                 disabled={isReadOnly}
                                 placeholder="e.g. Bayview Room"
+                                onName={(name) => setNamedSpaceDetails((prev) => ({
+                                  ...prev,
+                                  [item.id]: { ...forItem, [space.key]: { ...detail, spaceLabel: space.label, name } },
+                                }))}
+                                onPick={(room) => setNamedSpaceDetails((prev) => ({
+                                  ...prev,
+                                  [item.id]: { ...forItem, [space.key]: { ...detail, spaceLabel: space.label, name: room.name, dimensions: room.dimensions || detail.dimensions } },
+                                }))}
                               />
                             </div>
                             <div>
