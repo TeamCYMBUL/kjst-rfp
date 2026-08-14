@@ -235,6 +235,22 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
       return next
     })
 
+  // Per-team stat-bubble filter: clicking a bubble opens that team and narrows
+  // its trips to the ones behind that number (click again to clear).
+  const [bubbleFilter, setBubbleFilter] = useState<Record<string, string>>({})
+  const clickBubble = (key: string, metric: string) => {
+    setOpenKeys((prev) => new Set(prev).add(key))
+    setBubbleFilter((prev) => ({ ...prev, [key]: prev[key] === metric ? '' : metric }))
+  }
+  const tripMatchesMetric = (t: DashTrip, metric: string): boolean => {
+    const invited = t.rfp_invitations.length
+    const submitted = t.rfp_invitations.filter((i) => i.submitted_at != null).length
+    if (metric === 'invited') return invited > 0
+    if (metric === 'bids') return submitted > 0
+    if (metric === 'awaiting') return invited - submitted > 0
+    return true // 'trips' / no filter
+  }
+
   const allKeys = sorted.map(([k]) => k)
   const allOpen = allKeys.length > 0 && allKeys.every((k) => openKeys.has(k))
 
@@ -319,8 +335,42 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
                 )}
               </div>
             </button>
+
+            {/* Condensed 4 stat bubbles for this team — click to open + filter */}
+            <div className="grid grid-cols-2 gap-2 border-t border-slate-100 dark:border-slate-700 px-4 py-3 sm:grid-cols-4">
+              {([
+                { m: 'trips', label: 'Active trips', value: countVisits(group.trips), color: 'text-slate-800 dark:text-slate-100' },
+                { m: 'invited', label: 'Hotels invited', value: allInvited, color: 'text-slate-800 dark:text-slate-100' },
+                { m: 'bids', label: 'Bids received', value: allSubmitted, color: 'text-emerald-600' },
+                { m: 'awaiting', label: 'Awaiting response', value: Math.max(0, allInvited - allSubmitted), color: 'text-orange-500' },
+              ] as const).map((b) => {
+                const active = bubbleFilter[key] === b.m
+                return (
+                  <button
+                    key={b.m}
+                    onClick={() => clickBubble(key, b.m)}
+                    title={`Show ${group.name} trips for: ${b.label}`}
+                    className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                      active
+                        ? 'border-[#1C1008] dark:border-amber-400 bg-[#1C1008]/[0.05] dark:bg-amber-900/10'
+                        : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40'
+                    }`}
+                  >
+                    <div className={`text-xl font-bold leading-none ${b.color}`}>{b.value}</div>
+                    <div className="mt-1 text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{b.label}</div>
+                  </button>
+                )
+              })}
+            </div>
+
             {isOpen && (
               <div className="space-y-3 border-t border-slate-100 dark:border-slate-700 p-4">
+                {bubbleFilter[key] && (
+                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                    <span>Filtered to <strong className="text-slate-700 dark:text-slate-300">{({ invited: 'Hotels invited', bids: 'Bids received', awaiting: 'Awaiting response' } as Record<string, string>)[bubbleFilter[key]] ?? 'Active trips'}</strong></span>
+                    <button onClick={() => setBubbleFilter((prev) => ({ ...prev, [key]: '' }))} className="font-medium text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">Clear filter</button>
+                  </div>
+                )}
                 {key !== '__none__' && (
                   <div className="flex justify-end">
                     <button
@@ -338,6 +388,7 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
                   </div>
                 )}
                 {[...group.trips]
+                  .filter((t) => tripMatchesMetric(t, bubbleFilter[key] || 'trips'))
                   .sort((a, b) =>
                     (a.city ?? a.opponent_label ?? '').localeCompare(
                       b.city ?? b.opponent_label ?? '',
