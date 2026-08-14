@@ -232,6 +232,14 @@ export async function contractFileUrl(path: string): Promise<string | null> {
   return data?.signedUrl ?? null
 }
 
+// Raw bytes of a private contract file (for in-app rendering, e.g. Word docs).
+// Goes through the authenticated storage client so there's no cross-origin fetch.
+export async function contractFileBytes(path: string): Promise<ArrayBuffer | null> {
+  const { data, error } = await supabase.storage.from('contracts').download(path)
+  if (error || !data) return null
+  return await data.arrayBuffer()
+}
+
 export async function updateContractStatus(id: string, status: ContractStatus): Promise<void> {
   const { error } = await supabase
     .from('contracts')

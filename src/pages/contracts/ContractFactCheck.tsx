@@ -14,11 +14,11 @@ function TermList({ title, terms }: { title: string; terms: BidTerm[] }) {
       <dl className="space-y-1">
         {terms.map((t, i) => (
           <div key={i} className="flex items-start justify-between gap-3 text-sm">
-            <dt className="min-w-0 flex-1 text-slate-600 dark:text-slate-300">
+            <dt className="min-w-0 shrink text-slate-600 dark:text-slate-300">
               {t.label}
               {t.note && <span className="mt-0.5 block text-xs italic text-blue-700 dark:text-blue-400">"{t.note}"</span>}
             </dt>
-            <dd className="shrink-0 font-medium tabular-nums text-slate-800 dark:text-slate-100">{t.value}</dd>
+            <dd className="min-w-0 max-w-[60%] break-words text-right font-medium text-slate-800 dark:text-slate-100">{t.value}</dd>
           </div>
         ))}
       </dl>

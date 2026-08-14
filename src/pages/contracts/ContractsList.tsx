@@ -6,10 +6,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ErrorNote, Loading } from '../../components/ui'
 import {
-  listAwardedContracts, contractFileUrl, updateContractStatus, uploadSignedCopy, uploadContractStaff,
+  listAwardedContracts, updateContractStatus, uploadSignedCopy, uploadContractStaff,
 } from '../../lib/contractsApi'
 import type { AwardedContract, ContractStatus } from '../../lib/contractsApi'
 import { ContractFactCheck } from './ContractFactCheck'
+import { ContractViewer } from './ContractViewer'
 import { useAuth } from '../../auth/AuthContext'
 import { isContractsUser } from '../../lib/activity'
 
@@ -40,6 +41,7 @@ export default function ContractsList() {
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [openId, setOpenId] = useState<string | null>(null) // which contract's fact-check panel is expanded
+  const [viewer, setViewer] = useState<{ path: string; fileName: string | null; title: string } | null>(null)
   const { user } = useAuth()
   const allowed = isContractsUser(user?.email)
 
@@ -62,13 +64,6 @@ export default function ContractsList() {
     }
     return [...byClient.values()].sort((a, b) => a.name.localeCompare(b.name))
   }, [rows])
-
-  const openFile = async (path: string | null) => {
-    if (!path) return
-    const url = await contractFileUrl(path)
-    if (url) window.open(url, '_blank', 'noopener')
-    else alert('Could not open the file.')
-  }
 
   const setStatus = async (id: string, status: ContractStatus) => {
     setBusyId(id)
@@ -113,6 +108,9 @@ export default function ContractsList() {
 
   return (
     <div className="space-y-6">
+      {viewer && (
+        <ContractViewer path={viewer.path} fileName={viewer.fileName} title={viewer.title} onClose={() => setViewer(null)} />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Contracts</h1>
@@ -198,7 +196,7 @@ export default function ContractsList() {
                     ) : (
                       <>
                         {c.file_path ? (
-                          <button onClick={() => openFile(c.file_path)} className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                          <button onClick={() => setViewer({ path: c.file_path!, fileName: c.file_name, title: `${r.hotel_name} — Agreement` })} className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
                             View agreement
                           </button>
                         ) : (
@@ -220,7 +218,7 @@ export default function ContractsList() {
                           </button>
                         )}
                         {c.signed_file_path && (
-                          <button onClick={() => openFile(c.signed_file_path)} className="rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100">
+                          <button onClick={() => setViewer({ path: c.signed_file_path!, fileName: c.signed_file_name, title: `${r.hotel_name} — Signed copy` })} className="rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100">
                             View signed copy
                           </button>
                         )}
