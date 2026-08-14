@@ -1192,13 +1192,16 @@ export default function RfpForm() {
     [scheduleAutosave],
   )
 
-  // Trigger autosave whenever resp or answers change (but not on initial load)
+  // Trigger autosave whenever any answer field changes (but not on initial load).
+  // Includes the meeting-space detail state — previously only [resp, answers] was
+  // watched, so room-name / square-footage edits weren't saved until some other
+  // change happened to fire an autosave; on refresh those edits could be lost.
   const isFirstRender = useRef(true)
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return }
     scheduleAutosave()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resp, answers])
+  }, [resp, answers, meetingSpaceDetails, additionalSpaces, namedSpaceDetails, scenarioAvailability])
 
   // --- Submit ---
   const handleSubmit = async (e: React.FormEvent) => {
