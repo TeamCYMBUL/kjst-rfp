@@ -304,6 +304,7 @@ function ConcessionRow({
   showCommissionWarning,
   hasError,
   noteSuggestion,
+  answerPrefilled,
 }: {
   item: ConcessionItem
   answer: AnswerState
@@ -312,6 +313,7 @@ function ConcessionRow({
   showCommissionWarning?: boolean
   hasError?: boolean
   noteSuggestion?: string
+  answerPrefilled?: boolean
 }) {
   const isYesNo = item.answer_type === 'yes_no'
   // Comment-enabled yes/no items show the box automatically on "No" and can also
@@ -400,6 +402,9 @@ function ConcessionRow({
           </div>
           {showToggleError && (
             <p className="mt-1 text-xs font-medium text-red-500">Required</p>
+          )}
+          {answerPrefilled && !disabled && (
+            <p className="mt-1 text-[10px] font-medium text-blue-600">Prefilled from your last RFP</p>
           )}
         </div>
       </div>
@@ -979,6 +984,7 @@ export default function RfpForm() {
   const [prefill, setPrefill] = useState<RfpPrefill | null>(null)
   const [prefillDismissed, setPrefillDismissed] = useState(false)
   const [prefilledFields, setPrefilledFields] = useState<Set<string>>(new Set())
+  const [prefilledAnswers, setPrefilledAnswers] = useState<Set<string>>(new Set()) // clause items whose Yes/No was prefilled
 
   // Night scenarios state — populated from loaded trip data
   const [nightScenarios, setNightScenarios] = useState<number[]>([1])
@@ -1154,6 +1160,35 @@ export default function RfpForm() {
               return Object.keys(patch).length ? { ...prev, ...patch } : prev
             })
             if (filled.size) setPrefilledFields((s) => new Set([...s, ...filled]))
+
+            // Prefill the in-season / postseason clause answers (hotels answer
+            // these the same way each time). Only where still unanswered, and
+            // only from the email-locked `answers` the server returned.
+            if (p.answers) {
+              const clauseIds = d.items
+                .filter((i) => i.section === 'in_season_tournament' || i.section === 'postseason')
+                .map((i) => i.id)
+              const prefilled = new Set<string>()
+              setAnswers((prev) => {
+                const next = { ...prev }
+                for (const id of clauseIds) {
+                  const pa = p.answers?.[id]
+                  if (!pa || (pa.yesNo == null && !pa.value)) continue
+                  const cur = next[id]
+                  const unanswered = !cur || (cur.answer_yes_no == null && !cur.answer_value?.trim())
+                  if (!unanswered) continue
+                  next[id] = {
+                    answer_yes_no: pa.yesNo,
+                    answer_value: pa.value || (cur?.answer_value ?? ''),
+                    comment: cur?.comment ?? '',
+                    commentOpen: cur?.commentOpen ?? false,
+                  }
+                  prefilled.add(id)
+                }
+                return next
+              })
+              if (prefilled.size) setPrefilledAnswers((s) => new Set([...s, ...prefilled]))
+            }
           })
           .catch(() => { /* prefill is best-effort; never block the form */ })
       })
@@ -1696,6 +1731,7 @@ export default function RfpForm() {
         showCommissionWarning={isCommissionItem(item)}
         hasError={fieldErrors.has(item.id)}
         noteSuggestion={prefill?.notes?.[item.id]}
+        answerPrefilled={prefilledAnswers.has(item.id)}
       />
     ))
 

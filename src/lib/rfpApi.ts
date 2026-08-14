@@ -206,6 +206,7 @@ export type RfpPrefill = {
   checkinTime?: string
   rooms?: { name: string; dimensions: string; space_type: string }[]
   notes?: Record<string, string>
+  answers?: Record<string, { yesNo: boolean | null; value: string }>
 }
 
 export async function fetchRfpPrefill(token: string): Promise<RfpPrefill> {

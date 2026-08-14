@@ -47,10 +47,12 @@ Deno.serve(async (req: Request) => {
   const SELECT = `id, hotel_name, hotel_contact_email, status,
       rfp_responses ( id, occupancy_tax, resort_fee, standard_checkin_time, meeting_space_notes, completed_date, created_at )`
   let invs: any[] = []
+  let emailMatched = false // true only when the priors came from an exact email match
   if (email) {
     const { data } = await sb.from('rfp_invitations').select(SELECT)
       .ilike('hotel_contact_email', email).in('status', ['submitted', 'awarded']).neq('id', (cur as any).id)
     invs = data ?? []
+    emailMatched = invs.length > 0
   }
   if (invs.length === 0 && name) {
     const { data } = await sb.from('rfp_invitations').select(SELECT)
@@ -99,25 +101,36 @@ Deno.serve(async (req: Request) => {
   const rooms = [...roomMap.values()].sort((a, b) => a.name.localeCompare(b.name))
 
   // Prior counteroffer/note per concession item (most recent non-empty).
-  const respIds = priors.map((r) => r.id)
+  // ISOLATION: notes are free-text specific to a person's negotiation, so they are
+  // ONLY ever taken from an EXACT contact-email match — never the hotel-name
+  // fallback. A rep never sees another rep's counteroffers, even at the same hotel.
+  const respIds = emailMatched ? priors.map((r) => r.id) : []
   const notes: Record<string, string> = {}
+  // Prior Yes/No (and value) per item — the form uses these to prefill the
+  // in-season and postseason clauses, which hotels answer the same way each time.
+  const answers: Record<string, { yesNo: boolean | null; value: string }> = {}
   if (respIds.length) {
     const { data: ans } = await sb
       .from('concession_answers')
-      .select('concession_item_id, comment, response_id')
+      .select('concession_item_id, comment, answer_yes_no, answer_value, response_id')
       .in('response_id', respIds)
-      .not('comment', 'is', null)
     // priors is newest-first; respIds preserves that order, so keep the first seen.
     const order = new Map(respIds.map((id, i) => [id, i]))
-    const best: Record<string, { rank: number; comment: string }> = {}
+    const bestNote: Record<string, number> = {}
+    const bestAns: Record<string, number> = {}
     for (const a of (ans ?? []) as any[]) {
-      const c = clean(a.comment)
-      if (!c) continue
       const rank = order.get(a.response_id) ?? 999
-      const cur2 = best[a.concession_item_id]
-      if (!cur2 || rank < cur2.rank) best[a.concession_item_id] = { rank, comment: c }
+      const c = clean(a.comment)
+      if (c && (bestNote[a.concession_item_id] == null || rank < bestNote[a.concession_item_id])) {
+        bestNote[a.concession_item_id] = rank
+        notes[a.concession_item_id] = c
+      }
+      const hasAns = a.answer_yes_no != null || clean(a.answer_value) !== ''
+      if (hasAns && (bestAns[a.concession_item_id] == null || rank < bestAns[a.concession_item_id])) {
+        bestAns[a.concession_item_id] = rank
+        answers[a.concession_item_id] = { yesNo: a.answer_yes_no ?? null, value: clean(a.answer_value) }
+      }
     }
-    for (const [item, v] of Object.entries(best)) notes[item] = v.comment
   }
 
   return json({
@@ -127,5 +140,6 @@ Deno.serve(async (req: Request) => {
     occupancyTax, resortFee, checkinTime,
     rooms,
     notes,
+    answers,
   })
 })
