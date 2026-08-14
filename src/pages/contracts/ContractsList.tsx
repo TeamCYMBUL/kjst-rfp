@@ -42,6 +42,7 @@ export default function ContractsList() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [openId, setOpenId] = useState<string | null>(null) // which contract's fact-check panel is expanded
   const [viewer, setViewer] = useState<{ path: string; fileName: string | null; title: string } | null>(null)
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({}) // per-tier collapse, keyed `${clientId}:${tier}`
   const { user } = useAuth()
   const allowed = isContractsUser(user?.email)
 
@@ -56,10 +57,10 @@ export default function ContractsList() {
 
   const groups = useMemo(() => {
     if (!rows) return []
-    const byClient = new Map<string, { name: string; items: AwardedContract[] }>()
+    const byClient = new Map<string, { id: string; name: string; items: AwardedContract[] }>()
     for (const r of rows) {
       const key = r.client?.id ?? 'unknown'
-      if (!byClient.has(key)) byClient.set(key, { name: r.client?.team_name ?? 'Unknown client', items: [] })
+      if (!byClient.has(key)) byClient.set(key, { id: key, name: r.client?.team_name ?? 'Unknown client', items: [] })
       byClient.get(key)!.items.push(r)
     }
     return [...byClient.values()].sort((a, b) => a.name.localeCompare(b.name))
@@ -105,6 +106,8 @@ export default function ContractsList() {
   const total = rows.length
   const uploaded = rows.filter((r) => r.contract && r.contract.status !== 'requested').length
   const awaiting = rows.filter((r) => !r.contract || r.contract.status === 'requested').length
+  // A hotel is "uploaded" once its agreement file is in the platform.
+  const isUploaded = (r: AwardedContract) => !!(r.contract && r.contract.file_path)
 
   return (
     <div className="space-y-6">
@@ -141,13 +144,11 @@ export default function ContractsList() {
         </div>
       )}
 
-      {groups.map((g) => (
-        <div key={g.name} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
-          <div className="border-b border-slate-100 dark:border-slate-700 px-5 py-3">
-            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{g.name}</h2>
-          </div>
-          <div className="divide-y divide-slate-100 dark:divide-slate-700">
-            {g.items.map((r) => {
+      {groups.map((g) => {
+        const byName = (a: AwardedContract, b: AwardedContract) => a.hotel_name.localeCompare(b.hotel_name)
+        const uploadedItems = g.items.filter(isUploaded).sort(byName)
+        const pendingItems = g.items.filter((r) => !isUploaded(r)).sort(byName)
+        const renderRow = (r: AwardedContract) => {
               const c = r.contract
               const twoVisit = !!r.trip?.stay2_arrival_date
               const stayTxt = twoVisit ? (r.awarded_stay1 && r.awarded_stay2 ? ' · Stay 1 & 2' : r.awarded_stay1 ? ' · Stay 1' : ' · Stay 2') : ''
@@ -247,10 +248,36 @@ export default function ContractsList() {
                 {isOpen && canFactCheck && <ContractFactCheck row={r} onDone={load} />}
                 </div>
               )
-            })}
+        }
+        // Two labeled, collapsible, alphabetical tiers: agreements received vs. still awaited.
+        const tier = (tierKey: string, label: string, items: AwardedContract[], startCollapsed: boolean) => {
+          if (items.length === 0) return null
+          const k = `${g.id}:${tierKey}`
+          const isC = collapsed[k] ?? startCollapsed
+          return (
+            <div>
+              <button
+                onClick={() => setCollapsed((s) => ({ ...s, [k]: !isC }))}
+                className="flex w-full items-center gap-2 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 px-5 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-700/60"
+              >
+                <span className="w-3 text-xs text-slate-400">{isC ? '▸' : '▾'}</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</span>
+                <span className="rounded-full bg-slate-200 dark:bg-slate-700 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">{items.length}</span>
+              </button>
+              {!isC && <div className="divide-y divide-slate-100 dark:divide-slate-700">{items.map(renderRow)}</div>}
+            </div>
+          )
+        }
+        return (
+          <div key={g.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
+            <div className="border-b border-slate-100 dark:border-slate-700 px-5 py-3">
+              <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{g.name}</h2>
+            </div>
+            {tier('uploaded', 'Uploaded', uploadedItems, false)}
+            {tier('pending', 'Not uploaded', pendingItems, true)}
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

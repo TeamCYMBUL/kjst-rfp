@@ -20,6 +20,41 @@ const fmtDate = (d: string | null) =>
   d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : null
 
 // Extract readable text from a .docx (a zip; the body lives in word/document.xml).
+// Hotel agreements come in wildly different templates and every one puts the room
+// block, rates, and function agenda in a TABLE. A flat tag-strip collapses those
+// tables into a meaningless run of numbers ("44 44 88 39,600"), which is the main
+// thing that makes the AI misread counts and rates. So this walks the document in
+// order and preserves structure: table cells become " | "-separated columns, table
+// rows and paragraphs become their own lines. The model then sees real rows like
+//   King Rooms (395-512 sq ft) | $450.00 | 44 | 44 | 88 | $39,600.00
+// regardless of which hotel's template it came from.
+const decodeXml = (s: string) =>
+  s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+   .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'")
+
+function xmlToStructuredText(xml: string): string {
+  let out = ''
+  let cellDepth = 0 // >0 while inside a table cell (paragraph breaks become spaces there)
+  // One pass over text runs and the structural tags that carry layout.
+  const re = /<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>|<w:tab\b[^>]*\/?>|<w:br\b[^>]*\/?>|<w:tc\b[^>]*>|<\/w:tc>|<\/w:tr>|<\/w:p>/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(xml)) !== null) {
+    const tok = m[0]
+    if (m[1] !== undefined) out += decodeXml(m[1])            // visible text run
+    else if (tok.startsWith('<w:tab')) out += ' '
+    else if (tok.startsWith('<w:br')) out += '\n'
+    else if (tok.startsWith('<w:tc')) cellDepth++             // enter a table cell
+    else if (tok === '</w:tc>') { cellDepth = Math.max(0, cellDepth - 1); out += ' | ' }
+    else if (tok === '</w:tr>') out += '\n'                   // end of a table row
+    else if (tok === '</w:p>') out += cellDepth > 0 ? ' ' : '\n' // para: space in cell, else newline
+  }
+  // Tidy: normalize each line, drop the trailing cell separator, collapse blanks.
+  const lines = out.split('\n').map((l) =>
+    l.replace(/[ \t]+/g, ' ').replace(/\s*\|\s*/g, ' | ').replace(/\s*\|\s*$/, '').trim(),
+  )
+  return lines.filter((l, i) => !(l === '' && lines[i - 1] === '')).join('\n').trim()
+}
+
 async function docxToText(bytes: Uint8Array): Promise<string> {
   const reader = new ZipReader(new Uint8ArrayReader(bytes))
   try {
@@ -27,13 +62,7 @@ async function docxToText(bytes: Uint8Array): Promise<string> {
     const doc = entries.find((e: any) => e.filename === 'word/document.xml')
     if (!doc?.getData) return ''
     const xml: string = await doc.getData(new TextWriter())
-    return xml
-      .replace(/<\/w:p>/g, '\n')
-      .replace(/<w:tab\/?>/g, '\t')
-      .replace(/<[^>]+>/g, '')
-      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-      .replace(/\n{3,}/g, '\n\n')
-      .trim()
+    return xmlToStructuredText(xml)
   } finally {
     await reader.close()
   }
@@ -177,6 +206,8 @@ Deno.serve(async (req: Request) => {
     'For each material term (king/suite/selling rates, occupancy tax and resort/other fees, room block counts, arrival/departure dates, and every concession the hotel agreed to), ' +
     'decide whether the contract MATCHES the bid, MISMATCHES it (a conflicting value), is MISSING (the bid term is not addressed in the contract), or is EXTRA (a term the contract adds that was not in the bid). ' +
     'Base contract_value only on what the document actually states; if a term is not addressed, use "—" and status "missing". Use the exact bid value for bid_value (or "—" if none). ' +
+    'The contract text is extracted from a Word document and TABLES are rendered as rows whose cells are separated by " | " (e.g. a room-block or rate table). Read those tables carefully to pull exact room counts, room types, and per-night rates. ' +
+    'Treat values that are economically equivalent as a MATCH even if phrased differently: e.g. a contract tax broken into "15% + 2% + $0.86" equals a bid "17% and .86"; suites given "at the contracted room rate" equal "at the king rate" when those rates are the same; a per-night rate stated with cents ("$450.00") equals the bid\'s "$450". Only call a MISMATCH when the actual value genuinely conflicts. ' +
     'Keep note short (one clause) and only when it helps. Set overall to "issues" if any check is mismatch/missing/extra that a person should review, else "match". Write a one-sentence summary.'
 
   const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -186,7 +217,7 @@ Deno.serve(async (req: Request) => {
       model: 'claude-opus-5',
       max_tokens: 16000,
       system,
-      output_config: { effort: 'medium', format: { type: 'json_schema', schema: ANALYSIS_SCHEMA } },
+      output_config: { effort: 'high', format: { type: 'json_schema', schema: ANALYSIS_SCHEMA } },
       messages: [{ role: 'user', content }],
     }),
   })

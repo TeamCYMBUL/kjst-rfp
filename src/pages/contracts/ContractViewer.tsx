@@ -1,10 +1,12 @@
 // In-platform document viewer for a stored contract file. Opens in a modal so
 // staff can read the agreement without it downloading to their machine.
 //   • PDF  → shown inline in an <iframe> off a short-lived signed URL.
-//   • .docx → converted to HTML in the browser with mammoth (nothing is sent to
-//             any third-party viewer; the file never leaves the platform).
+//   • .docx → rendered with docx-preview, which reproduces the Word document's
+//             own formatting (fonts, spacing, tables, page layout) so it looks
+//             like the original — same fidelity as viewing a proposal. Fully
+//             client-side: the file never leaves the platform.
 //   • legacy .doc / anything else → offer download / open-in-tab as a fallback.
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { contractFileUrl, contractFileBytes } from '../../lib/contractsApi'
 
 type Kind = 'pdf' | 'docx' | 'other'
@@ -15,32 +17,18 @@ function kindOf(name: string | null): Kind {
   return 'other'
 }
 
-// Minimal sanitizer for mammoth's HTML: drop scripts/styles and any event
-// handlers, and neutralize non-http links so a crafted document can't run code.
-function sanitize(html: string): string {
-  const doc = new DOMParser().parseFromString(html, 'text/html')
-  doc.querySelectorAll('script, style, iframe, object, embed, link').forEach((el) => el.remove())
-  doc.querySelectorAll('*').forEach((el) => {
-    for (const attr of [...el.attributes]) {
-      if (/^on/i.test(attr.name)) el.removeAttribute(attr.name)
-      if ((attr.name === 'href' || attr.name === 'src') && /^\s*javascript:/i.test(attr.value)) el.removeAttribute(attr.name)
-    }
-  })
-  return doc.body.innerHTML
-}
-
 export function ContractViewer({
   path, fileName, title, onClose,
 }: { path: string; fileName: string | null; title: string; onClose: () => void }) {
   const [url, setUrl] = useState<string | null>(null)
-  const [docHtml, setDocHtml] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const docxRef = useRef<HTMLDivElement>(null)
   const kind = kindOf(fileName)
 
   useEffect(() => {
     let alive = true
-    setLoading(true); setError(null); setDocHtml(null)
+    setLoading(true); setError(null)
     ;(async () => {
       const signed = await contractFileUrl(path)
       if (!alive) return
@@ -49,11 +37,20 @@ export function ContractViewer({
       if (kind === 'docx') {
         try {
           const buf = await contractFileBytes(path)
+          if (!alive) return
           if (!buf) throw new Error('Could not read the file.')
-          const mod: any = await import('mammoth/mammoth.browser')
-          const mammoth = mod.default ?? mod
-          const { value } = await mammoth.convertToHtml({ arrayBuffer: buf })
-          if (alive) setDocHtml(sanitize(value || '<p>(empty document)</p>'))
+          const { renderAsync } = await import('docx-preview')
+          if (!alive || !docxRef.current) return
+          docxRef.current.innerHTML = ''
+          await renderAsync(buf, docxRef.current, undefined, {
+            className: 'docx',
+            inWrapper: true,
+            breakPages: true,
+            useBase64URL: true,
+            experimental: true,
+            renderHeaders: true,
+            renderFooters: true,
+          })
         } catch (e: any) {
           if (alive) setError('Could not render this Word document. ' + (e?.message ?? ''))
         }
@@ -99,23 +96,22 @@ export function ContractViewer({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto bg-slate-100 dark:bg-slate-950">
-          {loading && <div className="p-8 text-center text-sm text-slate-500">Loading the agreement…</div>}
+        <div className="relative min-h-0 flex-1 overflow-auto bg-slate-200 dark:bg-slate-800">
+          {loading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-200/80 text-sm text-slate-500 dark:bg-slate-800/80">
+              Loading the agreement…
+            </div>
+          )}
           {error && <div className="p-8 text-center text-sm text-red-600">{error}</div>}
 
-          {!loading && !error && kind === 'pdf' && url && (
+          {/* Word document — docx-preview renders faithful pages into this host. */}
+          {kind === 'docx' && !error && <div ref={docxRef} className="docx-view py-4" />}
+
+          {kind === 'pdf' && url && !error && (
             <iframe title={title} src={url} className="h-full w-full border-0" />
           )}
 
-          {!loading && !error && kind === 'docx' && docHtml && (
-            <div className="mx-auto max-w-[820px] px-6 py-8">
-              <div className="contract-doc rounded-lg bg-white p-8 text-slate-800 shadow-sm dark:bg-slate-900 dark:text-slate-100">
-                <div dangerouslySetInnerHTML={{ __html: docHtml }} />
-              </div>
-            </div>
-          )}
-
-          {!loading && !error && kind === 'other' && (
+          {kind === 'other' && !loading && !error && (
             <div className="p-8 text-center text-sm text-slate-600 dark:text-slate-300">
               <p>This file type can't be previewed in the browser.</p>
               {url && (
@@ -128,21 +124,10 @@ export function ContractViewer({
         </div>
       </div>
 
-      {/* Rendering styles for the converted Word document. */}
+      {/* docx-preview injects its own styles; keep its page wrapper centered and tidy. */}
       <style>{`
-        .contract-doc { line-height: 1.55; font-size: 14px; }
-        .contract-doc p { margin: 0 0 0.7em; }
-        .contract-doc h1, .contract-doc h2, .contract-doc h3 { font-weight: 700; margin: 1.1em 0 0.5em; line-height: 1.25; }
-        .contract-doc h1 { font-size: 1.4em; }
-        .contract-doc h2 { font-size: 1.2em; }
-        .contract-doc h3 { font-size: 1.05em; }
-        .contract-doc ul, .contract-doc ol { margin: 0 0 0.7em 1.4em; }
-        .contract-doc li { margin: 0.2em 0; }
-        .contract-doc table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 0.92em; }
-        .contract-doc td, .contract-doc th { border: 1px solid #cbd5e1; padding: 4px 8px; text-align: left; vertical-align: top; }
-        .contract-doc strong { font-weight: 700; }
-        .contract-doc a { color: #2563eb; text-decoration: underline; }
-        .contract-doc img { max-width: 100%; height: auto; }
+        .docx-view .docx-wrapper { background: transparent; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+        .docx-view .docx-wrapper > section.docx { box-shadow: 0 1px 6px rgba(0,0,0,0.18); margin: 0; background: #fff; }
       `}</style>
     </div>
   )
