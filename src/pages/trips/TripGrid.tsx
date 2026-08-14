@@ -174,13 +174,7 @@ function getDealbreakerBadges(
     badges.push({ label: 'No Mtg Space', level: 'yellow' })
   }
 
-  // 4. Night scenario unavailable
-  if (resp.scenario_rates) {
-    const unavailable = Object.entries(resp.scenario_rates)
-      .filter(([, v]) => v.available === false)
-      .map(([k]) => `${k}n N/A`)
-    for (const u of unavailable) badges.push({ label: u, level: 'yellow' })
-  }
+  // (Night scenarios removed — no per-scenario availability badges.)
 
   // 5. Date scenario unavailable
   if (resp.scenario_availability) {
@@ -632,6 +626,22 @@ export default function TripGrid() {
           >
             ↓ Export (.xlsx)
           </button>
+          {(() => {
+            // Notify not selected — surfaced on the grid too, but only once a
+            // winner has been awarded so nobody gets a decline mid-comparison.
+            const awardMade = invitations.some((i) => i.status === 'awarded' || i.awarded_stay1 || i.awarded_stay2)
+            const losers = invitations.filter((i) => ['submitted', 'passed'].includes(i.status) && !i.awarded_stay1 && !i.awarded_stay2).length
+            if (!awardMade || losers === 0) return null
+            return (
+              <Link
+                to={`/trips/${id}?regret=1`}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                title="Email every hotel that submitted a bid but wasn't selected."
+              >
+                Notify not selected ({losers})
+              </Link>
+            )
+          })()}
         </div>
       </div>
 
@@ -1025,9 +1035,9 @@ export default function TripGrid() {
                 )
               })()}
 
-              {/* Multi-scenario rates — shown when trip has night_scenarios with 2+ values */}
+              {/* Night-scenarios feature removed — never render the multi-scenario rate rows. */}
               {(() => {
-                const scenarios: number[] = (trip as any)?.night_scenarios ?? []
+                const scenarios: number[] = []
                 if (scenarios.length < 2) return null
                 return scenarios.map((n) => (
                   <tr key={`scenario-${n}`} className="border-b border-slate-100 hover:bg-slate-50">

@@ -123,7 +123,6 @@ export default function TripForm() {
   const [clients, setClients] = useState<Pick<Client, 'id' | 'team_name' | 'default_terms'>[]>([])
   const [fields, setFields] = useState<FormState>({ ...blank, client_id: presetClient })
   const [showStay2, setShowStay2] = useState(false)
-  const [nightScenarios, setNightScenarios] = useState<number[]>([1])
   const [dateScenarios, setDateScenarios] = useState<DateScenario[]>([])
   const [needsPlayoffClause, setNeedsPlayoffClause] = useState(false)
   const [needsTournamentClause, setNeedsTournamentClause] = useState(false)
@@ -163,7 +162,6 @@ export default function TripForm() {
         } else if (data) {
           const t = data as Trip
           if (t.stay2_arrival_date) setShowStay2(true)
-          if ((t as any).night_scenarios?.length) setNightScenarios((t as any).night_scenarios)
           if ((t as any).date_scenarios?.length) setDateScenarios((t as any).date_scenarios)
           if (t.postseason_window || t.postseason_rooms_text) setNeedsPlayoffClause(true)
           if (t.in_season_tournament_window) setNeedsTournamentClause(true)
@@ -303,7 +301,7 @@ export default function TripForm() {
       postseason_type: fields.postseason_type,
       status: fields.status,
       response_deadline: clean(fields.response_deadline),
-      night_scenarios: nightScenarios.length > 0 ? nightScenarios : [1],
+      night_scenarios: [1], // night-scenarios feature removed; every trip is single-rate
       date_scenarios: dateScenarios,
     }
 
@@ -428,52 +426,6 @@ export default function TripForm() {
               onChange={set('response_deadline')}
             />
           </div>
-        </Card>
-
-        {/* Night Scenarios */}
-        <Card className="p-6">
-          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Night Scenarios
-          </h2>
-          <p className="mb-4 text-xs text-slate-400 dark:text-slate-500">
-            Hotels will quote a separate rate for each option you select. Not sure yet? Check all that apply — you can narrow it down before sending.
-          </p>
-          <div className="flex flex-wrap gap-3">
-            {[1, 2, 3, 4, 5, 6, 7].map((n) => {
-              const checked = nightScenarios.includes(n)
-              return (
-                <label
-                  key={n}
-                  className={`flex cursor-pointer items-center gap-2.5 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
-                    checked
-                      ? 'border-[#1C1008] bg-[#1C1008]/5 text-[#1C1008] dark:border-amber-400 dark:text-amber-400'
-                      : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-500'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300 accent-[#1C1008]"
-                    checked={checked}
-                    onChange={(e) => {
-                      setNightScenarios((prev) =>
-                        e.target.checked
-                          ? [...prev, n].sort((a, b) => a - b)
-                          : prev.filter((x) => x !== n).length > 0
-                            ? prev.filter((x) => x !== n)
-                            : prev // never allow empty
-                      )
-                    }}
-                  />
-                  {n} night{n > 1 ? 's' : ''}
-                </label>
-              )
-            })}
-          </div>
-          {nightScenarios.length > 1 && (
-            <p className="mt-3 text-xs text-amber-600">
-              Hotels will be asked to quote rates and confirm availability for each selected scenario.
-            </p>
-          )}
         </Card>
 
         {/* Second Visit */}

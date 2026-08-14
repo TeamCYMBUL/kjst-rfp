@@ -496,8 +496,10 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
   const client = trip.clients
 
   const hasStay2 = Boolean(trip.stay2_arrival_date)
-  const scenarios = trip.night_scenarios ?? [1]
-  const isMultiScenario = scenarios.length > 1
+  // Night-scenarios feature removed platform-wide: every RFP is single-rate, even
+  // for older trips that were saved with multiple night options.
+  const scenarios = [1]
+  const isMultiScenario = false
 
   // ── Helper: table cell styles ─────────────────────────────────────────────
   const th = 'border border-slate-300 bg-slate-100 px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500'

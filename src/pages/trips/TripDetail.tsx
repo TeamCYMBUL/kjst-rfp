@@ -1597,6 +1597,7 @@ export default function TripDetail() {
   // When arriving from the Contracts page ("Send contract request"), auto-open
   // the contract dialog for that hotel once its data has loaded.
   const contractParamHandled = useRef(false)
+  const regretParamHandled = useRef(false)
   const { role, canEditClient } = useRole()
   const isViewer = role === 'viewer'
   const [trip, setTrip] = useState<(Trip & { clients: Pick<Client, 'id' | 'team_name' | 'league' | 'progress_steps'> | null }) | null>(null)
@@ -2091,6 +2092,11 @@ export default function TripDetail() {
   const [regretSending, setRegretSending] = useState(false)
   // "Not selected" = bid in / passed but not awarded either visit.
   const loserCount = (invites ?? []).filter((i) => ['submitted', 'passed'].includes(i.status) && !(i as any).awarded_stay1 && !(i as any).awarded_stay2).length
+  // Only offer "Notify not selected" once a winner has actually been chosen (or
+  // the whole trip is cancelled) — never before an award, so nobody gets a
+  // decline while bids are still being compared.
+  const awardMade = (invites ?? []).some((i) => i.status === 'awarded' || (i as any).awarded_stay1 || (i as any).awarded_stay2)
+  const canNotifyNotSelected = (awardMade || (trip as any)?.cancelled) && loserCount > 0
   const openRegret = () => {
     const tripRef = [trip?.clients?.team_name, trip?.city].filter(Boolean).join(' · ')
     setRegretMsg(
@@ -2100,6 +2106,15 @@ export default function TripDetail() {
     )
     setRegretOpen(true)
   }
+  // Deep-link from the grid: /trips/:id?regret=1 opens the notify-not-selected
+  // flow once data has loaded and an award has actually been made.
+  useEffect(() => {
+    if (regretParamHandled.current) return
+    if (searchParams.get('regret') !== '1' || !invites || !trip) return
+    if (!canNotifyNotSelected) return
+    regretParamHandled.current = true
+    openRegret()
+  }, [searchParams, invites, trip, canNotifyNotSelected])
   const sendRegretEmails = async () => {
     setRegretSending(true)
     const res = await sendRegrets(id!, { message: regretMsg })
@@ -2300,7 +2315,7 @@ export default function TripDetail() {
               Edit
             </LinkButton>
           )}
-          {trip && canEditClient(trip.client_id) && loserCount > 0 && (
+          {trip && canEditClient(trip.client_id) && canNotifyNotSelected && (
             <button
               onClick={openRegret}
               title="Email every hotel that submitted a bid but wasn't selected (or all bidders, if this trip is cancelled)."
