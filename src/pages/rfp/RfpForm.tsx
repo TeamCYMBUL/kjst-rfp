@@ -1320,9 +1320,18 @@ export default function RfpForm() {
     }
 
     // Named function-space fields (Meal Room / Treatment Room / Coaches
-    // Meeting Room) required when the hotel answered Yes
+    // Meeting Room) required when the hotel answered Yes. Must mirror the RENDER
+    // filter (isNamedFunctionSpaceItem) EXACTLY: an item that also says
+    // "complimentary meeting space" (e.g. the Timberwolves' Treatment Room item,
+    // whose body mentions "Treatment Room/Function space") is rendered as a
+    // single room-detail card, not the 3 named sub-spaces — so validating it as a
+    // named-function-space item demanded fields the form never showed, blocking
+    // submission. Exclude those here so validation and render agree.
     const namedFnItems = (data?.items ?? []).filter(
-      (item) => item.answer_type === 'yes_no' && item.label.toLowerCase().includes('function space'),
+      (item) =>
+        item.answer_type === 'yes_no' &&
+        item.label.toLowerCase().includes('function space') &&
+        !item.label.toLowerCase().includes('complimentary meeting space'),
     )
     for (const item of namedFnItems) {
       if (answers[item.id]?.answer_yes_no === true) {
