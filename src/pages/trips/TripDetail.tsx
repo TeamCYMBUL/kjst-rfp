@@ -1953,7 +1953,23 @@ export default function TripDetail() {
   const [contractSubject, setContractSubject] = useState('')
   const [contractMessage, setContractMessage] = useState('')
   const [contractSending, setContractSending] = useState(false)
+  const [contractAttachments, setContractAttachments] = useState<{ path: string; name: string; size?: number; type?: string }[]>([])
+  const [contractUploading, setContractUploading] = useState(false)
+  const uploadContractFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0 || !contractTarget) return
+    setContractUploading(true)
+    try {
+      for (const file of Array.from(files)) {
+        const safe = (file.name || 'file').replace(/[^\w.\- ]+/g, '_').replace(/\s+/g, '_').slice(0, 120)
+        const path = `request-attachments/${contractTarget.id}/${crypto.randomUUID()}-${safe}`
+        const { error } = await supabase.storage.from('contracts').upload(path, file, { upsert: false })
+        if (error) { alert('Upload failed: ' + error.message); continue }
+        setContractAttachments((prev) => [...prev, { path, name: safe, size: file.size, type: file.type }])
+      }
+    } finally { setContractUploading(false) }
+  }
   const openContractDialog = (inv: Invitation) => {
+    setContractAttachments([])
     const team = trip?.clients?.team_name ?? 'the team'
     const cityName = trip?.city ?? 'the city'
     const cutoff = trip?.arrival_date
@@ -2006,10 +2022,11 @@ export default function TripDetail() {
     if (!contractTarget) return
     const inv = contractTarget
     setContractSending(true)
-    const res = await sendContractRequest(inv.id, { subject: contractSubject.trim(), message: contractMessage })
+    const res = await sendContractRequest(inv.id, { subject: contractSubject.trim(), message: contractMessage, attachments: contractAttachments })
     setContractSending(false)
     if ('error' in res) { alert(`Could not send: ${res.error}`); return }
     setContractTarget(null)
+    setContractAttachments([])
     alert(`Contract request sent to ${res.sent_to}.`)
   }
 
@@ -2994,10 +3011,26 @@ export default function TripDetail() {
             <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
               Sends to {contractTarget.hotel_contact_email || 'the hotel'}, CC'ing the assigned managers.
             </p>
+
+            {/* Attachments */}
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Attachments</label>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600">
+                {contractUploading ? 'Uploading…' : '+ Add file'}
+                <input type="file" multiple className="hidden" onChange={(e) => { uploadContractFiles(e.target.files); e.target.value = '' }} />
+              </label>
+              {contractAttachments.map((a) => (
+                <span key={a.path} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 px-2.5 py-1 text-xs text-slate-600 dark:text-slate-300">
+                  {a.name}
+                  <button type="button" onClick={() => setContractAttachments((prev) => prev.filter((x) => x.path !== a.path))} className="text-slate-400 hover:text-red-500" aria-label="Remove">×</button>
+                </span>
+              ))}
+            </div>
+
             <div className="mt-5 flex items-center gap-2">
               <button
                 onClick={confirmSendContract}
-                disabled={contractSending || !contractMessage.trim()}
+                disabled={contractSending || contractUploading || !contractMessage.trim()}
                 className="rounded-lg bg-[#1C1008] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#2d1e0e] disabled:opacity-50"
               >
                 {contractSending ? 'Sending…' : 'Send contract request'}

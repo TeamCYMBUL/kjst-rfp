@@ -6,6 +6,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2"
 // the sending manager, CC'ing the assigned managers + Jon and any hotel brand CC.
 // It also ensures a `contracts` record + token exists and appends a secure upload
 // link so the hotel can return its signed agreement straight into the platform.
+// Staff may also attach files (stored in the `contracts` bucket) to the email.
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -73,6 +74,29 @@ function escMultiline(s: string): string {
   return esc(s).replace(/\r?\n/g, '<br>')
 }
 
+// Download the staff-attached files from the private `contracts` bucket and turn
+// them into Resend attachments (base64). Best-effort: a bad path is skipped, not
+// fatal, so the email still goes out.
+async function buildAttachments(
+  sb: ReturnType<typeof createClient>,
+  raw: unknown,
+): Promise<{ filename: string; content: string }[]> {
+  if (!Array.isArray(raw)) return []
+  const out: { filename: string; content: string }[] = []
+  for (const a of raw.slice(0, 10)) {
+    const path = a && typeof a === 'object' ? (a as any).path : null
+    const name = a && typeof a === 'object' ? (a as any).name : null
+    if (typeof path !== 'string' || typeof name !== 'string') continue
+    const { data: file } = await sb.storage.from('contracts').download(path)
+    if (!file) continue
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    let bin = ''
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
+    out.push({ filename: name, content: btoa(bin) })
+  }
+  return out
+}
+
 function buildHtml(p: {
   hotelName: string
   teamName: string | null
@@ -132,7 +156,7 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405, headers: CORS })
   if (!RESEND_API_KEY) return Response.json({ error: 'RESEND_API_KEY not set' }, { status: 500, headers: CORS })
 
-  let body: { invitation_id?: string; subject?: string; message?: string; base_url?: string }
+  let body: { invitation_id?: string; subject?: string; message?: string; base_url?: string; attachments?: unknown }
   try { body = await req.json() } catch { return Response.json({ error: 'Invalid JSON body' }, { status: 400, headers: CORS }) }
 
   const invitation_id = body.invitation_id
@@ -221,6 +245,8 @@ Deno.serve(async (req: Request) => {
     ccList.push(`${hotelCc.name} <${hotelCc.email}>`)
   }
 
+  const attachments = await buildAttachments(sb, body.attachments)
+
   const fromAddress = senderEmail || FROM_EMAIL
   const resendBody: Record<string, unknown> = {
     from: `${senderName || FROM_NAME} <${fromAddress}>`,
@@ -230,6 +256,7 @@ Deno.serve(async (req: Request) => {
     html,
   }
   if (ccList.length > 0) resendBody.cc = ccList
+  if (attachments.length > 0) resendBody.attachments = attachments
 
   const resendRes = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -241,5 +268,5 @@ Deno.serve(async (req: Request) => {
     return Response.json({ error: `Resend API error: ${errText}` }, { status: 500, headers: CORS })
   }
 
-  return Response.json({ ok: true, sent_to: inv.hotel_contact_email, cc: ccList }, { headers: CORS })
+  return Response.json({ ok: true, sent_to: inv.hotel_contact_email, cc: ccList, attached: attachments.length }, { headers: CORS })
 })
