@@ -190,8 +190,8 @@ function calcScores(
     // table and grid never disagree on which bids get the dealbreaker flag.
     const noCommission = commissionItem != null && ['', '0', '0%'].includes((commValue ?? '').trim())
 
-    // 1. Flex cancel — 20 pts
-    const flexScore = flexAns === true ? 20 : 0
+    // 1. Flex cancel — 10 pts
+    const flexScore = flexAns === true ? 10 : 0
 
     // 2. Commission — tiered (15 pts). Books almost always come in at 0 / 7 / 10,
     //    so reward the tier rather than giving full marks for any commission at all:
@@ -225,19 +225,19 @@ function calcScores(
     // 4. Playoff / postseason clause — 10 pts
     const playoffScore = getYesNo(postseasonItem) === true ? 10 : 0
 
-    // 5. Meeting space — up to 10 pts, scaled by the fraction of meeting-space
+    // 5. Meeting space — up to 25 pts, scaled by the fraction of meeting-space
     // items this hotel answered Yes to (item count varies per client template)
     const meetingYesCount = meetingSpaceItems.filter((item) => ansMap.get(item.id)?.answer_yes_no === true).length
-    const meetingScore = meetingSpaceItems.length > 0 ? Math.round((meetingYesCount / meetingSpaceItems.length) * 10) : 0
+    const meetingScore = meetingSpaceItems.length > 0 ? (meetingYesCount / meetingSpaceItems.length) * 25 : 0
 
-    // 6. Suite concessions — up to 20 pts. Works whether the template uses a
-    // quantity (a number > 0) or Yes/No (Yes counts) for these items.
+    // 6. Suite concessions — up to 15 pts (comp suite + suite upgrade, 7.5 each).
+    // Works whether the template uses a quantity (a number > 0) or Yes/No.
     const compPositive = suiteAnswerView(compSuitesItem ? ansMap.get(compSuitesItem.id) : null).positive
     const upgPositive  = suiteAnswerView(suiteUpgItem ? ansMap.get(suiteUpgItem.id) : null).positive
-    const suiteScore = (compPositive ? 10 : 0) + (upgPositive ? 10 : 0)
+    const suiteScore = (compPositive ? 7.5 : 0) + (upgPositive ? 7.5 : 0)
 
     const rawTotal = flexScore + commScore + rateScore + playoffScore + meetingScore + suiteScore
-    const total = Math.min(100, Number.isFinite(rawTotal) ? rawTotal : 0)
+    const total = Math.min(100, Number.isFinite(rawTotal) ? Math.round(rawTotal) : 0)
     scores.set(inv.id, { score: total, noFlexCancel, noCommission })
   }
   return scores
