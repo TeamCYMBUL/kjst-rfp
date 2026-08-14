@@ -25,9 +25,13 @@ export function isContractsUser(email: string | null | undefined): boolean {
   return CONTRACTS_EMAILS.includes((email ?? '').trim().toLowerCase())
 }
 
-// Editing the AI fact-check rules is owner-only for now (matches the DB RLS on
-// contract_check_rules). Widen this list when the feature opens to the KJST team.
-export const CONTRACT_RULES_ADMIN_EMAILS = ['info@cymbul.co']
+// Who can edit the AI fact-check rules (matches the DB RLS on
+// contract_check_rules — keep the two in sync). Owner + Anabel + Catherine.
+export const CONTRACT_RULES_ADMIN_EMAILS = [
+  'info@cymbul.co',
+  'cgibson@kjsportstravel.com',
+  'acabrera@kjsportstravel.com',
+]
 export function isContractRulesAdmin(email: string | null | undefined): boolean {
   return CONTRACT_RULES_ADMIN_EMAILS.includes((email ?? '').trim().toLowerCase())
 }
