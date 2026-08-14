@@ -214,7 +214,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: invitations, error: invErr } = await sb
     .from('rfp_invitations')
-    .select('id, hotel_name, hotel_contact_name, hotel_contact_email, token, status')
+    .select('id, hotel_name, hotel_contact_name, hotel_contact_email, token, status, visit_scope')
     .eq('trip_id', trip_id)
     .not('status', 'in', '("submitted","awarded","passed")')
 
@@ -245,7 +245,18 @@ Deno.serve(async (req: Request) => {
     const rfpLink = `${base_url}/rfp/${inv.token}`
     const monY = (iso: string | null | undefined) =>
       iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' }) : ''
-    const datesText = [monY(trip?.arrival_date), monY(trip?.stay2_arrival_date)].filter(Boolean).join(' & ')
+    // Per-hotel visit scoping: subject months + the body's arrival date show only
+    // the stay(s) this hotel is asked to quote.
+    const scope = ((inv as any).visit_scope ?? 'both') as 'both' | 'stay1' | 'stay2'
+    const showV1 = scope !== 'stay2'
+    const showV2 = Boolean(trip?.stay2_arrival_date) && scope !== 'stay1'
+    const datesText = [
+      showV1 ? monY(trip?.arrival_date) : '',
+      showV2 ? monY(trip?.stay2_arrival_date) : '',
+    ].filter(Boolean).join(' & ')
+    // Arrival row: use Visit 1 when in scope, otherwise fall back to the Visit 2
+    // arrival for a stay-2-only hotel so it never sees the stay it isn't bidding.
+    const bodyArrival = showV1 ? (trip?.arrival_date ?? null) : (showV2 ? (trip?.stay2_arrival_date ?? null) : null)
     const subjectHotel = (inv.hotel_name || '').replace(/\s+/g, ' ').trim() || 'Hotel'
     const subject = `Reminder: RFP Response Needed – ${subjectHotel} · ${client?.team_name ?? 'KJ Sports Travel'} @ ${trip?.city ?? 'Trip'}${datesText ? ` (${datesText})` : ''}`
 
@@ -255,7 +266,7 @@ Deno.serve(async (req: Request) => {
       teamName: client?.team_name ?? null,
       city: trip?.city ?? null,
       opponentLabel: trip?.opponent_label ?? null,
-      arrivalDate: trip?.arrival_date ?? null,
+      arrivalDate: bodyArrival,
       responseDeadline: trip?.response_deadline ?? null,
       rfpLink,
       daysLeft,
