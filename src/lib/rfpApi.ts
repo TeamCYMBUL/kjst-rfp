@@ -196,6 +196,32 @@ export async function respondRfp(args: {
   return data
 }
 
+// What this hotel entered on its PRIOR RFPs, for prefill / suggestions on a new one.
+export type RfpPrefill = {
+  found: boolean
+  hotelName?: string
+  lastDate?: string | null
+  occupancyTax?: string
+  resortFee?: string
+  checkinTime?: string
+  rooms?: { name: string; dimensions: string; space_type: string }[]
+  notes?: Record<string, string>
+}
+
+export async function fetchRfpPrefill(token: string): Promise<RfpPrefill> {
+  try {
+    const res = await fetch(`${BASE}/rfp-prefill`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+    if (!res.ok) return { found: false }
+    return await res.json()
+  } catch {
+    return { found: false }
+  }
+}
+
 export async function declineRfp(args: {
   token: string
   decline_reason: string

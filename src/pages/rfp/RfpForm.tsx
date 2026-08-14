@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { getRfp, respondRfp, declineRfp } from '../../lib/rfpApi'
+import { getRfp, respondRfp, declineRfp, fetchRfpPrefill } from '../../lib/rfpApi'
+import type { RfpPrefill } from '../../lib/rfpApi'
 import { supabase } from '../../lib/supabase'
 import { formatDate, formatGameTime } from '../../lib/format'
 import type {
@@ -228,6 +229,71 @@ function noteRequirementOnNo(item: ConcessionItem): { placeholder: string } | nu
   return null
 }
 
+// Short labels for the saved-room dropdown (mirrors the Type-of-room select).
+const SPACE_TYPE_LABELS: Record<string, string> = {
+  function_room: 'Function room',
+  restaurant: 'Restaurant',
+  suite_converted: 'Suite',
+  ballroom: 'Ballroom',
+}
+
+// Room-name input with a dropdown of rooms this hotel has used on prior RFPs.
+// Not autofilled — the hotel opens it and picks one, which fills name + size +
+// type together. Falls back to a plain text input when there's nothing saved.
+type SavedRoom = { name: string; dimensions: string; space_type: string }
+function RoomNameField({
+  id, value, rooms, disabled, placeholder, onName, onPick,
+}: {
+  id: string
+  value: string
+  rooms: SavedRoom[]
+  disabled?: boolean
+  placeholder?: string
+  onName: (name: string) => void
+  onPick: (room: SavedRoom) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const q = value.trim().toLowerCase()
+  const matches = rooms.filter((r) => !q || r.name.toLowerCase().includes(q))
+  const show = open && !disabled && matches.length > 0
+  return (
+    <div className="relative">
+      <input
+        id={id}
+        type="text"
+        className={inputCls}
+        value={value}
+        disabled={disabled}
+        placeholder={placeholder}
+        autoComplete="off"
+        onChange={(e) => onName(e.target.value)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      {show && (
+        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+          <div className="border-b border-slate-100 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            Rooms you've used before
+          </div>
+          {matches.map((r, i) => (
+            <button
+              key={i}
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); onPick(r); setOpen(false) }}
+              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-blue-50"
+            >
+              <span className="text-slate-800">{r.name}</span>
+              <span className="whitespace-nowrap text-xs text-slate-500">
+                {[r.dimensions ? `${r.dimensions} sq ft` : '', SPACE_TYPE_LABELS[r.space_type] ?? ''].filter(Boolean).join(' · ')}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Single concession item row ────────────────────────────────────────────────
 
 function ConcessionRow({
@@ -237,6 +303,7 @@ function ConcessionRow({
   disabled,
   showCommissionWarning,
   hasError,
+  noteSuggestion,
 }: {
   item: ConcessionItem
   answer: AnswerState
@@ -244,6 +311,7 @@ function ConcessionRow({
   disabled?: boolean
   showCommissionWarning?: boolean
   hasError?: boolean
+  noteSuggestion?: string
 }) {
   const isYesNo = item.answer_type === 'yes_no'
   // Comment-enabled yes/no items show the box automatically on "No" and can also
@@ -350,8 +418,28 @@ function ConcessionRow({
             placeholder={noteRequired ? noReq!.placeholder : 'Reason or counteroffer…'}
             value={answer.comment}
             onChange={(e) => onChange({ comment: e.target.value })}
+            onKeyDown={(e) => {
+              // Tab accepts the saved suggestion when the box is still empty.
+              if (e.key === 'Tab' && !e.shiftKey && noteSuggestion && !answer.comment?.trim()) {
+                e.preventDefault()
+                onChange({ comment: noteSuggestion })
+              }
+            }}
             disabled={disabled}
           />
+          {noteSuggestion && !answer.comment?.trim() && !disabled && (
+            <div className="mt-1.5 flex items-start gap-2 rounded-md bg-blue-50 px-2.5 py-1.5 text-xs ring-1 ring-blue-200">
+              <span className="whitespace-nowrap font-medium text-blue-600">From your last RFP:</span>
+              <span className="flex-1 italic text-slate-600">"{noteSuggestion}"</span>
+              <button
+                type="button"
+                onClick={() => onChange({ comment: noteSuggestion })}
+                className="whitespace-nowrap font-semibold text-blue-600 hover:underline"
+              >
+                Use (Tab)
+              </button>
+            </div>
+          )}
           {showNoteError && (
             <p className="mt-1 text-xs font-medium text-red-500">A note is required when you answer No here.</p>
           )}
@@ -394,9 +482,10 @@ type RfpHeaderProps = {
   scheduleAutosave: () => void
   visit1Declined: boolean
   visit2Declined: boolean
+  prefilledFields: Set<string>
 }
 
-function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAvailability, setScenarioAvailability, scheduleAutosave, visit1Declined, visit2Declined }: RfpHeaderProps) {
+function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAvailability, setScenarioAvailability, scheduleAutosave, visit1Declined, visit2Declined, prefilledFields }: RfpHeaderProps) {
   const { invitation, org } = data
   const trip = invitation.trips
   const client = trip.clients
@@ -701,6 +790,9 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
                       placeholder="e.g. 16.9% + $5/night"
                       onChange={(e) => setResp((r) => ({ ...r, occupancy_tax: e.target.value }))}
                       disabled={isReadOnly} />
+                    {prefilledFields.has('occupancy_tax') && !!resp.occupancy_tax?.trim() && (
+                      <div className="px-2 pb-1 text-[10px] font-medium text-blue-600">Prefilled from your last RFP</div>
+                    )}
                   </td>
                 </tr>
               </tbody>
@@ -825,6 +917,9 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
             onChange={(e) => setResp((r) => ({ ...r, resort_fee: e.target.value }))}
             disabled={isReadOnly}
             placeholder="e.g. $35/night" />
+          {prefilledFields.has('resort_fee') && !!resp.resort_fee?.trim() && (
+            <div className="mt-1 text-[10px] font-medium text-blue-600">Prefilled from your last RFP</div>
+          )}
         </div>
 
         {/* ── Rate notes (optional) ── */}
@@ -878,6 +973,12 @@ export default function RfpForm() {
   const [declineScope, setDeclineScope] = useState<'both' | 1 | 2>('both')
   const [visit1Declined, setVisit1Declined] = useState(false)
   const [visit2Declined, setVisit2Declined] = useState(false)
+
+  // Auto-populate profile from this hotel's prior RFPs (tax prefill, saved rooms,
+  // per-line note suggestions). Only ever this hotel's own past answers.
+  const [prefill, setPrefill] = useState<RfpPrefill | null>(null)
+  const [prefillDismissed, setPrefillDismissed] = useState(false)
+  const [prefilledFields, setPrefilledFields] = useState<Set<string>>(new Set())
 
   // Night scenarios state — populated from loaded trip data
   const [nightScenarios, setNightScenarios] = useState<number[]>([1])
@@ -1037,6 +1138,24 @@ export default function RfpForm() {
           }
         })
         setAnswers(answerMap)
+
+        // Pull this hotel's prior-RFP profile and prefill the stable single
+        // values (tax / resort fee) only where the field is still empty. Runs
+        // after the loaded response is applied so it never clobbers real data.
+        fetchRfpPrefill(token)
+          .then((p) => {
+            if (!p.found) return
+            setPrefill(p)
+            const filled = new Set<string>()
+            setResp((prev) => {
+              const patch: Partial<typeof prev> = {}
+              if (!prev.occupancy_tax?.trim() && p.occupancyTax) { patch.occupancy_tax = p.occupancyTax; filled.add('occupancy_tax') }
+              if (!prev.resort_fee?.trim() && p.resortFee) { patch.resort_fee = p.resortFee; filled.add('resort_fee') }
+              return Object.keys(patch).length ? { ...prev, ...patch } : prev
+            })
+            if (filled.size) setPrefilledFields((s) => new Set([...s, ...filled]))
+          })
+          .catch(() => { /* prefill is best-effort; never block the form */ })
       })
       .catch((e) => setLoadError(e.message))
   }, [token])
@@ -1576,6 +1695,7 @@ export default function RfpForm() {
         disabled={isReadOnly}
         showCommissionWarning={isCommissionItem(item)}
         hasError={fieldErrors.has(item.id)}
+        noteSuggestion={prefill?.notes?.[item.id]}
       />
     ))
 
@@ -1593,6 +1713,7 @@ export default function RfpForm() {
           scheduleAutosave={scheduleAutosave}
           visit1Declined={visit1Declined}
           visit2Declined={visit2Declined}
+          prefilledFields={prefilledFields}
         />
 
         {/* ── KJST staff-entry banner: filling the bid on the hotel's behalf ── */}
@@ -1755,6 +1876,20 @@ export default function RfpForm() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-8">
+          {/* Returning-hotel autofill banner */}
+          {prefill?.found && !prefillDismissed && !isReadOnly && (
+            <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+              <svg className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l4 2" /></svg>
+              <div className="flex-1 text-sm text-blue-900">
+                <span className="font-semibold">Welcome back{prefill.hotelName ? `, ${prefill.hotelName}` : ''}.</span>{' '}
+                We pulled details from your prior RFPs to save you time. Your occupancy tax {prefill.resortFee ? 'and resort fee are' : 'is'} filled in below, your saved meeting rooms are available in each room dropdown, and your past counteroffers appear as suggestions you can accept. Review and update anything that has changed.
+              </div>
+              <button type="button" onClick={() => setPrefillDismissed(true)} className="flex-shrink-0 text-blue-400 hover:text-blue-600" aria-label="Dismiss">
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+              </button>
+            </div>
+          )}
+
           {/* ── Section 1: Flexible Cancellation ─── */}
           {flexCancelItems.length > 0 && (
             <div className="rounded-xl border border-slate-200 bg-white p-6">
@@ -1828,17 +1963,22 @@ export default function RfpForm() {
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div>
                           <FieldLabel htmlFor={`msd-${item.id}-name`} required>Room name</FieldLabel>
-                          <input
+                          <RoomNameField
                             id={`msd-${item.id}-name`}
-                            type="text"
-                            className={inputCls}
                             value={detail.name}
-                            onChange={(e) => {
-                              const v = e.target.value
-                              setMeetingSpaceDetails((prev) => ({ ...prev, [item.id]: { ...detail, name: v } }))
-                            }}
+                            rooms={prefill?.rooms ?? []}
                             disabled={isReadOnly}
                             placeholder="e.g. Grand Ballroom A"
+                            onName={(name) => setMeetingSpaceDetails((prev) => ({ ...prev, [item.id]: { ...detail, name } }))}
+                            onPick={(room) => setMeetingSpaceDetails((prev) => ({
+                              ...prev,
+                              [item.id]: {
+                                ...detail,
+                                name: room.name,
+                                dimensions: room.dimensions || detail.dimensions,
+                                space_type: room.space_type || detail.space_type,
+                              },
+                            }))}
                           />
                         </div>
                         <div>
@@ -1935,14 +2075,19 @@ export default function RfpForm() {
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <FieldLabel htmlFor={`add-${idx}-name`} required>Room name</FieldLabel>
-                      <input
+                      <RoomNameField
                         id={`add-${idx}-name`}
-                        type="text"
-                        className={inputCls}
                         value={space.name}
-                        onChange={(e) => { const v = e.target.value; setAdditionalSpaces((prev) => prev.map((s, i) => i === idx ? { ...s, name: v } : s)) }}
+                        rooms={prefill?.rooms ?? []}
                         disabled={isReadOnly}
                         placeholder="e.g. Boardroom B"
+                        onName={(name) => setAdditionalSpaces((prev) => prev.map((s, i) => i === idx ? { ...s, name } : s))}
+                        onPick={(room) => setAdditionalSpaces((prev) => prev.map((s, i) => i === idx ? {
+                          ...s,
+                          name: room.name,
+                          dimensions: room.dimensions || s.dimensions,
+                          space_type: room.space_type || s.space_type,
+                        } : s))}
                       />
                     </div>
                     <div>
