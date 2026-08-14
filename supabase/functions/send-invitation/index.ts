@@ -17,10 +17,6 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Retry a Resend send ONLY on 429 (rate limited = the email was never accepted),
-// honoring Retry-After, with capped backoff + jitter. Any other status returns
-// as-is, so success and real errors behave exactly as before. No double-send
-// risk: a 429 means nothing was sent.
 async function sendResend(payload: unknown, apiKey: string, maxAttempts = 4): Promise<Response> {
   for (let attempt = 1; ; attempt++) {
     const res = await fetch('https://api.resend.com/emails', {
@@ -55,8 +51,6 @@ async function getCcRecipients(sb: ReturnType<typeof createClient>, clientId: st
   return recipients
 }
 
-// A hotel's persistent card can carry an "Always CC" (brand_cc) copied on every
-// RFP email to that property. Match by primary contact email first, then name+city.
 async function getHotelBrandCc(
   sb: ReturnType<typeof createClient>,
   contactEmail: string | null,
@@ -94,8 +88,6 @@ function fmtList(dates: string[] | null | undefined, single: string | null): str
   return list.map((d) => fmt(d)).join(', ')
 }
 
-// Build the "Sample menus from KJ Sports Travel" block for the email (links to the
-// public client-sample-menus bucket). Empty string when the team has none.
 function buildSampleMenusHtml(menus: { name: string; url: string }[]): string {
   if (!menus.length) return ''
   const links = menus.map((m) =>
@@ -123,6 +115,7 @@ function buildInviteHtml(p: {
   stay2ArrivalDate: string | null
   stay2DepartureDate: string | null
   stay2GameDatesText: string
+  visitScope: 'both' | 'stay1' | 'stay2'
   responseDeadline: string | null
   kingRooms: number | null
   doubleRooms: number | null
@@ -139,8 +132,6 @@ function buildInviteHtml(p: {
   sampleMenusHtml: string
 }): string {
   const teamName = p.teamName ?? 'our client'
-  // Full season label (e.g. "2026-2027"), not a single year. Prefer the client's
-  // stored season; otherwise derive a range from the arrival date.
   const seasonLabel = p.season || (p.arrivalDate
     ? (() => { const d = new Date(p.arrivalDate); const y = d.getUTCFullYear(); return d.getUTCMonth() >= 6 ? `${y}-${y + 1}` : `${y - 1}-${y}` })()
     : '2026-2027')
@@ -153,7 +144,33 @@ function buildInviteHtml(p: {
     p.suites ? `${p.suites} suites` : null,
   ].filter(Boolean)
   const roomBlock = (roomParts.length ? roomParts.join(', ') : 'TBD') + (p.totalRooms ? ` (${p.totalRooms} total)` : '')
-  const hasStay2 = Boolean(p.stay2ArrivalDate)
+
+  // Which visit(s) this hotel is asked to quote. When scoped to a single stay we
+  // show only that stay's dates and drop the "Visit 1 / Visit 2" labels entirely,
+  // so the hotel never sees dates for the stay it isn't bidding on.
+  const scope = p.visitScope ?? 'both'
+  const showV1 = scope !== 'stay2'
+  const showV2 = Boolean(p.stay2ArrivalDate) && scope !== 'stay1'
+  const twoVisit = showV1 && showV2
+
+  const dateRow = (label: string, val: string) =>
+    val ? `<tr><td style="padding:4px 0;font-size:13px;color:#64748b;width:140px">${label}</td><td style="padding:4px 0;font-size:13px;color:#1e293b;font-weight:500">${val}</td></tr>` : ''
+  const visitLabel = (t: string) =>
+    `<tr><td colspan="2" style="padding:8px 0 2px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8">${t}</td></tr>`
+
+  let datesHtml = ''
+  if (showV1) {
+    if (twoVisit) datesHtml += visitLabel('Visit 1')
+    datesHtml += dateRow('Arrival', p.arrivalDate ? fmt(p.arrivalDate) : '')
+    datesHtml += dateRow('Departure', p.departureDate ? fmt(p.departureDate) : '')
+    datesHtml += dateRow('Game date(s)', p.gameDatesText)
+  }
+  if (showV2) {
+    if (twoVisit) datesHtml += visitLabel('Visit 2')
+    datesHtml += dateRow('Arrival', p.stay2ArrivalDate ? fmt(p.stay2ArrivalDate) : '')
+    datesHtml += dateRow('Departure', p.stay2DepartureDate ? fmt(p.stay2DepartureDate) : '')
+    datesHtml += dateRow('Game date(s)', p.stay2GameDatesText)
+  }
 
   const signatureLines = [
     `<strong style="color:#1e293b">${p.senderName}</strong>`,
@@ -198,14 +215,7 @@ function buildInviteHtml(p: {
             <p style="margin:0 0 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8">Trip Details</p>
             ${tripDesc ? `<p style="margin:0 0 12px;font-size:16px;font-weight:700;color:#1e293b">${tripDesc}</p>` : ''}
             <table cellpadding="0" cellspacing="0" style="width:100%">
-              ${hasStay2 ? `<tr><td colspan="2" style="padding:8px 0 2px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8">Visit 1</td></tr>` : ''}
-              ${p.arrivalDate ? `<tr><td style="padding:4px 0;font-size:13px;color:#64748b;width:140px">Arrival</td><td style="padding:4px 0;font-size:13px;color:#1e293b;font-weight:500">${fmt(p.arrivalDate)}</td></tr>` : ''}
-              ${p.departureDate ? `<tr><td style="padding:4px 0;font-size:13px;color:#64748b">Departure</td><td style="padding:4px 0;font-size:13px;color:#1e293b;font-weight:500">${fmt(p.departureDate)}</td></tr>` : ''}
-              ${p.gameDatesText ? `<tr><td style="padding:4px 0;font-size:13px;color:#64748b">Game date(s)</td><td style="padding:4px 0;font-size:13px;color:#1e293b;font-weight:500">${p.gameDatesText}</td></tr>` : ''}
-              ${hasStay2 ? `<tr><td colspan="2" style="padding:12px 0 2px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94a3b8">Visit 2</td></tr>` : ''}
-              ${hasStay2 && p.stay2ArrivalDate ? `<tr><td style="padding:4px 0;font-size:13px;color:#64748b;width:140px">Arrival</td><td style="padding:4px 0;font-size:13px;color:#1e293b;font-weight:500">${fmt(p.stay2ArrivalDate)}</td></tr>` : ''}
-              ${hasStay2 && p.stay2DepartureDate ? `<tr><td style="padding:4px 0;font-size:13px;color:#64748b">Departure</td><td style="padding:4px 0;font-size:13px;color:#1e293b;font-weight:500">${fmt(p.stay2DepartureDate)}</td></tr>` : ''}
-              ${hasStay2 && p.stay2GameDatesText ? `<tr><td style="padding:4px 0;font-size:13px;color:#64748b">Game date(s)</td><td style="padding:4px 0;font-size:13px;color:#1e293b;font-weight:500">${p.stay2GameDatesText}</td></tr>` : ''}
+              ${datesHtml}
               <tr><td style="padding:8px 0 4px;font-size:13px;color:#64748b">Room block</td><td style="padding:8px 0 4px;font-size:13px;color:#1e293b;font-weight:500">${roomBlock}</td></tr>
               ${p.responseDeadline ? `<tr><td style="padding:8px 0 4px;font-size:13px;color:#dc2626;font-weight:600">Response by</td><td style="padding:8px 0 4px;font-size:13px;color:#dc2626;font-weight:700">${fmt(p.responseDeadline)}</td></tr>` : ''}
             </table>
@@ -279,7 +289,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: inv, error: invErr } = await sb
     .from('rfp_invitations')
-    .select(`id, hotel_name, hotel_contact_name, hotel_contact_email, token, status,
+    .select(`id, hotel_name, hotel_contact_name, hotel_contact_email, token, status, visit_scope,
       trips ( city, opponent_label, arrival_date, departure_date, game_date, game_dates, stay2_arrival_date, stay2_departure_date, stay2_game_date, stay2_game_dates, response_deadline, king_rooms_requested, double_rooms_requested, suites_requested, total_rooms_requested,
         clients ( id, team_name, season, always_cc_enabled, always_cc_name, always_cc_email, sample_menus ) )`)
     .eq('id', invitation_id)
@@ -290,18 +300,24 @@ Deno.serve(async (req: Request) => {
 
   const trip = inv.trips as any
   const client = trip?.clients as any
+  const scope = ((inv as any).visit_scope ?? 'both') as 'both' | 'stay1' | 'stay2'
   const rfpLink = `${base_url}/rfp/${inv.token}`
   const declineLink = `${base_url}/rfp/${inv.token}?decline=1`
   const monY = (iso: string | null | undefined) =>
     iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' }) : ''
-  const stayMonths = [monY(trip?.arrival_date), monY(trip?.stay2_arrival_date)].filter(Boolean)
+  // Subject line months honor the scope: only the stay(s) this hotel is quoting.
+  const subjectShowV1 = scope !== 'stay2'
+  const subjectShowV2 = Boolean(trip?.stay2_arrival_date) && scope !== 'stay1'
+  const stayMonths = [
+    subjectShowV1 ? monY(trip?.arrival_date) : '',
+    subjectShowV2 ? monY(trip?.stay2_arrival_date) : '',
+  ].filter(Boolean)
   const datesText = stayMonths.join(' & ')
   const subjectHotel = (inv.hotel_name || '').replace(/\s+/g, ' ').trim() || 'Hotel'
   const subject = `RFP Request: ${subjectHotel} – ${client?.team_name ?? 'KJ Sports Travel Client'} @ ${trip?.city ?? 'Trip'}${datesText ? ` (${datesText})` : ''}`
 
   const ccRecipients = await getCcRecipients(sb, client?.id ?? null)
 
-  // Sample menus KJST shares with hotels (public bucket) → links in the email.
   const sampleMenus = (Array.isArray(client?.sample_menus) ? client.sample_menus : [])
     .filter((m: any) => m && typeof m.path === 'string' && typeof m.name === 'string')
     .map((m: any) => ({ name: m.name as string, url: `${SUPABASE_URL}/storage/v1/object/public/client-sample-menus/${m.path}` }))
@@ -320,6 +336,7 @@ Deno.serve(async (req: Request) => {
     stay2ArrivalDate: trip?.stay2_arrival_date ?? null,
     stay2DepartureDate: trip?.stay2_departure_date ?? null,
     stay2GameDatesText: fmtList(trip?.stay2_game_dates ?? null, trip?.stay2_game_date ?? null),
+    visitScope: scope,
     responseDeadline: trip?.response_deadline ?? null,
     kingRooms: trip?.king_rooms_requested ?? null,
     doubleRooms: trip?.double_rooms_requested ?? null,
@@ -341,7 +358,6 @@ Deno.serve(async (req: Request) => {
     ccList.push(client.always_cc_name ? `${client.always_cc_name} <${client.always_cc_email}>` : client.always_cc_email)
   }
 
-  // Hotel-card "Always CC" (brand_cc): auto-copy the property's permanent CC.
   const hotelCc = await getHotelBrandCc(sb, inv.hotel_contact_email, inv.hotel_name, trip?.city ?? null)
   if (
     hotelCc &&
