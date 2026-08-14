@@ -12,7 +12,7 @@ import type { AwardedContract, ContractStatus } from '../../lib/contractsApi'
 import { ContractFactCheck } from './ContractFactCheck'
 import { ContractViewer } from './ContractViewer'
 import { useAuth } from '../../auth/AuthContext'
-import { isContractsUser } from '../../lib/activity'
+import { isContractsUser, isContractRulesAdmin } from '../../lib/activity'
 
 const STATUS_LABEL: Record<ContractStatus, string> = {
   requested: 'Requested',
@@ -129,6 +129,14 @@ export default function ContractsList() {
             <div><div className="text-2xl font-bold text-blue-600">{uploaded}</div><div className="text-xs text-slate-400">received</div></div>
             <div><div className="text-2xl font-bold text-amber-500">{awaiting}</div><div className="text-xs text-slate-400">awaiting</div></div>
           </div>
+          {isContractRulesAdmin(user?.email) && (
+            <Link
+              to="/contracts/rules"
+              className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+            >
+              Fact-check rules
+            </Link>
+          )}
           <Link
             to="/contracts/print"
             className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"

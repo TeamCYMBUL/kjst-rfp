@@ -15,6 +15,7 @@ import DelinquentPrint from './pages/clients/DelinquentPrint'
 import RfpForm from './pages/rfp/RfpForm'
 import ContractUpload from './pages/contracts/ContractUpload'
 import ContractsList from './pages/contracts/ContractsList'
+import ContractRules from './pages/contracts/ContractRules'
 import ContractsPrint from './pages/contracts/ContractsPrint'
 import TemplateEditor from './pages/settings/TemplateEditor'
 import SettingsPage from './pages/settings/Settings'
@@ -62,6 +63,7 @@ export default function App() {
           <Route path="trips/:id/grid" element={<TripGrid />} />
 
           <Route path="contracts" element={<ContractsList />} />
+          <Route path="contracts/rules" element={<ContractRules />} />
           <Route path="hotels" element={<HotelsList />} />
           <Route path="tickets" element={<Tickets />} />
           <Route path="template" element={<TemplateEditor />} />

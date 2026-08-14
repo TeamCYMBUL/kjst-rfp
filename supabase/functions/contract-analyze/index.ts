@@ -201,7 +201,7 @@ Deno.serve(async (req: Request) => {
     text: `WINNING BID TERMS (source of truth):\n\n${brief}\n\nCompare the uploaded contract above against these bid terms and return your structured findings.`,
   })
 
-  const system =
+  const baseSystem =
     "You are a contracts auditor for KJ Sports Travel. Compare a hotel's uploaded room agreement against the terms the hotel committed to in its winning bid. " +
     'For each material term (king/suite/selling rates, occupancy tax and resort/other fees, room block counts, arrival/departure dates, and every concession the hotel agreed to), ' +
     'decide whether the contract MATCHES the bid, MISMATCHES it (a conflicting value), is MISSING (the bid term is not addressed in the contract), or is EXTRA (a term the contract adds that was not in the bid). ' +
@@ -209,6 +209,20 @@ Deno.serve(async (req: Request) => {
     'The contract text is extracted from a Word document and TABLES are rendered as rows whose cells are separated by " | " (e.g. a room-block or rate table). Read those tables carefully to pull exact room counts, room types, and per-night rates. ' +
     'Treat values that are economically equivalent as a MATCH even if phrased differently: e.g. a contract tax broken into "15% + 2% + $0.86" equals a bid "17% and .86"; suites given "at the contracted room rate" equal "at the king rate" when those rates are the same; a per-night rate stated with cents ("$450.00") equals the bid\'s "$450". Only call a MISMATCH when the actual value genuinely conflicts. ' +
     'Keep note short (one clause) and only when it helps. Set overall to "issues" if any check is mismatch/missing/extra that a person should review, else "match". Write a one-sentence summary.'
+
+  // KJST-managed audit rules, edited in-app and stored in the DB, are appended to
+  // the base instructions so the team can add/change checks without a code deploy.
+  const { data: ruleRows } = await sb
+    .from('contract_check_rules')
+    .select('rule_text')
+    .eq('active', true)
+    .order('sort_order', { ascending: true })
+  const extraRules = (ruleRows ?? []).map((r: any) => String(r.rule_text ?? '').trim()).filter(Boolean)
+  const rulesSection = extraRules.length
+    ? '\n\nADDITIONAL MANDATORY RULES set by KJ Sports Travel. Evaluate EACH numbered rule below against the contract and include exactly ONE check per rule in your output: label = a short name for the rule; status = "mismatch" if the contract violates the rule or contains what the rule says to flag, otherwise "match"; contract_value = the specific offending text and where it appears (or "None found" / "Compliant"); bid_value = a short statement of what the rule requires. Rules:\n'
+      + extraRules.map((r, i) => `${i + 1}. ${r}`).join('\n')
+    : ''
+  const system = baseSystem + rulesSection
 
   const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',

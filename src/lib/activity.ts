@@ -25,6 +25,13 @@ export function isContractsUser(email: string | null | undefined): boolean {
   return CONTRACTS_EMAILS.includes((email ?? '').trim().toLowerCase())
 }
 
+// Editing the AI fact-check rules is owner-only for now (matches the DB RLS on
+// contract_check_rules). Widen this list when the feature opens to the KJST team.
+export const CONTRACT_RULES_ADMIN_EMAILS = ['info@cymbul.co']
+export function isContractRulesAdmin(email: string | null | undefined): boolean {
+  return CONTRACT_RULES_ADMIN_EMAILS.includes((email ?? '').trim().toLowerCase())
+}
+
 // Lifecycle moments that have no timestamp home on a base table and so must be
 // logged explicitly. Everything else (trip_created, invite_sent, bid_received,
 // bid_declined, build_saved) is derived from base-table timestamps by the

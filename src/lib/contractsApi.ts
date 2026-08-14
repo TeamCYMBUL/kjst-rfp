@@ -313,3 +313,55 @@ export async function uploadSignedCopy(contractId: string, file: File): Promise<
     .eq('id', contractId)
   if (error) throw error
 }
+
+// ── Fact-check rules (owner-editable; the analyzer reads the active ones) ───────
+export type ContractCheckRule = {
+  id: string
+  rule_text: string
+  active: boolean
+  sort_order: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export async function listContractRules(): Promise<ContractCheckRule[]> {
+  const { data, error } = await supabase
+    .from('contract_check_rules')
+    .select('*')
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as ContractCheckRule[]
+}
+
+export async function addContractRule(rule_text: string, created_by: string | null): Promise<void> {
+  // Place new rules at the end.
+  const { data: last } = await supabase
+    .from('contract_check_rules')
+    .select('sort_order')
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const sort_order = ((last as any)?.sort_order ?? 0) + 1
+  const { error } = await supabase
+    .from('contract_check_rules')
+    .insert({ rule_text, sort_order, created_by })
+  if (error) throw error
+}
+
+export async function updateContractRule(
+  id: string,
+  patch: Partial<Pick<ContractCheckRule, 'rule_text' | 'active'>>,
+): Promise<void> {
+  const { error } = await supabase
+    .from('contract_check_rules')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteContractRule(id: string): Promise<void> {
+  const { error } = await supabase.from('contract_check_rules').delete().eq('id', id)
+  if (error) throw error
+}
