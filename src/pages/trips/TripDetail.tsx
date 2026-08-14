@@ -875,6 +875,8 @@ function HotelPanel({
   onReopen,
   onContractRequest,
   onSendCopy,
+  onVisitScope,
+  visitScopeSaving,
   copyingId,
   reopeningId,
   onCopyLink,
@@ -897,6 +899,8 @@ function HotelPanel({
   onReopen: (inv: Invitation) => void
   onContractRequest: (inv: Invitation) => void
   onSendCopy: (inv: Invitation) => void
+  onVisitScope: (inv: Invitation, scope: 'both' | 'stay1' | 'stay2') => void
+  visitScopeSaving: string | null
   copyingId: string | null
   reopeningId: string | null
   onCopyLink: (token: string) => void
@@ -1064,6 +1068,28 @@ function HotelPanel({
               <span className="inline-flex rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-300">
                 ↺ Reopened — awaiting revised bid
               </span>
+            )}
+            {/* Per-visit scoping (2-visit trips only). Defaults to "Both"; switch a
+                single hotel to Stay 1 or Stay 2 when the other stay is already handled
+                (e.g. the preferred hotel is confirmed for one visit) so this hotel isn't
+                asked to quote a stay for no reason. Hidden once a bid is in / awarded. */}
+            {Boolean(trip.stay2_arrival_date) && (inv.status === 'sent' || inv.status === 'opened') && (
+              <label
+                className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 dark:border-indigo-700 bg-indigo-50/50 dark:bg-indigo-900/10 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:text-indigo-300"
+                title="Which stay this hotel is asked to quote. Both is the default; pick one stay to leave the other's dates and rates off this hotel's RFP."
+              >
+                <span className="text-indigo-500 dark:text-indigo-400">Collecting</span>
+                <select
+                  value={inv.visit_scope ?? 'both'}
+                  disabled={visitScopeSaving === inv.id}
+                  onChange={(e) => onVisitScope(inv, e.target.value as 'both' | 'stay1' | 'stay2')}
+                  className="bg-transparent font-semibold text-indigo-800 dark:text-indigo-200 focus:outline-none disabled:opacity-50 cursor-pointer"
+                >
+                  <option value="both">Both stays</option>
+                  <option value="stay1">Stay 1 only</option>
+                  <option value="stay2">Stay 2 only</option>
+                </select>
+              </label>
             )}
             {/* Reopen a submitted/awarded proposal so the hotel can revise it.
                 Hidden once it's already reopened (the flag above covers that state). */}
@@ -2018,6 +2044,17 @@ export default function TripDetail() {
     alert(`Copy of the completed RFP sent to ${res.sent_to}.`)
   }
 
+  // Per-visit invitation scoping (2-visit trips). Updates which stay(s) this one
+  // hotel is asked to quote; the hotel form then hides the other stay's dates/rates.
+  const [visitScopeSaving, setVisitScopeSaving] = useState<string | null>(null)
+  const updateVisitScope = async (inv: Invitation, scope: 'both' | 'stay1' | 'stay2') => {
+    setVisitScopeSaving(inv.id)
+    const { error } = await supabase.from('rfp_invitations').update({ visit_scope: scope }).eq('id', inv.id)
+    setVisitScopeSaving(null)
+    if (error) { alert(`Could not update: ${error.message}`); return }
+    setInvites((prev) => prev?.map((i) => (i.id === inv.id ? { ...i, visit_scope: scope } : i)) ?? prev)
+  }
+
   const confirmSendContract = async () => {
     if (!contractTarget) return
     const inv = contractTarget
@@ -2820,6 +2857,8 @@ export default function TripDetail() {
               onReopen={setReopenTarget}
               onContractRequest={openContractDialog}
               onSendCopy={sendRfpCopyToHotel}
+              onVisitScope={updateVisitScope}
+              visitScopeSaving={visitScopeSaving}
               copyingId={copyingId}
               reopeningId={reopeningId}
               onCopyLink={copyLink}

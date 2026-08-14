@@ -92,6 +92,7 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
   // a "Passed - Not Available" hotel that never bid has no submitted_at.
   const submitted = trip.rfp_invitations.filter((i) => i.submitted_at != null).length
   const opened = trip.rfp_invitations.filter((i) => i.status === 'opened').length
+  const declined = trip.rfp_invitations.filter((i) => i.status === 'declined').length
   const delinquent = delinquentCount(trip)
   const awardedHotel = trip.rfp_invitations.find((i) => i.status === 'awarded')?.hotel_name ?? null
   return (
@@ -154,6 +155,12 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
             <div>
               <div className="text-lg font-bold text-amber-500">{opened}</div>
               <div className="text-xs text-slate-400 dark:text-slate-500">opened</div>
+            </div>
+          )}
+          {declined > 0 && (
+            <div>
+              <div className="text-lg font-bold text-rose-500">{declined}</div>
+              <div className="text-xs text-slate-400 dark:text-slate-500">declined</div>
             </div>
           )}
           {invited === 0 && (

@@ -96,6 +96,9 @@ export type Invitation = {
   printed_at: string | null
   staff_notes: string | null
   created_at: string
+  // Per-visit invitation scoping (2-visit trips only). 'both' = quote both stays
+  // (default). 'stay1' / 'stay2' = only collect rates + dates for that one visit.
+  visit_scope: 'both' | 'stay1' | 'stay2' | null
   visit1_declined: boolean
   visit1_decline_reason: string | null
   visit1_decline_notes: string | null

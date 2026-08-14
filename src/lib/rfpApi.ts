@@ -69,6 +69,7 @@ export type RfpInvitation = {
   status: string
   submitted_at: string | null
   reopened_at: string | null
+  visit_scope?: 'both' | 'stay1' | 'stay2' | null
   visit1_declined: boolean
   visit1_decline_reason: string | null
   visit1_decline_notes: string | null

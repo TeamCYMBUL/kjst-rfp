@@ -495,7 +495,13 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
   const trip = invitation.trips
   const client = trip.clients
 
-  const hasStay2 = Boolean(trip.stay2_arrival_date)
+  // Per-hotel visit scope (default 'both'). A Stay-1-only invitation never shows
+  // the Visit 2 rates or dates; Stay-2-only hides Visit 1. Normal trips: 'both'.
+  const visitScope = invitation.visit_scope ?? 'both'
+  const showVisit1 = visitScope !== 'stay2'
+  // hasStay2 == "show the Visit 2 section" (respects the scope, so it's false for
+  // a Stay-1-only invitation even though the trip itself has a second stay).
+  const hasStay2 = Boolean(trip.stay2_arrival_date) && visitScope !== 'stay1'
   // Night-scenarios feature removed platform-wide: every RFP is single-rate, even
   // for older trips that were saved with multiple night options.
   const scenarios = [1]
@@ -519,7 +525,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
 
   // Build dates rows. `game` is already-formatted text (may list several dates).
   const dateRows: Array<{ opponent: string; arr: string | null; dep: string | null; nts: number | null; game: string | null; time: string | null }> = []
-  dateRows.push({
+  if (showVisit1) dateRows.push({
     opponent: trip.opponent_label || '—',
     arr: trip.arrival_date,
     dep: trip.departure_date,
@@ -750,7 +756,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
             <table className="w-full min-w-[520px] border-collapse text-sm">
               <thead>
                 <tr>
-                  {!visit1Declined && (
+                  {showVisit1 && !visit1Declined && (
                     <>
                       <th className={th}>
                         Best Available King/Double Rate(s){hasStay2 ? ' — Visit 1' : ''}
@@ -764,7 +770,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
               </thead>
               <tbody>
                 <tr>
-                  {!visit1Declined && (
+                  {showVisit1 && !visit1Declined && (
                     <>
                       <td className="border border-slate-300 p-0">
                         <div className="flex items-center">
@@ -1261,7 +1267,7 @@ export default function RfpForm() {
   )
 
   // --- Decline ---
-  const hasStay2ForDecline = Boolean(data?.invitation.trips.stay2_arrival_date)
+  const hasStay2ForDecline = Boolean(data?.invitation.trips.stay2_arrival_date) && (data?.invitation.visit_scope ?? 'both') !== 'stay1'
   const handleDecline = async () => {
     if (!token || !declineReason) return
     setDeclining(true)
@@ -1385,7 +1391,11 @@ export default function RfpForm() {
     }
     const scenarios = nightScenarios
     const isMultiScenario = scenarios.length > 1
-    if (!visit1Declined && !isMultiScenario && !resp.best_king_rate.trim()) {
+    // Respect the per-hotel visit scope: a Stay-2-only invitation never asks for
+    // Visit 1 rates, a Stay-1-only one never asks for Visit 2.
+    const submitScope = data?.invitation.visit_scope ?? 'both'
+    const scopeShowsV1 = submitScope !== 'stay2'
+    if (scopeShowsV1 && !visit1Declined && !isMultiScenario && !resp.best_king_rate.trim()) {
       setValidationError('Best Available King Rate is required before submitting.')
       focusField('rate-king')
       return
@@ -1423,7 +1433,7 @@ export default function RfpForm() {
     }
 
     // Required: Visit 2 rates when a second stay exists and it wasn't declined
-    const hasStay2Val = Boolean(data?.invitation.trips.stay2_arrival_date)
+    const hasStay2Val = Boolean(data?.invitation.trips.stay2_arrival_date) && submitScope !== 'stay1'
     if (hasStay2Val && !visit2Declined) {
       if (!resp.stay2_king_rate.trim()) {
         setValidationError('King Rate for Visit 2 is required before submitting.')
@@ -1710,7 +1720,7 @@ export default function RfpForm() {
     !!data.invitation.submitted_at &&
     new Date(data.invitation.reopened_at).getTime() > new Date(data.invitation.submitted_at).getTime()
   const isReadOnly = data.invitation.status === 'submitted' && !reopenedForEdit
-  const hasStay2 = Boolean(data.invitation.trips.stay2_arrival_date)
+  const hasStay2 = Boolean(data.invitation.trips.stay2_arrival_date) && (data.invitation.visit_scope ?? 'both') !== 'stay1'
 
   // Substitute [TEAM NAME], [ROOMS], [SUITES], [KINGS] placeholders with real trip data
   const teamName = data.invitation.trips.clients.team_name ?? 'Team'
