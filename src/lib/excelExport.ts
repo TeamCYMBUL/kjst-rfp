@@ -8,6 +8,17 @@ import * as XLSX from 'xlsx'
 import type { ConcessionItem } from './rfpApi'
 import { formatMeetingSpaceNotes } from './format'
 
+// ── Concession matching (universal, punctuation-insensitive) ───────────────────
+// Every team words the comp-suite and suite-upgrade concessions differently:
+// "One Bedroom" vs "One-Bedroom", singular/plural, a leading "(1)", "…for VIPs",
+// etc. Matching on the raw label with literal spaces silently misses the
+// hyphenated teams (Bulls, Pelicans, Magic), so the Comp Suite column read blank
+// for them. Normalize the label (letters only, lowercased) and match on that so
+// every team resolves the SAME way, everywhere the value is used.
+const normLabel = (s: unknown): string => String(s ?? '').toLowerCase().replace(/[^a-z]/g, '')
+const isCompSuiteItem = (label: unknown): boolean => normLabel(label).includes('complimentaryonebedroomsuite')
+const isSuiteUpgradeItem = (label: unknown): boolean => normLabel(label).includes('suiteupgrade')
+
 // ── Revenue helpers ───────────────────────────────────────────────────────────
 
 /**
@@ -292,12 +303,8 @@ export function exportTeamGrid(
   concessionItems: any[],
 ): void {
   // Find relevant concession item IDs (team-safe ones only)
-  const compSuitesItem = concessionItems.find((c: any) =>
-    c.label.toLowerCase().includes('complimentary one bedroom suites'),
-  )
-  const suiteUpgItem = concessionItems.find((c: any) =>
-    c.label.toLowerCase().includes('suite upgrades at the group'),
-  )
+  const compSuitesItem = concessionItems.find((c: any) => isCompSuiteItem(c.label))
+  const suiteUpgItem = concessionItems.find((c: any) => isSuiteUpgradeItem(c.label))
   const playoffItem = concessionItems.find((c: any) => c.section === 'postseason')
 
   const getAns = (invId: string, itemId: string | undefined) => {
@@ -835,11 +842,10 @@ export async function exportMultiCityConsolidatedXlsx(
     const taxesFeesAmt = kingRate != null ? kingRate * (tax ?? 0) / 100 + (fee ?? 0) : null
     const perNight = kingRate != null ? kingRate + (taxesFeesAmt ?? 0) : null
     // Paid rooms exclude complimentary suites (they carry no room revenue).
-    const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '')
-    const compItem = items.find((i) => norm(i.label).includes('complimentaryonebedroomsuite'))
+    const compItem = items.find((i) => isCompSuiteItem(i.label))
     const compAns = compItem ? h.answers[compItem.id] : undefined
     const compSuites = compAns?.answer_value ? Number(compAns.answer_value) : compAns?.answer_yes_no === true ? 1 : 0
-    const upgItem = items.find((i) => norm(i.label).includes('suiteupgrade'))
+    const upgItem = items.find((i) => isSuiteUpgradeItem(i.label))
     const upgAns = upgItem ? h.answers[upgItem.id] : undefined
     const suiteUpgrades = upgAns?.answer_value ? Number(upgAns.answer_value) : 0
     const totalRooms = trip.total_rooms_requested ?? null
@@ -945,8 +951,8 @@ export async function exportMultiCityConsolidatedXlsx(
     firstTrip = false
     const tripStartRow = rowIdx + 1
 
-    const compSuitesItem = items.find((i) => i.label.toLowerCase().includes('complimentary one bedroom suite'))
-    const suiteUpgItem = items.find((i) => i.label.toLowerCase().includes('suite upgrade'))
+    const compSuitesItem = items.find((i) => isCompSuiteItem(i.label))
+    const suiteUpgItem = items.find((i) => isSuiteUpgradeItem(i.label))
     const playoffItem = items.find(
       (i) => i.section === 'postseason' || (i.label.toLowerCase().includes('post') && i.label.toLowerCase().includes('season')),
     )
