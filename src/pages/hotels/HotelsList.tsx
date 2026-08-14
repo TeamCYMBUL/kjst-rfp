@@ -18,6 +18,8 @@ type Hotel = {
   contact_email: string | null
   contact_phone: string | null
   notes: string | null
+  created_at?: string | null
+  created_by_name?: string | null
 }
 
 type HotelNote = {
@@ -167,9 +169,17 @@ function HotelForm({
       notes: f.notes.trim() || null,
     }
     if (initial?.id) {
+      // Don't touch created_by on edits — it stays the original creator.
       await supabase.from('hotels').update(payload).eq('id', initial.id)
     } else {
-      await supabase.from('hotels').insert(payload)
+      // Attribute the new hotel to whoever added it (for the activity log).
+      const { data: { user } } = await supabase.auth.getUser()
+      let creatorName: string | null = user?.email ?? null
+      if (user?.id) {
+        const { data: sp } = await supabase.from('staff_profiles').select('display_name').eq('id', user.id).maybeSingle()
+        if (sp?.display_name) creatorName = sp.display_name
+      }
+      await supabase.from('hotels').insert({ ...payload, created_by: user?.id ?? null, created_by_name: creatorName })
     }
     setSaving(false)
     onSave()
@@ -801,6 +811,13 @@ function HotelImportModal({ onClose, onImported }: ImportModalProps) {
     if (parsed.length === 0) return
     setImporting(true)
     setImportError(null)
+    // Attribute the imported hotels to whoever ran the import.
+    const { data: { user } } = await supabase.auth.getUser()
+    let creatorName: string | null = user?.email ?? null
+    if (user?.id) {
+      const { data: sp } = await supabase.from('staff_profiles').select('display_name').eq('id', user.id).maybeSingle()
+      if (sp?.display_name) creatorName = sp.display_name
+    }
     const payload = parsed.map((r) => ({
       name: r.name,
       chain: r.chain || null,
@@ -809,6 +826,8 @@ function HotelImportModal({ onClose, onImported }: ImportModalProps) {
       contact_name: r.contact_name || null,
       contact_email: r.contact_email || null,
       contact_phone: r.contact_phone || null,
+      created_by: user?.id ?? null,
+      created_by_name: creatorName,
     }))
     // Insert in batches of 100
     const BATCH = 100
@@ -938,6 +957,12 @@ export default function HotelsList() {
   const [mobileView, setMobileView] = useState<'list' | 'detail'>('list')
   const [sortBy, setSortBy] = useState<SortBy>('brand')
   const [showImport, setShowImport] = useState(false)
+  const [showActivity, setShowActivity] = useState(false)
+  // Most-recently-added hotels, for the "who added what" activity log.
+  const recentlyAdded = [...hotels]
+    .filter((h) => h.created_at)
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+    .slice(0, 40)
 
   const load = () => {
     supabase.from('hotels').select('*').order('name')
@@ -998,6 +1023,13 @@ export default function HotelsList() {
         </div>
         {!isViewer && (
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowActivity(true)}
+              title="See who added which hotels and when"
+              className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+            >
+              Activity log
+            </button>
             <button
               onClick={() => setShowImport(true)}
               className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
@@ -1201,6 +1233,40 @@ export default function HotelsList() {
           onClose={() => setShowImport(false)}
           onImported={(_n) => { setShowImport(false); load() }}
         />
+      )}
+
+      {showActivity && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowActivity(false)}>
+          <div className="flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white dark:bg-slate-800 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 px-5 py-3">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Hotel activity — recently added</h2>
+                <p className="text-xs text-slate-400 dark:text-slate-500">Who added which hotel, newest first.</p>
+              </div>
+              <button onClick={() => setShowActivity(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" aria-label="Close">✕</button>
+            </div>
+            <div className="divide-y divide-slate-100 dark:divide-slate-700 overflow-y-auto">
+              {recentlyAdded.length === 0 && (
+                <p className="px-5 py-8 text-center text-sm text-slate-400">No additions recorded yet. New hotels will show here with who added them.</p>
+              )}
+              {recentlyAdded.map((h) => (
+                <div key={h.id} className="flex items-start justify-between gap-3 px-5 py-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{h.name}</span>
+                      {h.league && <span className="rounded bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500 dark:text-slate-300">{h.league}</span>}
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">{[h.city, h.chain].filter(Boolean).join(' · ')}</div>
+                  </div>
+                  <div className="shrink-0 text-right text-xs">
+                    <div className="font-medium text-slate-600 dark:text-slate-300">{h.created_by_name ?? '—'}</div>
+                    <div className="text-slate-400 dark:text-slate-500">{h.created_at ? new Date(h.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
