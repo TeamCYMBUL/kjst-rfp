@@ -168,13 +168,32 @@ export default function Tickets() {
 
   const setStatus = async (ticket: Ticket, status: Ticket['status']) => {
     setUpdatingId(ticket.id)
+    const wasResolved = ticket.status === 'resolved'
     const { error } = await supabase
       .from('tickets')
       .update({ status, resolved_at: status === 'resolved' ? new Date().toISOString() : null })
       .eq('id', ticket.id)
     setUpdatingId(null)
-    if (error) setError(error.message)
-    else setTickets((prev) => prev.map((t) => (t.id === ticket.id ? { ...t, status } : t)))
+    if (error) { setError(error.message); return }
+    setTickets((prev) => prev.map((t) => (t.id === ticket.id ? { ...t, status } : t)))
+    // Let the person who submitted the ticket know it's resolved. Fire only on the
+    // transition INTO resolved (not a re-save), and best-effort — never block the
+    // status change on the email.
+    if (status === 'resolved' && !wasResolved && ticket.created_by_email) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        await fetch(`${FN_BASE}/notify-ticket-resolved`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.access_token ?? ''}`,
+          },
+          body: JSON.stringify({ ticket_id: ticket.id }),
+        })
+      } catch {
+        // Email is a courtesy; the ticket is already resolved regardless.
+      }
+    }
   }
 
   return (
