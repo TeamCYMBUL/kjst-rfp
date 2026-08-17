@@ -1802,7 +1802,7 @@ export default function RfpForm() {
 
         {/* ── Can't bid panel ── */}
         {!isReadOnly && !(hasStay2 && visit1Declined && visit2Declined) && (
-          <div className="mb-6 rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <div className="mb-6 rounded-xl border-2 border-red-300 bg-red-50 overflow-hidden">
             {!showDeclinePanel ? (
               <button
                 type="button"
@@ -1811,10 +1811,10 @@ export default function RfpForm() {
                   else if (hasStay2 && visit2Declined && !visit1Declined) setDeclineScope(1)
                   setShowDeclinePanel(true)
                 }}
-                className="w-full px-6 py-4 text-left text-sm text-slate-500 hover:bg-slate-50 transition-colors rounded-xl"
+                className="w-full px-6 py-4 text-center text-base font-bold text-red-700 hover:bg-red-100 transition-colors rounded-xl"
               >
                 {hasStay2 && (visit1Declined || visit2Declined) ? 'Unable to bid on the remaining visit?' : 'Unable to bid on this RFP?'}{' '}
-                <span className="font-medium text-[#1C1008] hover:underline">Let us know →</span>
+                <span className="underline">Let us know →</span>
               </button>
             ) : (
               <div className="p-6">
