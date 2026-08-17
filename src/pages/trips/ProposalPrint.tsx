@@ -38,7 +38,7 @@ export default function ProposalPrint() {
     const load = async () => {
       const { data: tripData, error: tripError } = await supabase
         .from('trips')
-        .select('id, client_id, opponent_label, city, arrival_date, departure_date, king_rooms_requested, double_rooms_requested, suites_requested, total_rooms_requested, clients(team_name)')
+        .select('id, client_id, opponent_label, city, arrival_date, departure_date, stay2_arrival_date, stay2_departure_date, king_rooms_requested, double_rooms_requested, suites_requested, total_rooms_requested, clients(team_name)')
         .eq('id', tripId)
         .single()
 
@@ -187,6 +187,7 @@ export default function ProposalPrint() {
                 answers={answers}
                 concessionItems={concessionItems}
                 pageBreak={allHotelsMode && i !== invitations.length - 1}
+                trip={trip}
               />
             ))
           )}

@@ -53,7 +53,7 @@ export default function ClientProposalsPrint() {
       // All of this client's trips, alphabetical by city (matches the Trips page).
       const { data: tripData } = await supabase
         .from('trips')
-        .select('id, client_id, opponent_label, city, arrival_date, departure_date, king_rooms_requested, double_rooms_requested, suites_requested, total_rooms_requested, clients(team_name)')
+        .select('id, client_id, opponent_label, city, arrival_date, departure_date, stay2_arrival_date, stay2_departure_date, king_rooms_requested, double_rooms_requested, suites_requested, total_rooms_requested, clients(team_name)')
         .eq('client_id', clientId)
         .order('city')
       const tps = (tripData as unknown as Trip[]) ?? []
@@ -198,6 +198,7 @@ export default function ClientProposalsPrint() {
                     answers={answers}
                     concessionItems={concessionItems}
                     pageBreak={hi !== tripInvs.length - 1}
+                    trip={trip}
                   />
                 ))}
                 {ProposalFooter}

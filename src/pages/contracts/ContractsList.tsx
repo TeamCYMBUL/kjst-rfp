@@ -26,7 +26,7 @@ const STATUS_STYLE: Record<ContractStatus, string> = {
   requested: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
   uploaded: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
   in_review: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-  verified: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+  verified: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
   signed: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
   filed: 'bg-emerald-600 text-white',
 }
@@ -153,9 +153,14 @@ export default function ContractsList() {
       )}
 
       {groups.map((g) => {
-        const byName = (a: AwardedContract, b: AwardedContract) => a.hotel_name.localeCompare(b.hotel_name)
-        const uploadedItems = g.items.filter(isUploaded).sort(byName)
-        const pendingItems = g.items.filter((r) => !isUploaded(r)).sort(byName)
+        // Alphabetize by the trip's city (falling back to opponent), not the hotel
+        // name — KJST cross-references contracts by destination, so "Asher Adams"
+        // (a Utah stay) should sort under U, not A. Hotel name breaks ties.
+        const sortKey = (r: AwardedContract) => (r.trip?.city || r.trip?.opponent_label || '').toLowerCase()
+        const byCity = (a: AwardedContract, b: AwardedContract) =>
+          sortKey(a).localeCompare(sortKey(b)) || a.hotel_name.localeCompare(b.hotel_name)
+        const uploadedItems = g.items.filter(isUploaded).sort(byCity)
+        const pendingItems = g.items.filter((r) => !isUploaded(r)).sort(byCity)
         const renderRow = (r: AwardedContract) => {
               const c = r.contract
               const twoVisit = !!r.trip?.stay2_arrival_date

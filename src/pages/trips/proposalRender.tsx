@@ -13,6 +13,9 @@ export type ProposalTrip = {
   city: string | null
   arrival_date: string | null
   departure_date: string | null
+  // Second visit (same city twice) — null on single-visit trips.
+  stay2_arrival_date: string | null
+  stay2_departure_date: string | null
   king_rooms_requested: number | null
   double_rooms_requested: number | null
   suites_requested: number | null
@@ -72,6 +75,24 @@ export function fmtDate(d: string | null): string {
   const dt = d.includes('T') ? new Date(d) : new Date(d + 'T12:00:00Z')
   if (isNaN(dt.getTime())) return '—'
   return dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+}
+
+// Stay dates on the printed proposal include the weekday — hotels often mistype
+// the day of week on agreements, so KJST cross-references it while editing.
+export function fmtDateDow(d: string | null): string {
+  if (!d) return '—'
+  const dt = d.includes('T') ? new Date(d) : new Date(d + 'T12:00:00Z')
+  if (isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+}
+
+// Compact date shown beside a rate line so the reader knows which stay it is
+// (rates can differ between Stay 1 and Stay 2). Empty string when no date.
+export function fmtDateShort(d: string | null): string {
+  if (!d) return ''
+  const dt = d.includes('T') ? new Date(d) : new Date(d + 'T12:00:00Z')
+  if (isNaN(dt.getTime())) return ''
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 export function fmtMoney(n: number | null): string {
   return n != null ? `$${n.toLocaleString()}` : '—'
@@ -135,6 +156,7 @@ export const PrintStyles = (
 )
 
 export function TripHeader({ trip, subtitle }: { trip: ProposalTrip; subtitle: string }) {
+  const hasStay2 = Boolean(trip.stay2_arrival_date)
   const roomBlock = [
     trip.king_rooms_requested != null ? `${trip.king_rooms_requested} kings` : null,
     trip.double_rooms_requested != null ? `${trip.double_rooms_requested} doubles` : null,
@@ -153,8 +175,19 @@ export function TripHeader({ trip, subtitle }: { trip: ProposalTrip; subtitle: s
           {trip.opponent_label ?? 'Trip'}{trip.city ? ` · ${trip.city}` : ''}
         </div>
         <div style={{ fontSize: 13, color: '#64748b', display: 'flex', flexWrap: 'wrap', gap: '16px', marginTop: 8 }}>
-          {trip.arrival_date && <span><strong style={{ color: '#334155' }}>Check-in:</strong> {fmtDate(trip.arrival_date)}</span>}
-          {trip.departure_date && <span><strong style={{ color: '#334155' }}>Check-out:</strong> {fmtDate(trip.departure_date)}</span>}
+          {hasStay2 ? (
+            <>
+              {trip.arrival_date && <span><strong style={{ color: '#334155' }}>Stay 1 Check-in:</strong> {fmtDateDow(trip.arrival_date)}</span>}
+              {trip.departure_date && <span><strong style={{ color: '#334155' }}>Stay 1 Check-out:</strong> {fmtDateDow(trip.departure_date)}</span>}
+              {trip.stay2_arrival_date && <span><strong style={{ color: '#334155' }}>Stay 2 Check-in:</strong> {fmtDateDow(trip.stay2_arrival_date)}</span>}
+              {trip.stay2_departure_date && <span><strong style={{ color: '#334155' }}>Stay 2 Check-out:</strong> {fmtDateDow(trip.stay2_departure_date)}</span>}
+            </>
+          ) : (
+            <>
+              {trip.arrival_date && <span><strong style={{ color: '#334155' }}>Check-in:</strong> {fmtDateDow(trip.arrival_date)}</span>}
+              {trip.departure_date && <span><strong style={{ color: '#334155' }}>Check-out:</strong> {fmtDateDow(trip.departure_date)}</span>}
+            </>
+          )}
           {roomBlock && <span><strong style={{ color: '#334155' }}>Room Block:</strong> {roomBlock}</span>}
         </div>
       </div>
@@ -170,13 +203,14 @@ export const ProposalFooter = (
 
 // ── One hotel's full write-up ────────────────────────────────────────────────
 export function HotelFull({
-  inv, resp, answers, concessionItems, pageBreak,
+  inv, resp, answers, concessionItems, pageBreak, trip,
 }: {
   inv: ProposalInvitation
   resp: ProposalResponse | null
   answers: ProposalAnswer[]
   concessionItems: ProposalConcessionItem[]
   pageBreak: boolean
+  trip?: ProposalTrip
 }) {
   const hotelAnswers = resp ? answers.filter((a) => a.response_id === resp.id) : []
   const ansByItemId = new Map(hotelAnswers.map((a) => [a.concession_item_id, a]))
@@ -185,7 +219,12 @@ export function HotelFull({
   // first-visit rates "— Stay 1" so they read clearly against the "— Stay 2"
   // rows below. Single-visit trips keep the plain "King Rate" / "Suite Rate".
   const hasStay2Rows = inv.visit2_declined || resp?.stay2_king_rate != null || resp?.stay2_suite_rate != null
-  const s1 = hasStay2Rows ? ' — Stay 1' : ''
+  // On multi-stay cities the rates differ by stay, so tag each stay's rate rows
+  // with that stay's check-in date (e.g. "King Rate — Stay 1 (Dec 28, 2026)").
+  const stay1Date = trip?.arrival_date ? ` (${fmtDateShort(trip.arrival_date)})` : ''
+  const stay2Date = trip?.stay2_arrival_date ? ` (${fmtDateShort(trip.stay2_arrival_date)})` : ''
+  const s1 = hasStay2Rows ? ` — Stay 1${stay1Date}` : ''
+  const s2 = ` — Stay 2${stay2Date}`
   const rateRows: [string, string][] = inv.visit1_declined
     ? [
       [`King/Suite/Selling Rate${s1}`, 'Visit 1 declined'],
@@ -199,9 +238,9 @@ export function HotelFull({
       ['Occupancy Tax', resp?.occupancy_tax || '—'],
       ['Resort Fee', resp?.resort_fee || '—'],
     ]
-  if (inv.visit2_declined) rateRows.push(['King/Suite Rate — Stay 2', 'Visit 2 declined'])
-  else if (resp?.stay2_king_rate != null) rateRows.push(['King Rate — Stay 2', fmtMoney(resp.stay2_king_rate)])
-  if (!inv.visit2_declined && resp?.stay2_suite_rate != null) rateRows.push(['Suite Rate — Stay 2', fmtMoney(resp.stay2_suite_rate)])
+  if (inv.visit2_declined) rateRows.push([`King/Suite Rate${s2}`, 'Visit 2 declined'])
+  else if (resp?.stay2_king_rate != null) rateRows.push([`King Rate${s2}`, fmtMoney(resp.stay2_king_rate)])
+  if (!inv.visit2_declined && resp?.stay2_suite_rate != null) rateRows.push([`Suite Rate${s2}`, fmtMoney(resp.stay2_suite_rate)])
   if (resp?.distance_to_arena) rateRows.push(['Distance to arena', resp.distance_to_arena])
   if (resp?.standard_checkin_time) rateRows.push(['Standard check-in', resp.standard_checkin_time])
 
