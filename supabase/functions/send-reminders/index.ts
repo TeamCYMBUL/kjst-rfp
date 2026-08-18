@@ -216,7 +216,10 @@ Deno.serve(async (req: Request) => {
     .from('rfp_invitations')
     .select('id, hotel_name, hotel_contact_name, hotel_contact_email, token, status, visit_scope')
     .eq('trip_id', trip_id)
-    .not('status', 'in', '("submitted","awarded","passed")')
+    // Never remind hotels that are already resolved: submitted a bid, were
+    // awarded/passed, DECLINED the RFP, or are marked unavailable. (Declined was
+    // the gap — a declined hotel was still getting reminders.)
+    .not('status', 'in', '("submitted","awarded","passed","declined","unavailable")')
 
   if (invErr || !invitations) return Response.json({ error: 'Failed to fetch invitations' }, { status: 500, headers: CORS })
 

@@ -150,6 +150,11 @@ Deno.serve(async (req: Request) => {
 
   if (invErr || !inv) return Response.json({ error: 'Invitation not found' }, { status: 404, headers: CORS })
   if (!inv.hotel_contact_email) return Response.json({ error: 'No email address on file for this hotel' }, { status: 400, headers: CORS })
+  // Don't nudge a hotel that has already resolved (bid, awarded, passed, declined,
+  // or unavailable). Guards the single-send path the same way the bulk send does.
+  if (['submitted', 'awarded', 'passed', 'declined', 'unavailable'].includes(inv.status)) {
+    return Response.json({ error: `This hotel already ${inv.status === 'declined' ? 'declined' : 'responded to'} the RFP, so no reminder was sent.` }, { status: 400, headers: CORS })
+  }
 
   const trip = inv.trips as any
   const client = trip?.clients as any
