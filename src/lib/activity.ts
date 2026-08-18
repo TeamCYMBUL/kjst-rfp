@@ -20,6 +20,7 @@ export const CONTRACTS_EMAILS = [
   'info@cymbul.co',
   'cgibson@kjsportstravel.com',
   'acabrera@kjsportstravel.com',
+  'tlopez@kjsportstravel.com',
 ]
 export function isContractsUser(email: string | null | undefined): boolean {
   return CONTRACTS_EMAILS.includes((email ?? '').trim().toLowerCase())
