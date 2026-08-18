@@ -119,14 +119,21 @@ export async function fetchCommissions(): Promise<CommissionSummary> {
     .filter(Boolean)
   const pctByResponse = new Map<string, number>()
   if (responseIds.length && commItemIds.length) {
-    const { data: ans } = await supabase
-      .from('concession_answers')
-      .select('response_id, answer_value')
-      .in('response_id', responseIds)
-      .in('concession_item_id', commItemIds)
-    for (const a of ans ?? []) {
-      const p = num(a.answer_value)
-      if (p != null) pctByResponse.set(a.response_id, p)
+    // Fetch in batches: a single .in() over every response id (hundreds of bids)
+    // overflows the request URL and silently returns nothing, which zeroed out
+    // all commission. Batching keeps each request small and correct at any scale.
+    const CHUNK = 100
+    for (let i = 0; i < responseIds.length; i += CHUNK) {
+      const batch = responseIds.slice(i, i + CHUNK)
+      const { data: ans } = await supabase
+        .from('concession_answers')
+        .select('response_id, answer_value')
+        .in('response_id', batch)
+        .in('concession_item_id', commItemIds)
+      for (const a of ans ?? []) {
+        const p = num(a.answer_value)
+        if (p != null) pctByResponse.set(a.response_id, p)
+      }
     }
   }
 
