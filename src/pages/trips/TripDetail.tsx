@@ -713,6 +713,11 @@ function BidSummaryTable({
                         {isDeclined && (
                           <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400">Declined</span>
                         )}
+                        {twoVisit && !isDeclined && (inv.visit1_declined || inv.visit2_declined) && (
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-rose-100 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400">
+                            Declined Stay {[inv.visit1_declined && '1', inv.visit2_declined && '2'].filter(Boolean).join(' & ')}
+                          </span>
+                        )}
                         {result?.noFlexCancel && (
                           <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400">No flex cancel</span>
                         )}
@@ -2262,6 +2267,16 @@ export default function TripDetail() {
     if (inv.awarded_stay2) s.push('2')
     return s.length ? `Stay ${s.join(' & ')}` : ''
   }
+  // A hotel can decline just one stay of a 2-visit trip and still bid the other,
+  // so its overall status stays 'submitted'/'opened'. Surface that per-stay
+  // decline at a glance (only when NOT a full 'declined', which has its own badge).
+  const declineStayLabel = (inv: Invitation): string => {
+    if (!twoVisit || inv.status === 'declined') return ''
+    const s: string[] = []
+    if (inv.visit1_declined) s.push('1')
+    if (inv.visit2_declined) s.push('2')
+    return s.length ? `Declined Stay ${s.join(' & ')}` : ''
+  }
 
   return (
     <div className="flex min-h-[calc(100dvh-3.5rem)] lg:min-h-[calc(100vh-4rem)] flex-col -mx-4 -my-6 sm:-mx-6 lg:-mx-8 lg:-my-8">
@@ -2778,6 +2793,11 @@ export default function TripDetail() {
                       {isAwarded && twoVisit && awardStayLabel(inv) && (
                         <span className="mt-0.5 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
                           Won {awardStayLabel(inv)}
+                        </span>
+                      )}
+                      {declineStayLabel(inv) && (
+                        <span className="mt-0.5 inline-block rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-600 dark:bg-rose-900/30 dark:text-rose-300">
+                          {declineStayLabel(inv)}
                         </span>
                       )}
                       {(inv.status === 'passed' || inv.status === 'unavailable' || inv.status === 'declined') ? (
