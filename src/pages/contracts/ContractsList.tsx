@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ErrorNote, Loading } from '../../components/ui'
 import {
-  listAwardedContracts, updateContractStatus, uploadSignedCopy, uploadContractStaff,
+  listAwardedContracts, updateContractStatus, uploadSignedCopy, uploadContractStaff, removeContractFile,
 } from '../../lib/contractsApi'
 import type { AwardedContract, ContractStatus } from '../../lib/contractsApi'
 import { ContractFactCheck } from './ContractFactCheck'
@@ -86,6 +86,17 @@ export default function ContractsList() {
       await uploadContractStaff({ invitationId: r.invitation_id, tripId: r.trip?.id ?? null, clientId: r.client?.id ?? null }, file)
       load()
     } catch (e: any) { alert(e.message ?? 'Upload failed') }
+    finally { setBusyId(null) }
+  }
+
+  // Undo a wrong agreement upload for a trip. Deletes the file + fact-check and
+  // resets the row to awaiting upload; the signed copy (if any) is untouched.
+  const onRemoveContract = async (r: AwardedContract) => {
+    if (!r.contract?.id) return
+    if (!confirm(`Remove the uploaded agreement for ${r.hotel_name}${r.trip?.city ? ` (${r.trip.city})` : ''}?\n\nThis deletes the file and its fact-check and resets this to awaiting upload. It cannot be undone, but you can upload the correct file again.`)) return
+    setBusyId(r.contract.id)
+    try { await removeContractFile(r.contract.id); load() }
+    catch (e: any) { alert(e.message ?? 'Could not remove the file') }
     finally { setBusyId(null) }
   }
 
@@ -208,9 +219,19 @@ export default function ContractsList() {
                     ) : (
                       <>
                         {c.file_path ? (
-                          <button onClick={() => setViewer({ path: c.file_path!, fileName: c.file_name, title: `${r.hotel_name} — Agreement` })} className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
-                            View agreement
-                          </button>
+                          <>
+                            <button onClick={() => setViewer({ path: c.file_path!, fileName: c.file_name, title: `${r.hotel_name} — Agreement` })} className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                              View agreement
+                            </button>
+                            <button
+                              onClick={() => onRemoveContract(r)}
+                              disabled={busy}
+                              title="Uploaded the wrong file? Remove it and reset this to awaiting upload."
+                              className="rounded-lg border border-red-200 dark:border-red-800 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-40"
+                            >
+                              Remove
+                            </button>
+                          </>
                         ) : (
                           <label className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer">
                             {busy ? 'Working…' : 'Upload contract'}

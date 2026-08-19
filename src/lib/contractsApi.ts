@@ -309,6 +309,34 @@ export async function uploadContractStaff(
   if (error) throw error
 }
 
+// Undo a wrong agreement upload: delete the stored file and clear the agreement
+// fields + any fact-check, dropping the contract back to "requested" so it reads
+// as awaiting upload again. Leaves the signed copy alone (separate action).
+export async function removeContractFile(contractId: string): Promise<void> {
+  const { data: c } = await supabase
+    .from('contracts')
+    .select('file_path')
+    .eq('id', contractId)
+    .maybeSingle()
+  if (c?.file_path) {
+    // Best-effort storage delete; still clear the row even if the object is gone.
+    await supabase.storage.from('contracts').remove([c.file_path])
+  }
+  const { error } = await supabase
+    .from('contracts')
+    .update({
+      file_path: null,
+      file_name: null,
+      uploaded_at: null,
+      analysis: null,
+      analyzed_at: null,
+      status: 'requested',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', contractId)
+  if (error) throw error
+}
+
 // Staff uploads the final signed copy directly to the private bucket, then marks
 // the contract signed. (Authenticated staff have write access to the bucket.)
 export async function uploadSignedCopy(contractId: string, file: File): Promise<void> {
