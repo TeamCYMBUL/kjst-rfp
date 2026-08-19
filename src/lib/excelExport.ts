@@ -749,10 +749,11 @@ export async function exportMultiCityConsolidatedXlsx(
     cell.border = { bottom: { style: 'thin', color: { argb: 'FFBBB2A8' } } }
   })
   headerRow.height = 30
-  const postseasonIdx = layoutSpecs.findIndex((s) => s.type === 'base' && s.key === 'postseason')
-  if (postseasonIdx >= 0) {
-    ws.getCell(4, postseasonIdx + 1).note = 'YES / NO from hotel responses. Change to LIMITED manually if applicable.'
-  }
+  // NOTE: we deliberately do NOT attach an ExcelJS cell comment (.note) here.
+  // A cell comment plus the embedded logo image in the same sheet makes ExcelJS
+  // emit conflicting drawing parts, which Excel then flags as corrupt and
+  // "repairs" (dropping cell content, incl. check-in). Any column guidance stays
+  // in the on-screen UI, not as a spreadsheet comment.
 
   const REASON_LABELS: Record<string, string> = {
     sold_out: 'Sold out / no availability',
@@ -934,8 +935,19 @@ export async function exportMultiCityConsolidatedXlsx(
       }
       case 'suite_rate':
         return suite != null ? suite : null
-      case 'check_in_time':
-        return h.standard_checkin_time ?? ''
+      case 'check_in_time': {
+        // Prefer the dedicated system field, but fall back to a "standard
+        // check-in time" concession item's answer — most templates capture
+        // check-in as a text item rather than the system field, so without this
+        // the column reads blank even though hotels answered it.
+        if (h.standard_checkin_time) return h.standard_checkin_time
+        const ciItem = items.find((it) => {
+          const l = it.label.toLowerCase()
+          return l.includes('check-in time') || l.includes('check in time')
+        })
+        const ans = ciItem ? h.answers[ciItem.id] : undefined
+        return ans?.answer_value ?? ''
+      }
       case 'kings_suites':
         return `${trip.king_rooms_requested ?? '-'} / ${trip.suites_requested ?? '-'}`
       case 'total_rooms':
