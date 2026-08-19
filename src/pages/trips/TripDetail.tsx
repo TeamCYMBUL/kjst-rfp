@@ -1160,6 +1160,20 @@ function HotelPanel({
                 Enter bid for them
               </a>
             )}
+            {/* Edit a bid that's already in, on the hotel's behalf — e.g. a rate
+                renegotiated over email after they submitted. Opens the RFP form
+                in staff mode (editable, no hotel email); keeps the bid's status. */}
+            {(inv.status === 'submitted' || inv.status === 'awarded') && (
+              <a
+                href={`${PUBLIC_APP_URL}/rfp/${inv.token}?entry=staff`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Edit this hotel's submitted bid yourself (e.g. a rate renegotiated offline). The hotel is not emailed and the bid stays in place."
+                className="rounded-lg border border-indigo-200 dark:border-indigo-700 px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+              >
+                Edit bid
+              </a>
+            )}
             {canEmailStatus(inv.status) && (
               <button
                 onClick={() => onSendEmail(inv)}

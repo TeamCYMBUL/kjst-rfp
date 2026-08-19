@@ -256,6 +256,20 @@ export async function saveContractNotes(id: string, staff_notes: string): Promis
   if (error) throw error
 }
 
+// Files dragged straight from Google Drive File Stream arrive with a temp id for
+// a name (e.g. "404127") and no extension, which made the uploaded agreement
+// un-renderable (the viewer keys off .pdf/.docx). Sniff the magic bytes and
+// append the right extension so the file is always recognized.
+async function withDocExtension(file: File, name: string): Promise<string> {
+  if (/\.(pdf|docx?|xlsx?)$/i.test(name)) return name
+  try {
+    const head = new Uint8Array(await file.slice(0, 5).arrayBuffer())
+    if (head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46) return `${name}.pdf` // %PDF
+    if (head[0] === 0x50 && head[1] === 0x4b) return `${name}.docx` // PK zip → Word .docx
+  } catch { /* fall through — keep the name as-is */ }
+  return name
+}
+
 // Staff uploads the hotel's agreement themselves — for when the contract was
 // handled over email rather than through the hotel's upload link. Creates the
 // contract record first if the request was never sent through the platform.
@@ -277,7 +291,8 @@ export async function uploadContractStaff(
     if (insErr || !created) throw insErr ?? new Error('Failed to create contract record')
     c = created
   }
-  const safe = (file.name || 'contract').replace(/[^\w.\- ]+/g, '_').replace(/\s+/g, '_').slice(0, 120)
+  const base = (file.name || 'contract').replace(/[^\w.\- ]+/g, '_').replace(/\s+/g, '_').slice(0, 120)
+  const safe = await withDocExtension(file, base)
   const path = `${c.id}/staff-${Date.now()}-${safe}`
   const { error: upErr } = await supabase.storage.from('contracts').upload(path, file, { upsert: false })
   if (upErr) throw upErr
@@ -297,7 +312,8 @@ export async function uploadContractStaff(
 // Staff uploads the final signed copy directly to the private bucket, then marks
 // the contract signed. (Authenticated staff have write access to the bucket.)
 export async function uploadSignedCopy(contractId: string, file: File): Promise<void> {
-  const safe = (file.name || 'signed').replace(/[^\w.\- ]+/g, '_').replace(/\s+/g, '_').slice(0, 120)
+  const base = (file.name || 'signed').replace(/[^\w.\- ]+/g, '_').replace(/\s+/g, '_').slice(0, 120)
+  const safe = await withDocExtension(file, base)
   const path = `${contractId}/signed-${Date.now()}-${safe}`
   const { error: upErr } = await supabase.storage.from('contracts').upload(path, file, { upsert: false })
   if (upErr) throw upErr

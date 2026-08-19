@@ -179,7 +179,6 @@ function buildInviteHtml(p: {
     `<span style="color:#64748b">572 East Green Street, Suite 200, Pasadena, CA 91101</span>`,
     p.senderPhone ? `<span style="color:#64748b">M: ${p.senderPhone}</span>` : null,
     `<a href="mailto:${p.senderEmail}" style="color:#1C1008;text-decoration:none">E: ${p.senderEmail}</a>`,
-    `<a href="https://www.kjsportstravel.com" style="color:#1C1008;text-decoration:none">www.kjsportstravel.com</a>`,
   ].filter(Boolean).join('<br>')
 
   return `<!DOCTYPE html>

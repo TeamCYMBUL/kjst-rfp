@@ -1069,8 +1069,11 @@ export default function RfpForm() {
           !!d.invitation.reopened_at &&
           !!d.invitation.submitted_at &&
           new Date(d.invitation.reopened_at).getTime() > new Date(d.invitation.submitted_at).getTime()
-        if (d.invitation.status === 'submitted' && !reopenedForEdit) setSubmitted(true)
-        if (d.invitation.status === 'declined') setDeclined(true)
+        // Staff editing on the hotel's behalf (?entry=staff) can always edit a
+        // submitted bid in place — e.g. a rate renegotiated offline — without
+        // reopening it to the hotel or sending any email.
+        if (d.invitation.status === 'submitted' && !reopenedForEdit && !staffEntry) setSubmitted(true)
+        if (d.invitation.status === 'declined' && !staffEntry) setDeclined(true)
         if (d.invitation.visit1_declined) setVisit1Declined(true)
         if (d.invitation.visit2_declined) setVisit2Declined(true)
 
@@ -1719,7 +1722,7 @@ export default function RfpForm() {
     !!data.invitation.reopened_at &&
     !!data.invitation.submitted_at &&
     new Date(data.invitation.reopened_at).getTime() > new Date(data.invitation.submitted_at).getTime()
-  const isReadOnly = data.invitation.status === 'submitted' && !reopenedForEdit
+  const isReadOnly = data.invitation.status === 'submitted' && !reopenedForEdit && !staffEntry
   const hasStay2 = Boolean(data.invitation.trips.stay2_arrival_date) && (data.invitation.visit_scope ?? 'both') !== 'stay1'
 
   // Substitute [TEAM NAME], [ROOMS], [SUITES], [KINGS] placeholders with real trip data
