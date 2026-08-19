@@ -446,14 +446,6 @@ export default function Dashboard() {
   // with a My teams / All teams toggle. assignedIds === null → owner (sees all).
   const [assignedIds, setAssignedIds] = useState<string[] | null>(null)
   const [scope, setScope] = useState<'all' | 'mine'>('all')
-  // Header "Export all trips" (every team). Per-team export lives in ClientView.
-  const [tripsExportBusy, setTripsExportBusy] = useState<string | null>(null)
-  const exportTrips = async (clientId: string | null, teamName: string | null) => {
-    setTripsExportBusy(clientId ?? '__all__')
-    try { await exportTripsXlsx(clientId, teamName) }
-    catch (e: any) { alert(`Could not export trips: ${e.message ?? e}`) }
-    finally { setTripsExportBusy(null) }
-  }
 
   // "Log an award" launcher — pick a trip to jump into and log an off-platform award.
   const [awardOpen, setAwardOpen] = useState(false)
@@ -608,14 +600,6 @@ export default function Dashboard() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Dashboard</h1>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => exportTrips(null, null)}
-            disabled={tripsExportBusy === '__all__'}
-            title="Download every trip's in/out dates (all teams) to Excel to confirm the portal has the latest schedule"
-            className="rounded-lg border border-slate-200 dark:border-slate-700 px-3.5 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
-          >
-            {tripsExportBusy === '__all__' ? 'Exporting…' : '↓ Export all trips'}
-          </button>
           <LinkButton to="/clients/new" variant="secondary">
             + New client
           </LinkButton>
