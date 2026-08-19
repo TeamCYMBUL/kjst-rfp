@@ -53,6 +53,11 @@ staff data. Do not consider the build done until that test passes.
 8. Polish, empty/loading/error states, mobile, accessibility, and the RLS security test.
 
 ## Conventions
+- **Render parity (REQUIRED):** the proposal/RFP exists in THREE renderers that must stay in sync —
+  the on-screen/web view (`src/pages/trips/proposalRender.tsx`), the Word download
+  (`src/lib/reportDocx.ts`), and the Excel/grid exports (`src/lib/excelExport.ts`). Any change to how
+  something renders on the website MUST be applied to the Word and export renderers too (dates,
+  stay 1/stay 2, meeting-space formatting, labels, etc.). Never ship a web-only rendering change.
 - Keep components small and readable; prefer clarity over cleverness (a non-developer maintains this).
 - Never hardcode secrets. Supabase URL/anon key come from environment variables (`.env`, and Vercel
   env vars in production). Never commit `.env`.

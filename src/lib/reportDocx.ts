@@ -12,7 +12,7 @@ import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   WidthType, BorderStyle, ShadingType, AlignmentType, PageBreak, VerticalAlign,
 } from 'docx'
-import { formatMeetingSpaceNotes } from './format'
+import { parseMeetingSpaces } from './format'
 
 // ── Brand + layout constants ─────────────────────────────────────────────────
 const DARK = '1C1008'
@@ -34,6 +34,8 @@ export type DocxTrip = {
   city: string | null
   arrival_date: string | null
   departure_date: string | null
+  stay2_arrival_date?: string | null
+  stay2_departure_date?: string | null
   king_rooms_requested: number | null
   double_rooms_requested: number | null
   suites_requested: number | null
@@ -70,6 +72,20 @@ function fmtDate(d: string | null): string {
   const dt = d.includes('T') ? new Date(d) : new Date(d + 'T12:00:00Z')
   if (isNaN(dt.getTime())) return '—'
   return dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+}
+// Stay dates carry the weekday (hotels often mistype the day of week on agreements).
+function fmtDateDow(d: string | null): string {
+  if (!d) return '—'
+  const dt = d.includes('T') ? new Date(d) : new Date(d + 'T12:00:00Z')
+  if (isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+}
+// Compact date shown beside a rate line so each stay's rate is unambiguous.
+function fmtDateShort(d: string | null | undefined): string {
+  if (!d) return ''
+  const dt = d.includes('T') ? new Date(d) : new Date(d + 'T12:00:00Z')
+  if (isNaN(dt.getTime())) return ''
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 function fmtMoney(n: number | null): string { return n != null ? `$${n.toLocaleString()}` : '—' }
 const SECTION_LABELS: Record<string, string> = {
@@ -122,8 +138,18 @@ function tripHeaderTable(trip: DocxTrip): Table {
     trip.total_rooms_requested != null ? `${trip.total_rooms_requested} total` : null,
   ].filter(Boolean).join(' · ')
   const meta: Paragraph[] = []
-  if (trip.arrival_date) meta.push(new Paragraph({ spacing: { after: 20 }, children: [new TextRun({ text: 'Check-in: ', bold: true, font: BODY, size: 18, color: '334155' }), new TextRun({ text: fmtDate(trip.arrival_date), font: BODY, size: 18, color: MUTED })] }))
-  if (trip.departure_date) meta.push(new Paragraph({ spacing: { after: 20 }, children: [new TextRun({ text: 'Check-out: ', bold: true, font: BODY, size: 18, color: '334155' }), new TextRun({ text: fmtDate(trip.departure_date), font: BODY, size: 18, color: MUTED })] }))
+  const hasStay2 = Boolean(trip.stay2_arrival_date)
+  const dateLine = (label: string, d: string | null) =>
+    new Paragraph({ spacing: { after: 20 }, children: [new TextRun({ text: `${label}: `, bold: true, font: BODY, size: 18, color: '334155' }), new TextRun({ text: fmtDateDow(d), font: BODY, size: 18, color: MUTED })] })
+  if (hasStay2) {
+    if (trip.arrival_date) meta.push(dateLine('Stay 1 Check-in', trip.arrival_date))
+    if (trip.departure_date) meta.push(dateLine('Stay 1 Check-out', trip.departure_date))
+    if (trip.stay2_arrival_date) meta.push(dateLine('Stay 2 Check-in', trip.stay2_arrival_date))
+    if (trip.stay2_departure_date) meta.push(dateLine('Stay 2 Check-out', trip.stay2_departure_date))
+  } else {
+    if (trip.arrival_date) meta.push(dateLine('Check-in', trip.arrival_date))
+    if (trip.departure_date) meta.push(dateLine('Check-out', trip.departure_date))
+  }
   if (roomBlock) meta.push(new Paragraph({ children: [new TextRun({ text: 'Room Block: ', bold: true, font: BODY, size: 18, color: '334155' }), new TextRun({ text: roomBlock, font: BODY, size: 18, color: MUTED })] }))
   return new Table({
     width: { size: CONTENT_W, type: WidthType.DXA },
@@ -180,9 +206,13 @@ function kvTable(rows: { label: string; value: string; isNo?: boolean; comment?:
   })
 }
 
-function rateRowsFor(inv: DocxInv, resp: DocxResp): { label: string; value: string }[] {
+function rateRowsFor(inv: DocxInv, resp: DocxResp, trip?: DocxTrip): { label: string; value: string }[] {
   const hasStay2 = inv.visit2_declined || resp?.stay2_king_rate != null || resp?.stay2_suite_rate != null
-  const s1 = hasStay2 ? ' — Stay 1' : ''
+  // Tag each stay's rate rows with that stay's check-in date (rates can differ).
+  const d1 = trip?.arrival_date ? ` (${fmtDateShort(trip.arrival_date)})` : ''
+  const d2 = trip?.stay2_arrival_date ? ` (${fmtDateShort(trip.stay2_arrival_date)})` : ''
+  const s1 = hasStay2 ? ` — Stay 1${d1}` : ''
+  const s2 = ` — Stay 2${d2}`
   const rows: { label: string; value: string }[] = inv.visit1_declined
     ? [
       { label: `King/Suite/Selling Rate${s1}`, value: 'Visit 1 declined' },
@@ -196,15 +226,15 @@ function rateRowsFor(inv: DocxInv, resp: DocxResp): { label: string; value: stri
       { label: 'Occupancy Tax', value: resp?.occupancy_tax || '—' },
       { label: 'Resort Fee', value: resp?.resort_fee || '—' },
     ]
-  if (inv.visit2_declined) rows.push({ label: 'King/Suite Rate — Stay 2', value: 'Visit 2 declined' })
-  else if (resp?.stay2_king_rate != null) rows.push({ label: 'King Rate — Stay 2', value: fmtMoney(resp.stay2_king_rate) })
-  if (!inv.visit2_declined && resp?.stay2_suite_rate != null) rows.push({ label: 'Suite Rate — Stay 2', value: fmtMoney(resp.stay2_suite_rate) })
+  if (inv.visit2_declined) rows.push({ label: `King/Suite Rate${s2}`, value: 'Visit 2 declined' })
+  else if (resp?.stay2_king_rate != null) rows.push({ label: `King Rate${s2}`, value: fmtMoney(resp.stay2_king_rate) })
+  if (!inv.visit2_declined && resp?.stay2_suite_rate != null) rows.push({ label: `Suite Rate${s2}`, value: fmtMoney(resp.stay2_suite_rate) })
   if (resp?.distance_to_arena) rows.push({ label: 'Distance to arena', value: resp.distance_to_arena })
   if (resp?.standard_checkin_time) rows.push({ label: 'Standard check-in', value: resp.standard_checkin_time })
   return rows
 }
 
-function hotelBlock(h: DocxHotel): (Paragraph | Table)[] {
+function hotelBlock(h: DocxHotel, trip?: DocxTrip): (Paragraph | Table)[] {
   const out: (Paragraph | Table)[] = []
   out.push(new Paragraph({ spacing: { before: 240, after: 20 }, children: [new TextRun({ text: h.inv.hotel_name, bold: true, font: HEAD, size: 26, color: DARK })] }))
   const contact = [h.inv.hotel_contact_name, h.inv.hotel_contact_email].filter(Boolean).join(' · ') || 'No contact on file'
@@ -214,10 +244,16 @@ function hotelBlock(h: DocxHotel): (Paragraph | Table)[] {
     return out
   }
   out.push(sectionHeading('Rates'))
-  out.push(kvTable(rateRowsFor(h.inv, h.resp)))
+  out.push(kvTable(rateRowsFor(h.inv, h.resp, trip)))
   if (h.resp.meeting_space_notes) {
-    const note = formatMeetingSpaceNotes(h.resp.meeting_space_notes)
-    if (note) out.push(new Paragraph({ spacing: { before: 160 }, children: [new TextRun({ text: 'Meeting space: ', bold: true, font: BODY, size: 20, color: '374151' }), new TextRun({ text: note, font: BODY, size: 20, color: '374151' })] }))
+    // Label each space by its requested purpose (Meal/Coaches/Massage room, from
+    // the concession item) and render as a table, not a run-on paragraph.
+    const itemLabelById = Object.fromEntries(h.concessionItems.map((c) => [c.id, c.label]))
+    const spaces = parseMeetingSpaces(h.resp.meeting_space_notes, itemLabelById)
+    if (spaces.length) {
+      out.push(sectionHeading('Meeting Space'))
+      out.push(kvTable(spaces.map((s) => ({ label: s.purpose ?? 'Meeting space', value: s.detail }))))
+    }
   }
   const ansById = new Map(h.answers.map((a) => [a.concession_item_id, a]))
   for (const sectionKey of SECTION_ORDER) {
@@ -264,7 +300,7 @@ export function buildProposalDoc(input: { subtitle: string; groups: { trip: Docx
     } else {
       g.hotels.forEach((h, hi) => {
         if (hi > 0) children.push(pageBreakPara())
-        hotelBlock(h).forEach((c) => children.push(c))
+        hotelBlock(h, g.trip).forEach((c) => children.push(c))
       })
     }
     children.push(footerPara())
