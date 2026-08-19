@@ -66,6 +66,9 @@ export type GridHotel = {
   king_rate_notes: string | null
   current_selling_rate: string | null
   best_suite_rate: number | null
+  // Second-visit rates (2-visit trips); null on single-visit trips.
+  stay2_king_rate?: number | null
+  stay2_suite_rate?: number | null
   occupancy_tax: string | null
   meeting_space_notes: string | null
   general_comments: string | null
@@ -83,6 +86,11 @@ export type GridTrip = {
   departure_date: string | null
   game_date: string | null
   game_dates?: string[] | null
+  // Second visit (same city twice); null on single-visit trips.
+  stay2_arrival_date?: string | null
+  stay2_departure_date?: string | null
+  stay2_game_date?: string | null
+  stay2_game_dates?: string[] | null
   king_rooms_requested: number | null
   suites_requested: number | null
   total_rooms_requested: number | null
@@ -143,12 +151,22 @@ export function exportComparisonXlsx(
 
   const rows: (string | number | null)[][] = []
 
+  // On a 2-visit trip (same city twice), label the first-visit rows "— STAY 1"
+  // and add a matching "— STAY 2" set so both stays land on the grid.
+  const twoVisit = Boolean(trip.stay2_arrival_date)
+  const s1 = twoVisit ? ' — STAY 1' : ''
+
   // ── Trip header ──────────────────────────────────────────────────────────
   rows.push(['', ...hotelNames])
   rows.push(row('OPPONENT', hotels.map(() => fmt(trip.opponent_label))))
-  rows.push(row('ARR DATE', hotels.map(() => fmt(trip.arrival_date))))
-  rows.push(row('DEP DATE', hotels.map(() => fmt(trip.departure_date))))
-  rows.push(row('GAME DATE', hotels.map(() => fmt(joinGameDates(trip.game_dates, trip.game_date)))))
+  rows.push(row(`ARR DATE${s1}`, hotels.map(() => fmt(trip.arrival_date))))
+  rows.push(row(`DEP DATE${s1}`, hotels.map(() => fmt(trip.departure_date))))
+  rows.push(row(`GAME DATE${s1}`, hotels.map(() => fmt(joinGameDates(trip.game_dates, trip.game_date)))))
+  if (twoVisit) {
+    rows.push(row('ARR DATE — STAY 2', hotels.map(() => fmt(trip.stay2_arrival_date))))
+    rows.push(row('DEP DATE — STAY 2', hotels.map(() => fmt(trip.stay2_departure_date))))
+    rows.push(row('GAME DATE — STAY 2', hotels.map(() => fmt(joinGameDates(trip.stay2_game_dates, trip.stay2_game_date ?? null)))))
+  }
   rows.push([]) // blank spacer
 
   // ── Hotel meta ───────────────────────────────────────────────────────────
@@ -167,10 +185,14 @@ export function exportComparisonXlsx(
 
   // ── Rates ────────────────────────────────────────────────────────────────
   rows.push(['RATES'])
-  rows.push(row('RATE (Best King)', hotels.map((h) => h.best_king_rate ?? '—')))
+  rows.push(row(`RATE (Best King)${s1}`, hotels.map((h) => h.best_king_rate ?? '—')))
   rows.push(row('KING RATE NOTES', hotels.map((h) => fmt(h.king_rate_notes))))
   rows.push(row('CURRENT SELLING RATE', hotels.map((h) => fmt(h.current_selling_rate))))
-  rows.push(row('BEST SUITE RATE', hotels.map((h) => h.best_suite_rate ?? '—')))
+  rows.push(row(`BEST SUITE RATE${s1}`, hotels.map((h) => h.best_suite_rate ?? '—')))
+  if (twoVisit) {
+    rows.push(row('RATE (Best King) — STAY 2', hotels.map((h) => h.stay2_king_rate ?? '—')))
+    rows.push(row('BEST SUITE RATE — STAY 2', hotels.map((h) => h.stay2_suite_rate ?? '—')))
+  }
   rows.push(row('TAXES & FEES', hotels.map((h) => fmt(h.occupancy_tax))))
 
   // Revenue per hotel (numeric where calculable, '—' otherwise). Incl-tax applies
