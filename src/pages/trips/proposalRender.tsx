@@ -1,6 +1,6 @@
 // Shared proposal print/render pieces, used by both the per-trip ProposalPrint
 // and the client-wide ClientProposalsPrint so the two always look identical.
-import { formatMeetingSpaceNotes } from '../../lib/format'
+import { parseMeetingSpaces } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 
 export const PRIMARY = '#1C1008'
@@ -265,11 +265,26 @@ export function HotelFull({
                 ))}
               </tbody>
             </table>
-            {resp.meeting_space_notes && (
-              <div style={{ fontSize: 13, color: '#374151', marginBottom: 16, whiteSpace: 'pre-line' }}>
-                <strong>Meeting space:</strong> {formatMeetingSpaceNotes(resp.meeting_space_notes)}
-              </div>
-            )}
+            {(() => {
+              const itemLabelById = Object.fromEntries(concessionItems.map((c) => [c.id, c.label]))
+              const spaces = resp.meeting_space_notes ? parseMeetingSpaces(resp.meeting_space_notes, itemLabelById) : []
+              if (!spaces.length) return null
+              return (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#94a3b8', marginBottom: 8 }}>Meeting Space</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <tbody>
+                      {spaces.map((s, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '6px 12px', color: '#64748b', verticalAlign: 'top', width: '48%' }}>{s.purpose ?? 'Meeting space'}</td>
+                          <td style={{ padding: '6px 12px', color: '#111827', fontWeight: 600, textAlign: 'right' }}>{s.detail}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            })()}
             {SECTION_ORDER.map((sectionKey) => {
               const items = concessionItems.filter((c) => c.section === sectionKey).sort((a, b) => a.sort_order - b.sort_order)
               if (items.length === 0) return null

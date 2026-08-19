@@ -35,54 +35,87 @@ const MEETING_SPACE_TYPE_LABELS: Record<string, string> = {
   other: 'Other',
 }
 
-export function formatMeetingSpaceNotes(raw: string | null | undefined): string {
-  if (!raw) return ''
+// A single hotel-offered meeting space, paired with what it's FOR. `purpose` is
+// the short human reason (e.g. "Coaches Meeting Room", "meals/meetings"), pulled
+// from the requested concession item's label when the id->label map is provided.
+export type MeetingSpaceEntry = { purpose: string | null; detail: string }
+
+// The requested item labels read like "Complimentary Meeting space (800 sq. ft.
+// requested) for Coaches Meeting Room, for duration of stay". Pull out just the
+// "for <purpose>" so the proposal can say which room is for what.
+function shortMeetingPurpose(label: string): string {
+  const m = label.match(/for\s+(.+?)\s*,?\s+for\s+(?:the\s+)?duration/i)
+  if (m && m[1]) return m[1].trim()
+  // Fallbacks: strip the boilerplate prefix if present, else return as-is.
+  const m2 = label.match(/for\s+(.+)$/i)
+  return (m2 && m2[1] ? m2[1] : label).trim()
+}
+
+// Parse the stored meeting_space_notes JSON into labeled, per-space entries.
+// Pass itemLabelById (concession item id -> label) to resolve each __details
+// space to its requested purpose; without it, purpose is left null (unchanged
+// behavior for callers that don't have the items on hand).
+export function parseMeetingSpaces(
+  raw: string | null | undefined,
+  itemLabelById?: Record<string, string>,
+): MeetingSpaceEntry[] {
+  if (!raw) return []
   let parsed: any
   try {
     parsed = JSON.parse(raw)
   } catch {
-    return raw // plain text note — show as-is
+    return [{ purpose: null, detail: raw }] // plain-text legacy note
   }
-  if (!parsed || typeof parsed !== 'object') return raw
+  if (!parsed || typeof parsed !== 'object') return [{ purpose: null, detail: raw }]
 
-  const spaces: any[] = []
-  if (parsed.__details && typeof parsed.__details === 'object') {
-    spaces.push(...Object.values(parsed.__details))
-  }
-  if (Array.isArray(parsed.__additional)) {
-    spaces.push(...parsed.__additional)
-  }
-
-  const fmtSpace = (s: any): string | null => {
+  const detailOf = (s: any): string | null => {
     if (!s || typeof s !== 'object') return null
     const parts: string[] = []
-    // Meeting spaces show only Room name · Type · Size (F&B/Wi-Fi/additional
-    // were removed from the form; also suppress them for any legacy data).
     if (s.name) parts.push(String(s.name))
     if (s.space_type) parts.push(MEETING_SPACE_TYPE_LABELS[s.space_type] ?? String(s.space_type))
     if (s.dimensions) parts.push(`Size: ${s.dimensions}`)
     return parts.length ? parts.join(' · ') : null
   }
 
-  const lines = spaces.map(fmtSpace).filter(Boolean) as string[]
+  const out: MeetingSpaceEntry[] = []
 
-  // Named, fixed sub-spaces (e.g. Meal Room / Treatment Room / Coaches Meeting
-  // Room) required for a single yes_no item — keyed by item id, then space key.
+  // __details: keyed by concession item id — the item's label carries the purpose.
+  if (parsed.__details && typeof parsed.__details === 'object') {
+    for (const [itemId, s] of Object.entries(parsed.__details as Record<string, any>)) {
+      const detail = detailOf(s)
+      if (!detail) continue
+      const label = itemLabelById?.[itemId]
+      out.push({ purpose: label ? shortMeetingPurpose(label) : null, detail })
+    }
+  }
+  // __additional: free-form extra spaces, no fixed purpose.
+  if (Array.isArray(parsed.__additional)) {
+    for (const s of parsed.__additional) {
+      const detail = detailOf(s)
+      if (detail) out.push({ purpose: null, detail })
+    }
+  }
+  // __named: fixed sub-spaces that carry their own spaceLabel (Meal/Treatment/…).
   if (parsed.__named && typeof parsed.__named === 'object') {
     for (const itemSpaces of Object.values(parsed.__named)) {
       if (!itemSpaces || typeof itemSpaces !== 'object') continue
-      for (const [, s] of Object.entries(itemSpaces as Record<string, any>)) {
+      for (const s of Object.values(itemSpaces as Record<string, any>)) {
         if (!s || typeof s !== 'object') continue
-        const valueParts: string[] = []
-        if (s.name) valueParts.push(String(s.name))
-        if (s.dimensions) valueParts.push(`Size: ${s.dimensions}`)
-        if (!valueParts.length) continue
-        lines.push(s.spaceLabel ? `${s.spaceLabel}: ${valueParts.join(' · ')}` : valueParts.join(' · '))
+        const parts: string[] = []
+        if (s.name) parts.push(String(s.name))
+        if (s.dimensions) parts.push(`Size: ${s.dimensions}`)
+        if (!parts.length) continue
+        out.push({ purpose: s.spaceLabel ? String(s.spaceLabel) : null, detail: parts.join(' · ') })
       }
     }
   }
+  return out
+}
 
-  return lines.join('\n')
+export function formatMeetingSpaceNotes(raw: string | null | undefined): string {
+  const entries = parseMeetingSpaces(raw)
+  if (!entries.length) return ''
+  return entries.map((e) => (e.purpose ? `${e.purpose}: ${e.detail}` : e.detail)).join('\n')
 }
 
 // Human-readable elapsed duration between two timestamps (or a raw ms span).

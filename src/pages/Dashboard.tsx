@@ -6,6 +6,7 @@ import { Badge, ErrorNote, LinkButton, Loading } from '../components/ui'
 import { PageHint } from '../components/PageHint'
 import { RevenuePanel } from '../components/RevenuePanel'
 import { exportAllCitiesForClient } from '../lib/exportAllCities'
+import { exportTripsListXlsx, type TripListRow } from '../lib/excelExport'
 import { useAuth } from '../auth/AuthContext'
 import { StageTimeline } from '../components/StageTimeline'
 import { TEAM_STAGES, teamAutoDone, resolveDone, currentStage } from '../lib/rfpStages'
@@ -430,6 +431,51 @@ export default function Dashboard() {
   // with a My teams / All teams toggle. assignedIds === null → owner (sees all).
   const [assignedIds, setAssignedIds] = useState<string[] | null>(null)
   const [scope, setScope] = useState<'all' | 'mine'>('all')
+  const [exportingTrips, setExportingTrips] = useState(false)
+  // Export every trip's in/out dates to Excel so staff can confirm the portal
+  // has the latest schedule without opening each trip one by one. Fetches full
+  // date fields directly (the dashboard cards only carry a subset). Scoped by
+  // RLS to what this user can see, same as everything else.
+  const exportAllTrips = async () => {
+    setExportingTrips(true)
+    try {
+      const { data, error: qErr } = await supabase
+        .from('trips')
+        .select('opponent_label, city, arrival_date, departure_date, nights, game_date, game_dates, stay2_arrival_date, stay2_departure_date, stay2_game_date, stay2_game_dates, total_rooms_requested, response_deadline, status, cancelled, clients(team_name)')
+      if (qErr) throw qErr
+      const gd = (single: string | null, list: string[] | null): string =>
+        (list && list.length ? list : single ? [single] : []).filter(Boolean).map((d) => formatDate(d)).join(', ')
+      const rows: TripListRow[] = (data ?? [])
+        .map((t: any) => {
+          const c = Array.isArray(t.clients) ? t.clients[0] : t.clients
+          const s2 = gd(t.stay2_game_date, t.stay2_game_dates)
+          return {
+            team: c?.team_name ?? '—',
+            opponent: t.opponent_label ?? '',
+            city: t.city ?? '',
+            stay1_in: t.arrival_date ? formatDate(t.arrival_date) : '',
+            stay1_out: t.departure_date ? formatDate(t.departure_date) : '',
+            stay2_in: t.stay2_arrival_date ? formatDate(t.stay2_arrival_date) : '',
+            stay2_out: t.stay2_departure_date ? formatDate(t.stay2_departure_date) : '',
+            nights: t.nights ?? '',
+            game_dates: [gd(t.game_date, t.game_dates), s2].filter(Boolean).join('  |  '),
+            deadline: t.response_deadline ? formatDate(t.response_deadline) : '',
+            status: t.cancelled ? 'cancelled' : (t.status ?? ''),
+            total_rooms: t.total_rooms_requested ?? '',
+            _team: c?.team_name ?? '~',
+            _date: t.arrival_date ?? '9999',
+          } as TripListRow & { _team: string; _date: string }
+        })
+        .sort((a: any, b: any) => a._team.localeCompare(b._team) || String(a._date).localeCompare(String(b._date)))
+        .map(({ _team, _date, ...r }: any) => r)
+      exportTripsListXlsx(rows)
+    } catch (e: any) {
+      alert(`Could not export trips: ${e.message ?? e}`)
+    } finally {
+      setExportingTrips(false)
+    }
+  }
+
   // "Log an award" launcher — pick a trip to jump into and log an off-platform award.
   const [awardOpen, setAwardOpen] = useState(false)
   const [awardClient, setAwardClient] = useState('')
@@ -583,6 +629,14 @@ export default function Dashboard() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Dashboard</h1>
         <div className="flex items-center gap-2">
+          <button
+            onClick={exportAllTrips}
+            disabled={exportingTrips}
+            title="Download every trip's in/out dates to Excel to confirm the portal has the latest schedule"
+            className="rounded-lg border border-slate-200 dark:border-slate-700 px-3.5 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
+          >
+            {exportingTrips ? 'Exporting…' : '↓ Export trips'}
+          </button>
           <LinkButton to="/clients/new" variant="secondary">
             + New client
           </LinkButton>

@@ -1092,6 +1092,51 @@ export async function exportMultiCityConsolidatedXlsx(
 // exportSingleHotelXlsx — one hotel's full bid in a vertical label/value layout
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── All-trips list export ──────────────────────────────────────────────────────
+// A flat, one-row-per-trip spreadsheet of every trip's in/out dates so staff can
+// confirm the portal has the latest schedule without opening each trip. Pure:
+// the caller fetches and shapes the rows.
+export type TripListRow = {
+  team: string
+  opponent: string
+  city: string
+  stay1_in: string
+  stay1_out: string
+  stay2_in: string
+  stay2_out: string
+  nights: string | number
+  game_dates: string
+  deadline: string
+  status: string
+  total_rooms: string | number
+}
+
+export function exportTripsListXlsx(rows: TripListRow[], filename = 'KJST_All_Trips.xlsx'): void {
+  const header = [
+    'Team', 'Opponent', 'City',
+    'Stay 1 In', 'Stay 1 Out', 'Stay 2 In', 'Stay 2 Out',
+    'Nights', 'Game Date(s)', 'Response Deadline', 'Status', 'Total Rooms',
+  ]
+  const aoa: (string | number)[][] = [header]
+  for (const r of rows) {
+    aoa.push([
+      r.team, r.opponent, r.city,
+      r.stay1_in, r.stay1_out, r.stay2_in, r.stay2_out,
+      r.nights, r.game_dates, r.deadline, r.status, r.total_rooms,
+    ])
+  }
+  const ws = XLSX.utils.aoa_to_sheet(aoa)
+  ws['!cols'] = [
+    { wch: 22 }, { wch: 22 }, { wch: 18 },
+    { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+    { wch: 8 }, { wch: 26 }, { wch: 18 }, { wch: 12 }, { wch: 12 },
+  ]
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 0, c: header.length - 1 } }) }
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'All Trips')
+  XLSX.writeFile(wb, filename)
+}
+
 export function exportSingleHotelXlsx(
   hotel: GridHotel,
   trip: GridTrip,
