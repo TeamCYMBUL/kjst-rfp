@@ -628,18 +628,22 @@ export async function loadLogoForExcel(
 // season grid: alpha by city, one row per hotel offer, Stay 1/Stay 2 blocks,
 // sold-out hotels kept but red-struck. Uses ExcelJS (dynamic import) for cell
 // styling + an embedded client logo, which the community `xlsx` build cannot do.
-export async function exportMultiCityConsolidatedXlsx(
+export type ConsolidatedOpts = {
+  logoUrl?: string | null
+  season?: string | null
+  filename?: string
+  gridColumns?: GridColumnSpec[]
+  gridLayout?: GridColumnSpec[] // full column order (base + custom); overrides the default layout
+  fnbHeadcount?: number | null
+}
+
+// Builds the workbook (no download) so it can be exercised in tests. The public
+// exportMultiCityConsolidatedXlsx wraps this and triggers the browser download.
+export async function buildConsolidatedWorkbook(
   cities: ConsolidatedCity[],
   clientName: string,
-  opts: {
-    logoUrl?: string | null
-    season?: string | null
-    filename?: string
-    gridColumns?: GridColumnSpec[]
-    gridLayout?: GridColumnSpec[] // full column order (base + custom); overrides the default layout
-    fnbHeadcount?: number | null
-  } = {},
-): Promise<void> {
+  opts: ConsolidatedOpts = {},
+): Promise<{ wb: any; outputFile: string }> {
   const mod: any = await import('exceljs')
   const ExcelJS = mod.default ?? mod
 
@@ -1109,7 +1113,16 @@ export async function exportMultiCityConsolidatedXlsx(
   const clientStr = clientName.replace(/\s+/g, '_')
   const fileDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   const outputFile = opts.filename ?? `${clientStr}_Hotel_Options_${fileDate}.xlsx`
+  return { wb, outputFile }
+}
 
+// Public entry: build the workbook, then download it in the browser.
+export async function exportMultiCityConsolidatedXlsx(
+  cities: ConsolidatedCity[],
+  clientName: string,
+  opts: ConsolidatedOpts = {},
+): Promise<void> {
+  const { wb, outputFile } = await buildConsolidatedWorkbook(cities, clientName, opts)
   const buf = await wb.xlsx.writeBuffer()
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const url = URL.createObjectURL(blob)
