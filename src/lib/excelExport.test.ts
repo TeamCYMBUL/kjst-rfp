@@ -109,16 +109,21 @@ describe('buildConsolidatedWorkbook', () => {
         visit2_declined: false, visit2_decline_reason: null, best_king_rate: 300, best_suite_rate: 800,
         current_selling_rate: null, occupancy_tax: null, resort_fee: null, standard_checkin_time: null,
         general_comments: null, meeting_space_type: null, meeting_space_count: null,
-        answers: { 'itm-upg': { answer_yes_no: true, answer_value: null } },
+        answers: { 'itm-upg': { answer_yes_no: true, answer_value: null, comment: 'up to ten (10) upgrades at group rate' } },
       }],
       items: [suiteItem],
     } as any
     const { wb } = await buildConsolidatedWorkbook([yesNoCity], 'Orlando Magic', { logoUrl: null })
     const ws = wb.worksheets[0]
-    // A Yes to a "(4) suite upgrades" question shows the number 4 (was blank
-    // before the fix), matching how quantity-storing teams display the column.
-    let found4 = false
-    ws.eachRow((row: any) => row.eachCell((c: any) => { if (c.value === 4) found4 = true }))
-    expect(found4).toBe(true)
+    // Yes/No teams show "Yes" in the Suite UG column (was blank before the fix)
+    // and the hotel's note is carried into the Notes column verbatim.
+    let foundYes = false
+    let foundNote = false
+    ws.eachRow((row: any) => row.eachCell((c: any) => {
+      if (c.value === 'Yes') foundYes = true
+      if (typeof c.value === 'string' && c.value.includes('up to ten (10) upgrades')) foundNote = true
+    }))
+    expect(foundYes).toBe(true)
+    expect(foundNote).toBe(true)
   })
 })

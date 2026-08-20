@@ -35,21 +35,20 @@ const parseRequestedCount = (item: any): number | null => {
 // quantity; a number shows/counts as itself; no answer is blank/0.
 const readSuiteUpgrade = (
   item: any,
-  ans: { answer_yes_no?: boolean | null; answer_value?: string | null } | null | undefined,
-): { display: string | number | null; count: number } => {
-  if (!ans) return { display: null, count: 0 }
+  ans: { answer_yes_no?: boolean | null; answer_value?: string | null; comment?: string | null } | null | undefined,
+): { display: string | number | null; count: number; note: string | null } => {
+  if (!ans) return { display: null, count: 0, note: null }
   if (ans.answer_yes_no != null) {
-    // Yes/No teams: show the NUMBER the question asks for (the requested count,
-    // e.g. "(4) suite upgrades" -> 4) so the column reads the same as the teams
-    // that store a quantity. A Yes honors that count; a No is 0. Fall back to
-    // "Yes" only if no number can be parsed (shouldn't happen with current data).
-    const reqN = parseRequestedCount(item)
-    if (ans.answer_yes_no) return { display: reqN ?? 'Yes', count: reqN ?? 0 }
-    return { display: 0, count: 0 }
+    // Yes/No teams (Magic, Sharks): show Yes/No and surface the hotel's note,
+    // because the note is where the real offer lives (a different count, sq ft,
+    // rate, etc.) and it can't be reliably parsed into a single number. For
+    // room-cost math a Yes counts as the requested quantity, a No as 0.
+    const note = typeof ans.comment === 'string' && ans.comment.trim() ? ans.comment.trim() : null
+    return { display: ans.answer_yes_no ? 'Yes' : 'No', count: ans.answer_yes_no ? (parseRequestedCount(item) ?? 0) : 0, note }
   }
   const n = Number(ans.answer_value)
-  if (ans.answer_value != null && ans.answer_value !== '' && Number.isFinite(n)) return { display: n, count: n }
-  return { display: null, count: 0 }
+  if (ans.answer_value != null && ans.answer_value !== '' && Number.isFinite(n)) return { display: n, count: n, note: null }
+  return { display: null, count: 0, note: null }
 }
 
 // ── Revenue helpers ───────────────────────────────────────────────────────────
@@ -409,6 +408,9 @@ export function exportTeamGrid(
     // Auto-generate notes (no internal flags)
     const noteFragments: string[] = []
     if (inv.staff_notes?.trim()) noteFragments.push(inv.staff_notes.trim())
+    // Yes/No suite-upgrade teams (Magic, Sharks): surface the hotel's note.
+    const upgRead = readSuiteUpgrade(suiteUpgItem, upgAns)
+    if (upgRead.note) noteFragments.push(`Suite upgrade: ${upgRead.note}`)
     if (mtgType === 'restaurant' || mtgType === 'suite_converted') {
       noteFragments.push('Meeting space is restaurant/F&B — may not qualify')
     }
@@ -426,7 +428,7 @@ export function exportTeamGrid(
       resp?.resort_fee ?? '—',
       resp?.occupancy_tax ?? '—',
       compAns?.answer_value ?? (compAns?.answer_yes_no === true ? 'Yes' : compAns?.answer_yes_no === false ? 'No' : '—'),
-      readSuiteUpgrade(suiteUpgItem, upgAns).display ?? '—',
+      upgRead.display ?? '—',
       playoffAns?.answer_yes_no === true ? 'Yes' : playoffAns?.answer_yes_no === false ? 'No' : '—',
       mtgDisplay,
       noteFragments.join('; '),
@@ -1100,7 +1102,8 @@ export async function buildConsolidatedWorkbook(
         const upgAns = suiteUpgItem ? h.answers[suiteUpgItem.id] : undefined
         const playoffAns = playoffItem ? h.answers[playoffItem.id] : undefined
         const compSuites = compAns?.answer_value ? Number(compAns.answer_value) : compAns?.answer_yes_no === true ? 1 : 0
-        const suiteUg = readSuiteUpgrade(suiteUpgItem, upgAns).display
+        const suiteUpgRead = readSuiteUpgrade(suiteUpgItem, upgAns)
+        const suiteUg = suiteUpgRead.display
         const postGte = playoffAns?.answer_yes_no === true ? 'YES' : playoffAns?.answer_yes_no === false ? 'NO' : ''
 
         const reason = visit.index === 1 ? h.visit1_decline_reason : h.visit2_decline_reason
@@ -1111,6 +1114,9 @@ export async function buildConsolidatedWorkbook(
         if (struck) noteFrags.push(reason ? REASON_LABELS[reason] ?? 'Not available' : 'Not available')
         if (h.staff_notes) noteFrags.push(h.staff_notes)
         if (h.general_comments) noteFrags.push(h.general_comments)
+        // Yes/No suite-upgrade teams (Magic, Sharks): carry the hotel's note into
+        // the Notes column so the real offer (count/sq ft/rate) is never lost.
+        if (bid && suiteUpgRead.note) noteFrags.push(`Suite upgrade: ${suiteUpgRead.note}`)
 
         // One value per column, in the configured layout order.
         const baseCellValue = (key: GridBaseKey): string | number | Date | null => {
