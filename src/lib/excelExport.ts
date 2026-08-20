@@ -733,13 +733,12 @@ export async function buildConsolidatedWorkbook(
   ws.getRow(1).height = 46
   ws.getRow(2).height = 18
 
-  // Embed client logo (best-effort; text-only fallback on any failure)
-  const logo = opts.logoUrl ? await loadLogoForExcel(opts.logoUrl) : null
-  if (logo) {
-    const imgId = wb.addImage({ buffer: logo.buffer, extension: logo.extension })
-    // Square box so team crests (usually 1:1) aren't stretched into a wide oval.
-    ws.addImage(imgId, { tl: { col: 0.15, row: 0.12 }, ext: { width: 52, height: 52 } })
-  }
+  // NOTE: the client logo image is intentionally NOT embedded. An embedded image
+  // made ExcelJS write a drawing part that Excel flagged as needing "repair" (the
+  // scary corruption prompt), and the logo fetch could also fail on the first
+  // click so nothing downloaded. The branded text header above is enough; the
+  // grid is now a clean, single-part workbook with no drawings. (opts.logoUrl is
+  // accepted but unused, kept for signature compatibility.)
 
   // ── Column header row (row 4; row 3 is a thin spacer) ──
   ws.getRow(3).height = 6
