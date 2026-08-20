@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { buildConsolidatedWorkbook, type ConsolidatedCity } from './excelExport'
+import { buildConsolidatedWorkbook, sanitizeDrawingXfrm, type ConsolidatedCity } from './excelExport'
+import JSZip from 'jszip'
 
 // Smoke test for the "Hotel Options" grid: a 2-visit city must build a valid,
 // non-corrupt xlsx that includes BOTH stays' rates. Guards the exact failure
@@ -125,5 +126,37 @@ describe('buildConsolidatedWorkbook', () => {
     }))
     expect(foundYes).toBe(true)
     expect(foundNote).toBe(true)
+  })
+})
+
+describe('sanitizeDrawingXfrm (Excel-safe logo drawing)', () => {
+  const PNG = Uint8Array.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+    0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+    0x42, 0x60, 0x82,
+  ])
+
+  it('embeds the logo and strips the 0x0 xfrm Excel repairs, keeping the image', async () => {
+    const orig = globalThis.fetch
+    ;(globalThis as any).fetch = async () => ({
+      ok: true, headers: { get: () => 'image/png' },
+      arrayBuffer: async () => PNG.buffer.slice(PNG.byteOffset, PNG.byteOffset + PNG.byteLength),
+    })
+    try {
+      const { wb } = await buildConsolidatedWorkbook([city], 'Orlando Magic', { logoUrl: 'https://x/logo.png' })
+      expect(wb.worksheets[0].getImages().length).toBe(1) // logo embedded
+      const raw = await wb.xlsx.writeBuffer()
+      const clean = await sanitizeDrawingXfrm(raw)
+      const zip = await JSZip.loadAsync(clean)
+      const drawing = await zip.file('xl/drawings/drawing1.xml')!.async('string')
+      expect(drawing).not.toContain('<a:ext cx="0" cy="0"/>') // the repair trigger, removed
+      expect(zip.file('xl/media/image1.png')).not.toBeNull()   // image still present
+      const sheet = await zip.file('xl/worksheets/sheet1.xml')!.async('string')
+      expect(sheet).not.toContain('4294967295')                // dpi overflow gone
+    } finally {
+      globalThis.fetch = orig
+    }
   })
 })

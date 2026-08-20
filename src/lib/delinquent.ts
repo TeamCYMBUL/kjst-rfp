@@ -6,6 +6,7 @@
 //   - the trip has a response deadline AND it's now past, OR
 //   - the trip has no deadline set AND it's been 3+ days since the invite went out.
 import { supabase } from './supabase'
+import { loadLogoForExcel, sanitizeDrawingXfrm } from './excelExport'
 
 const STALE_DAYS = 3
 
@@ -165,9 +166,14 @@ export async function exportDelinquentXlsx(report: DelinquentReport): Promise<vo
   ws.getRow(1).height = 46
   ws.getRow(2).height = 18
 
-  // Client logo intentionally not embedded: an image drawing part makes real
-  // Excel show its "repaired / Drawing shape" prompt. The text band above brands
-  // the sheet without a drawing. See excelExport.ts for the full note.
+  // Client logo, top-left of the branding band. Safe now that pageSetup DPI is
+  // pinned (above) and the buffer is run through sanitizeDrawingXfrm on download
+  // to strip ExcelJS's 0x0 <a:xfrm>. See excelExport.ts for the full note.
+  const logo = client.logo_url ? await loadLogoForExcel(client.logo_url) : null
+  if (logo) {
+    const imgId = wb.addImage({ buffer: logo.buffer, extension: logo.extension })
+    ws.addImage(imgId, { tl: { col: 0.12, row: 0.15 }, ext: { width: 50, height: 50 } })
+  }
 
   ws.getRow(3).height = 6
   const headerRow = ws.getRow(4)
@@ -215,8 +221,9 @@ export async function exportDelinquentXlsx(report: DelinquentReport): Promise<vo
 
   const clientStr = client.team_name.replace(/\s+/g, '_')
   const fileDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-  const buf = await wb.xlsx.writeBuffer()
-  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const raw = await wb.xlsx.writeBuffer()
+  const buf = await sanitizeDrawingXfrm(raw) // Excel-safe drawing (strip 0x0 xfrm)
+  const blob = new Blob([buf as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

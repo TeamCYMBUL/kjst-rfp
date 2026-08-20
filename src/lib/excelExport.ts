@@ -5,8 +5,33 @@
 // Also exports a stripped team-facing grid (no commission, no flex cancel, no internal info).
 
 import * as XLSX from 'xlsx'
+import JSZip from 'jszip'
 import type { ConcessionItem } from './rfpApi'
 import { formatMeetingSpaceNotes } from './format'
+
+// Post-process an ExcelJS .xlsx buffer so its picture drawings match the
+// Excel-safe structure openpyxl emits. ExcelJS writes a contradictory zero-size
+// <a:xfrm> inside each picture's <xdr:spPr> (<a:off 0,0/><a:ext 0x0/>), while the
+// real size lives in the anchor's <xdr:ext>. Removing that empty xfrm is lossless
+// and avoids Excel's "we repaired this file / Drawing shape" prompt. Any failure
+// falls back to the original bytes so a download never breaks.
+export async function sanitizeDrawingXfrm(buf: ArrayBuffer | Uint8Array): Promise<Uint8Array> {
+  const asBytes = () => (buf instanceof Uint8Array ? new Uint8Array(buf) : new Uint8Array(buf))
+  try {
+    const zip = await JSZip.loadAsync(buf)
+    const paths = Object.keys(zip.files).filter((p) => /^xl\/drawings\/drawing\d+\.xml$/.test(p))
+    let changed = false
+    for (const p of paths) {
+      const xml = await zip.file(p)!.async('string')
+      const stripped = xml.replace(/<a:xfrm><a:off x="0" y="0"\/><a:ext cx="0" cy="0"\/><\/a:xfrm>/g, '')
+      if (stripped !== xml) { zip.file(p, stripped); changed = true }
+    }
+    if (!changed) return asBytes()
+    return await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })
+  } catch {
+    return asBytes()
+  }
+}
 
 // ── Concession matching (universal, punctuation-insensitive) ───────────────────
 // Every team words the comp-suite and suite-upgrade concessions differently:
@@ -793,15 +818,19 @@ export async function buildConsolidatedWorkbook(
   ws.getRow(1).height = 46
   ws.getRow(2).height = 18
 
-  // NOTE: the client logo is intentionally NOT embedded as an image here.
-  // Field evidence (multiple travel managers) shows real Excel repairs any grid
-  // that carries the drawing part — the prompt names "Drawing from
-  // /xl/drawings/drawing1.xml part (Drawing shape)". Lenient validators
-  // (openpyxl, xmllint) accept the file, so it can't be verified safe in CI, and
-  // a "we had to repair this" prompt reads as possible malware to the team. Until
-  // an image embed can be proven clean in real Excel, the grid stays a single,
-  // drawing-free part and the branding is the text band above. (opts.logoUrl is
-  // accepted for signature compatibility but not embedded.)
+  // ── Client logo (top-left of the branding band) ──
+  // The earlier "Excel repaired this file / Drawing shape" prompt was driven by
+  // the pageSetup DPI overflow (fixed above) corrupting the sheet — Excel then
+  // revalidated the whole package and rebuilt the drawing. With valid DPI, a lone
+  // image produces a single clean drawing part (verified via LibreOffice
+  // round-trip + structural checks). Same embed the delinquent export uses.
+  if (opts.logoUrl) {
+    const logo = await loadLogoForExcel(opts.logoUrl)
+    if (logo) {
+      const imgId = wb.addImage({ buffer: logo.buffer, extension: logo.extension })
+      ws.addImage(imgId, { tl: { col: 0.12, row: 0.15 }, ext: { width: 50, height: 50 } })
+    }
+  }
 
   // ── Column header row (row 4; row 3 is a thin spacer) ──
   ws.getRow(3).height = 6
@@ -1191,8 +1220,9 @@ export async function exportMultiCityConsolidatedXlsx(
   opts: ConsolidatedOpts = {},
 ): Promise<void> {
   const { wb, outputFile } = await buildConsolidatedWorkbook(cities, clientName, opts)
-  const buf = await wb.xlsx.writeBuffer()
-  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const raw = await wb.xlsx.writeBuffer()
+  const buf = await sanitizeDrawingXfrm(raw) // Excel-safe drawing (see sanitizeDrawingXfrm)
+  const blob = new Blob([buf as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

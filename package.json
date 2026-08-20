@@ -16,6 +16,7 @@
     "docx": "^9.7.1",
     "docx-preview": "^0.4.0",
     "exceljs": "^4.4.0",
+    "jszip": "^3.10.1",
     "mammoth": "^1.12.1",
     "pdfjs-dist": "^6.0.227",
     "react": "^19.2.6",
