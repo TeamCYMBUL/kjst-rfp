@@ -730,6 +730,10 @@ export async function buildConsolidatedWorkbook(
   const wb = new ExcelJS.Workbook()
   const ws = wb.addWorksheet('Hotel Options', {
     views: [{ state: 'frozen', ySplit: 4 }], // keep branding + header on screen
+    // ExcelJS otherwise writes horizontalDpi/verticalDpi as 4294967295 (a -1
+    // integer overflow) into pageSetup, which real Excel flags as needing
+    // "repair" of cell information. Pin valid DPI so the file opens clean.
+    pageSetup: { horizontalDpi: 300, verticalDpi: 300 },
   })
   ws.columns = COLS.map((c) => ({ width: c.width }))
 
@@ -754,20 +758,15 @@ export async function buildConsolidatedWorkbook(
   ws.getRow(1).height = 46
   ws.getRow(2).height = 18
 
-  // ── Client logo (top-left of the branding band) ──
-  // Safe to embed as long as the sheet has NO cell comments (.note): an image
-  // alone produces a single, valid drawing part. The corruption people saw came
-  // from a cell comment + image together, which made ExcelJS emit a legacy VML
-  // drawing AND an image drawing that Excel then "repaired". We keep this sheet
-  // comment-free (see the header note below), so a lone image is fine — this is
-  // the same embed the delinquent-hotels export uses without issue.
-  if (opts.logoUrl) {
-    const logo = await loadLogoForExcel(opts.logoUrl)
-    if (logo) {
-      const imgId = wb.addImage({ buffer: logo.buffer, extension: logo.extension })
-      ws.addImage(imgId, { tl: { col: 0.15, row: 0.12 }, ext: { width: 52, height: 52 } })
-    }
-  }
+  // NOTE: the client logo is intentionally NOT embedded as an image here.
+  // Field evidence (multiple travel managers) shows real Excel repairs any grid
+  // that carries the drawing part — the prompt names "Drawing from
+  // /xl/drawings/drawing1.xml part (Drawing shape)". Lenient validators
+  // (openpyxl, xmllint) accept the file, so it can't be verified safe in CI, and
+  // a "we had to repair this" prompt reads as possible malware to the team. Until
+  // an image embed can be proven clean in real Excel, the grid stays a single,
+  // drawing-free part and the branding is the text band above. (opts.logoUrl is
+  // accepted for signature compatibility but not embedded.)
 
   // ── Column header row (row 4; row 3 is a thin spacer) ──
   ws.getRow(3).height = 6

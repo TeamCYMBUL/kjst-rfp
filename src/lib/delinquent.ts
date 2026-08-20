@@ -6,7 +6,6 @@
 //   - the trip has a response deadline AND it's now past, OR
 //   - the trip has no deadline set AND it's been 3+ days since the invite went out.
 import { supabase } from './supabase'
-import { loadLogoForExcel } from './excelExport'
 
 const STALE_DAYS = 3
 
@@ -143,7 +142,12 @@ export async function exportDelinquentXlsx(report: DelinquentReport): Promise<vo
   const NCOL = COLS.length
 
   const wb = new ExcelJS.Workbook()
-  const ws = wb.addWorksheet('Delinquent Hotels', { views: [{ state: 'frozen', ySplit: 4 }] })
+  // pageSetup DPI pinned to avoid ExcelJS's 4294967295 (-1) overflow, which real
+  // Excel flags as needing "repair". See excelExport.ts for the full note.
+  const ws = wb.addWorksheet('Delinquent Hotels', {
+    views: [{ state: 'frozen', ySplit: 4 }],
+    pageSetup: { horizontalDpi: 300, verticalDpi: 300 },
+  })
   ws.columns = COLS.map((c) => ({ width: c.width }))
 
   const dateStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -161,11 +165,9 @@ export async function exportDelinquentXlsx(report: DelinquentReport): Promise<vo
   ws.getRow(1).height = 46
   ws.getRow(2).height = 18
 
-  const logo = client.logo_url ? await loadLogoForExcel(client.logo_url) : null
-  if (logo) {
-    const imgId = wb.addImage({ buffer: logo.buffer, extension: logo.extension })
-    ws.addImage(imgId, { tl: { col: 0.15, row: 0.12 }, ext: { width: 52, height: 52 } })
-  }
+  // Client logo intentionally not embedded: an image drawing part makes real
+  // Excel show its "repaired / Drawing shape" prompt. The text band above brands
+  // the sheet without a drawing. See excelExport.ts for the full note.
 
   ws.getRow(3).height = 6
   const headerRow = ws.getRow(4)

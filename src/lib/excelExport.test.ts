@@ -69,40 +69,26 @@ describe('buildConsolidatedWorkbook', () => {
     expect(found399).toBe(true)
   })
 
-  it('embeds a client logo as a single image with no cell comments (no Excel-repair)', async () => {
-    // A tiny valid 1x1 PNG.
-    const png = Uint8Array.from([
-      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
-      0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
-      0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
-      0x42, 0x60, 0x82,
-    ])
-    const orig = globalThis.fetch
-    ;(globalThis as any).fetch = async () => ({
-      ok: true,
-      headers: { get: () => 'image/png' },
-      arrayBuffer: async () => png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength),
+  it('stays drawing-free and comment-free even when a logoUrl is given (no Excel "repair")', async () => {
+    // Real Excel repairs any grid carrying an image drawing part ("Drawing shape")
+    // or a cell comment (legacy VML drawing). The grid must therefore contain
+    // NO images and NO comments regardless of logoUrl, so Excel opens it clean.
+    const { wb } = await buildConsolidatedWorkbook([city], 'Orlando Magic', {
+      logoUrl: 'https://example.com/logo.png',
     })
-    try {
-      const { wb } = await buildConsolidatedWorkbook([city], 'Orlando Magic', {
-        logoUrl: 'https://example.com/logo.png',
-      })
-      const ws = wb.worksheets[0]
-      // Exactly one embedded image (the logo).
-      expect(ws.getImages().length).toBe(1)
-      // No cell comments anywhere — a comment + image is what made ExcelJS emit a
-      // legacy VML drawing alongside the image drawing, which Excel then "repaired".
-      let hasComment = false
-      ws.eachRow((row: any) => row.eachCell((c: any) => { if (c.note) hasComment = true }))
-      expect(hasComment).toBe(false)
-      // Round-trips to a valid ZIP.
-      const buf = await wb.xlsx.writeBuffer()
-      const bytes = new Uint8Array(buf as ArrayBuffer)
-      expect(bytes[0]).toBe(0x50)
-      expect(bytes[1]).toBe(0x4b)
-    } finally {
-      globalThis.fetch = orig
-    }
+    const ws = wb.worksheets[0]
+    expect(ws.getImages().length).toBe(0)
+    let hasComment = false
+    ws.eachRow((row: any) => row.eachCell((c: any) => { if (c.note) hasComment = true }))
+    expect(hasComment).toBe(false)
+  })
+
+  it('pins a valid pageSetup DPI (no 4294967295 overflow that Excel repairs)', async () => {
+    const { wb } = await buildConsolidatedWorkbook([city], 'Indiana Pacers', { logoUrl: null })
+    const ws: any = wb.worksheets[0]
+    // ExcelJS writes -1 as unsignedInt 4294967295 in the XML unless a real DPI
+    // is set. Pinning it to 300 is what removes the overflow Excel repairs.
+    expect(ws.pageSetup.horizontalDpi).toBe(300)
+    expect(ws.pageSetup.verticalDpi).toBe(300)
   })
 })
