@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import ProtectedRoute from './auth/ProtectedRoute'
 import DashboardLayout from './components/DashboardLayout'
 import ErrorBoundary from './components/ErrorBoundary'
+import VersionGate from './components/VersionGate'
 import Login from './pages/Login'
 import ClientsList from './pages/clients/ClientsList'
 import ClientForm from './pages/clients/ClientForm'
@@ -29,6 +30,7 @@ import TimelinePage from './pages/timeline/TimelinePage'
 export default function App() {
   return (
     <ErrorBoundary>
+    <VersionGate />
     <Routes>
       {/* Public hotel-facing pages — no auth required */}
       <Route path="/rfp/:token" element={<RfpForm />} />
