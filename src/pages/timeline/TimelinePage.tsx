@@ -50,12 +50,21 @@ const EVENT_META: Record<TimelineEvent['event_type'], { icon: string; label: str
   client_deleted: { icon: '', label: 'Client deleted', danger: true },
 }
 
-function median(nums: number[]): number | null {
-  if (!nums.length) return null
-  const s = [...nums].sort((a, b) => a - b)
-  const mid = Math.floor(s.length / 2)
-  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2
+// Accurate lifecycle metrics computed server-side (get_lifecycle_metrics) over
+// the FULL dataset. The old client-side medians were derived from the timeline
+// feed, which is row-capped newest-first, so they only saw a recent slice and
+// badly under-reported. numeric columns arrive as strings from PostgREST.
+type LifecycleMetrics = {
+  setup_ms: number | string | null
+  send_ms: number | string | null
+  hotel_response_ms: number | string | null
+  award_ms: number | string | null
+  lifecycle_ms: number | string | null
+  outstanding_count: number | null
+  outstanding_oldest_days: number | null
 }
+const toMs = (x: number | string | null | undefined): number | null =>
+  x == null ? null : Number.isFinite(Number(x)) ? Number(x) : null
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -172,54 +181,6 @@ function sendAnchor(c: TripCycle, goLive: number | null): number | null {
   return c.firstHotelAdded
 }
 
-// Hotel response latency (invite_sent -> bid_received), paired by trip + hotel.
-// This is the hotel's clock, not KJST's — reported separately, never against KJST.
-function hotelResponseDurations(events: TimelineEvent[]): number[] {
-  const invitedAt = new Map<string, number>()
-  const out: number[] = []
-  const key = (e: TimelineEvent) => `${e.trip_id}::${(e.hotel_name || '').toLowerCase()}`
-  for (const e of events) {
-    if (e.event_type === 'invite_sent' && e.trip_id && e.hotel_name) {
-      const k = key(e)
-      const at = t(e.at)
-      if (!invitedAt.has(k) || at < invitedAt.get(k)!) invitedAt.set(k, at)
-    }
-  }
-  for (const e of events) {
-    if (e.event_type === 'bid_received' && e.trip_id && e.hotel_name) {
-      const inv = invitedAt.get(key(e))
-      if (inv !== undefined) out.push(t(e.at) - inv)
-    }
-  }
-  return out
-}
-
-// Hotels invited but with no bid and no decline yet — the outstanding worklist.
-function outstanding(events: TimelineEvent[]): { count: number; oldestDays: number | null } {
-  const invited = new Map<string, { at: number; team: string | null; city: string | null }>()
-  const resolved = new Set<string>()
-  const key = (e: TimelineEvent) => `${e.trip_id}::${(e.hotel_name || '').toLowerCase()}`
-  for (const e of events) {
-    if (!e.trip_id || !e.hotel_name) continue
-    if (e.event_type === 'invite_sent') {
-      const k = key(e)
-      const at = t(e.at)
-      if (!invited.has(k) || at < invited.get(k)!.at) invited.set(k, { at, team: e.team_name, city: e.city })
-    } else if (e.event_type === 'bid_received' || e.event_type === 'bid_declined') {
-      resolved.add(key(e))
-    }
-  }
-  let count = 0
-  let oldest: number | null = null
-  for (const [k, v] of invited) {
-    if (resolved.has(k)) continue
-    count++
-    const days = Math.floor((Date.now() - v.at) / 86400000)
-    if (oldest === null || days > oldest) oldest = days
-  }
-  return { count, oldestDays: oldest }
-}
-
 function Tile({ value, label, sublabel, tone = 'ink' }: {
   value: string
   label: string
@@ -283,37 +244,20 @@ export default function TimelinePage() {
       })
   }, [allowed, clientId])
 
+  // Headline cycle-time tiles come from the server (full dataset), NOT the
+  // row-capped event feed above — otherwise the medians only reflect recent days.
+  const [m, setM] = useState<LifecycleMetrics | null>(null)
+  useEffect(() => {
+    if (!allowed) return
+    supabase
+      .rpc('get_lifecycle_metrics', { p_client_id: clientId || null })
+      .then(({ data }) => setM((data?.[0] ?? null) as LifecycleMetrics | null))
+  }, [allowed, clientId])
+
   // Show the full activity log (past the default cap) when the operator asks.
   const [showAll, setShowAll] = useState(false)
 
   const cycles = useMemo(() => buildCycles(events), [events])
-
-  const metrics = useMemo(() => {
-    const span = (a: number | null, b: number | null) => (a !== null && b !== null && b >= a ? b - a : null)
-    const setup: number[] = []      // trip created/imported → first hotel added
-    const send: number[] = []       // first hotel added → first invite emailed
-    const award: number[] = []      // last bid received → hotel awarded
-    const lifecycle: number[] = []  // start → proposal sent (full lifecycle)
-    for (const c of cycles) {
-      const su = span(c.start, c.firstHotelAdded)
-      const sd = span(sendAnchor(c, goLive), c.firstInvite)
-      const aw = span(c.lastBid, c.awarded)
-      if (su !== null) setup.push(su)
-      if (sd !== null) send.push(sd)
-      if (aw !== null) award.push(aw)
-      const lc = span(c.start, c.proposalSent)
-      if (lc !== null) lifecycle.push(lc)
-    }
-    return {
-      setup: median(setup),
-      send: median(send),
-      award: median(award),
-      lifecycle: median(lifecycle),
-      hotelResponse: median(hotelResponseDurations(events)),
-    }
-  }, [cycles, events, goLive])
-
-  const out = useMemo(() => outstanding(events), [events])
 
   const feed = useMemo(
     () => events.filter((e) => typeFilter.has(e.event_type)),
@@ -382,9 +326,9 @@ export default function TimelinePage() {
               KJST cycle time <span className="font-normal text-slate-400">(median, what KJST controls)</span>
             </h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-              <Tile value={dur(metrics.setup)} label="Set up hotels" sublabel="trip created → first hotel added" />
-              <Tile value={dur(metrics.send)} label="Send bids" sublabel="first hotel added → first invite" />
-              <Tile value={dur(metrics.award)} label="Award" sublabel="last bid → hotel awarded" />
+              <Tile value={dur(toMs(m?.setup_ms))} label="Set up hotels" sublabel="trip created → first hotel added" />
+              <Tile value={dur(toMs(m?.send_ms))} label="Send bids" sublabel="first hotel added → first invite" />
+              <Tile value={dur(toMs(m?.award_ms))} label="Award" sublabel="last bid → hotel awarded" />
             </div>
           </div>
 
@@ -394,14 +338,14 @@ export default function TimelinePage() {
               Hotel response <span className="font-normal text-slate-400">(hotel&apos;s clock, once the invite is out)</span>
             </h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <Tile value={dur(metrics.hotelResponse)} label="Median hotel response" sublabel="invite → bid received" tone="muted" />
+              <Tile value={dur(toMs(m?.hotel_response_ms))} label="Median hotel response" sublabel="invite → bid received" tone="muted" />
               <Tile
-                value={String(out.count)}
+                value={String(m?.outstanding_count ?? 0)}
                 label="Outstanding"
-                sublabel={out.oldestDays !== null ? `oldest ${out.oldestDays}d waiting` : 'invited, no bid yet'}
-                tone={out.count > 0 ? 'warn' : 'muted'}
+                sublabel={m?.outstanding_oldest_days != null ? `oldest ${m.outstanding_oldest_days}d waiting` : 'invited, no bid yet'}
+                tone={(m?.outstanding_count ?? 0) > 0 ? 'warn' : 'muted'}
               />
-              <Tile value={dur(metrics.lifecycle)} label="Total lifecycle" sublabel="import → proposal (incl. hotel wait)" tone="muted" />
+              <Tile value={dur(toMs(m?.lifecycle_ms))} label="Total lifecycle" sublabel="trip created → awarded" tone="muted" />
             </div>
           </div>
 
