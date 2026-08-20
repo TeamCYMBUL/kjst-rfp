@@ -1,0 +1,20 @@
+name: CI
+
+# Runs on every push and PR. This is a check only — it never deploys or touches
+# the live site. A failure shows as a red check on the commit/PR.
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build

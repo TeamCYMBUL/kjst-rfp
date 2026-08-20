@@ -48,7 +48,7 @@ export type CommissionSummary = {
 }
 
 /** Pull the leading numeric value out of free text ("7%", "$269", "10.5") → number | null. */
-function num(v: unknown): number | null {
+export function num(v: unknown): number | null {
   if (v == null) return null
   const n = parseFloat(String(v).replace(/[^0-9.]/g, ''))
   return isFinite(n) ? n : null
@@ -58,13 +58,13 @@ function num(v: unknown): number | null {
 // "99999999" (a property flagging no availability), not a real price. Excluding
 // it keeps one junk bid from blowing up revenue and the opportunity average.
 const MAX_SANE_RATE = 20000
-function saneRate(v: unknown): number | null {
+export function saneRate(v: unknown): number | null {
   const n = num(v)
   return n != null && n > 0 && n <= MAX_SANE_RATE ? n : null
 }
 
 /** Nights between two ISO dates; 1 when missing/invalid (mirrors excelExport.calcNights). */
-function nightsBetween(a: string | null | undefined, b: string | null | undefined): number {
+export function nightsBetween(a: string | null | undefined, b: string | null | undefined): number {
   if (!a || !b) return 1
   const n = Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000)
   return n > 0 ? n : 1

@@ -27,7 +27,7 @@ const isSuiteUpgradeItem = (label: unknown): boolean => normLabel(label).include
  * The old parser read only the leading percentage and silently dropped the "+ $5"
  * flat fee, understating the all-in total. Returns { pct: 0.169, flat: 5 }.
  */
-function parseTaxComponents(raw: string | null | undefined): { pct: number; flat: number } {
+export function parseTaxComponents(raw: string | null | undefined): { pct: number; flat: number } {
   if (raw == null) return { pct: 0, flat: 0 }
   const s = raw.trim()
   // Flat dollar add-on, e.g. "$5", "$3.50" — treated as per room, per night.
@@ -50,7 +50,7 @@ function parseTaxComponents(raw: string | null | undefined): { pct: number; flat
 }
 
 /** Number of nights between two ISO date strings. Returns 1 if inputs are missing/invalid. */
-function calcNights(arrival: string | null | undefined, departure: string | null | undefined): number {
+export function calcNights(arrival: string | null | undefined, departure: string | null | undefined): number {
   if (!arrival || !departure) return 1
   const ms = new Date(departure).getTime() - new Date(arrival).getTime()
   const nights = Math.round(ms / 86_400_000)
