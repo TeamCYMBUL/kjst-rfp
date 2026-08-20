@@ -91,4 +91,32 @@ describe('buildConsolidatedWorkbook', () => {
     expect(ws.pageSetup.horizontalDpi).toBe(300)
     expect(ws.pageSetup.verticalDpi).toBe(300)
   })
+
+  it('shows Suite Upgrade for teams that store it as Yes/No (Magic, Sharks)', async () => {
+    const suiteItem = {
+      id: 'itm-upg',
+      label: '(4) One-Bedroom Suite Upgrades at group/King rate — must for this team',
+      answer_type: 'yes_no',
+      requested_value: '4 (Team Hot Button)',
+      section: null,
+    }
+    const yesNoCity: ConsolidatedCity = {
+      trip: { city: 'Orlando', opponent_label: 'Orlando Magic', arrival_date: '2026-11-10',
+        departure_date: '2026-11-12', game_date: '2026-11-11', total_rooms_requested: 40 },
+      hotels: [{
+        hotel_name: 'Test Hotel', status: 'submitted', staff_notes: null,
+        awarded_stay1: false, awarded_stay2: false, visit1_declined: false, visit1_decline_reason: null,
+        visit2_declined: false, visit2_decline_reason: null, best_king_rate: 300, best_suite_rate: 800,
+        current_selling_rate: null, occupancy_tax: null, resort_fee: null, standard_checkin_time: null,
+        general_comments: null, meeting_space_type: null, meeting_space_count: null,
+        answers: { 'itm-upg': { answer_yes_no: true, answer_value: null } },
+      }],
+      items: [suiteItem],
+    } as any
+    const { wb } = await buildConsolidatedWorkbook([yesNoCity], 'Orlando Magic', { logoUrl: null })
+    const ws = wb.worksheets[0]
+    let foundYes = false
+    ws.eachRow((row: any) => row.eachCell((c: any) => { if (c.value === 'Yes') foundYes = true }))
+    expect(foundYes).toBe(true) // was blank before the yes/no fix
+  })
 })

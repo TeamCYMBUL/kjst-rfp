@@ -19,6 +19,33 @@ const normLabel = (s: unknown): string => String(s ?? '').toLowerCase().replace(
 const isCompSuiteItem = (label: unknown): boolean => normLabel(label).includes('complimentaryonebedroomsuite')
 const isSuiteUpgradeItem = (label: unknown): boolean => normLabel(label).includes('suiteupgrade')
 
+// Pull the first integer out of a concession item's requested_value/label, e.g.
+// "4 (Team Hot Button)" or "(4) One-Bedroom Suite Upgrades…" → 4.
+const parseRequestedCount = (item: any): number | null => {
+  const m = `${item?.requested_value ?? ''} ${item?.label ?? ''}`.match(/\d+/)
+  return m ? Number(m[0]) : null
+}
+
+// Universal reader for a "suite upgrade" answer, matching the web's
+// suiteAnswerView so the grid/exports show exactly what staff see on the trip
+// page. Some teams (e.g. Magic, Sharks) store this as Yes/No while most store a
+// quantity — and one team's item is even typed 'quantity' but answered Yes/No.
+// Keying off the ANSWER shape (not the item type) makes every client resolve the
+// same way: a Yes shows "Yes" and, for cost math, counts as the requested
+// quantity; a number shows/counts as itself; no answer is blank/0.
+const readSuiteUpgrade = (
+  item: any,
+  ans: { answer_yes_no?: boolean | null; answer_value?: string | null } | null | undefined,
+): { display: string | number | null; count: number } => {
+  if (!ans) return { display: null, count: 0 }
+  if (ans.answer_yes_no != null) {
+    return { display: ans.answer_yes_no ? 'Yes' : 'No', count: ans.answer_yes_no ? (parseRequestedCount(item) ?? 0) : 0 }
+  }
+  const n = Number(ans.answer_value)
+  if (ans.answer_value != null && ans.answer_value !== '' && Number.isFinite(n)) return { display: n, count: n }
+  return { display: null, count: 0 }
+}
+
 // ── Revenue helpers ───────────────────────────────────────────────────────────
 
 /**
@@ -392,8 +419,8 @@ export function exportTeamGrid(
       resp?.best_king_rate != null ? resp.best_king_rate : '—',
       resp?.resort_fee ?? '—',
       resp?.occupancy_tax ?? '—',
-      compAns?.answer_value ?? '—',
-      upgAns?.answer_value ?? '—',
+      compAns?.answer_value ?? (compAns?.answer_yes_no === true ? 'Yes' : compAns?.answer_yes_no === false ? 'No' : '—'),
+      readSuiteUpgrade(suiteUpgItem, upgAns).display ?? '—',
       playoffAns?.answer_yes_no === true ? 'Yes' : playoffAns?.answer_yes_no === false ? 'No' : '—',
       mtgDisplay,
       noteFragments.join('; '),
@@ -901,7 +928,9 @@ export async function buildConsolidatedWorkbook(
     const compSuites = compAns?.answer_value ? Number(compAns.answer_value) : compAns?.answer_yes_no === true ? 1 : 0
     const upgItem = items.find((i) => isSuiteUpgradeItem(i.label))
     const upgAns = upgItem ? h.answers[upgItem.id] : undefined
-    const suiteUpgrades = upgAns?.answer_value ? Number(upgAns.answer_value) : 0
+    // Count Yes/No teams' upgrades as the requested quantity so room-cost math
+    // is correct for every client, not just the ones that store a number.
+    const suiteUpgrades = readSuiteUpgrade(upgItem, upgAns).count
     const totalRooms = trip.total_rooms_requested ?? null
     // ONE room-cost formula (roomBlockTotal) governs every team so the math is
     // identical across the board: comped suites free, suite upgrades + kings at
@@ -1065,7 +1094,7 @@ export async function buildConsolidatedWorkbook(
         const upgAns = suiteUpgItem ? h.answers[suiteUpgItem.id] : undefined
         const playoffAns = playoffItem ? h.answers[playoffItem.id] : undefined
         const compSuites = compAns?.answer_value ? Number(compAns.answer_value) : compAns?.answer_yes_no === true ? 1 : 0
-        const suiteUg = upgAns?.answer_value ? Number(upgAns.answer_value) : null
+        const suiteUg = readSuiteUpgrade(suiteUpgItem, upgAns).display
         const postGte = playoffAns?.answer_yes_no === true ? 'YES' : playoffAns?.answer_yes_no === false ? 'NO' : ''
 
         const reason = visit.index === 1 ? h.visit1_decline_reason : h.visit2_decline_reason
@@ -1090,7 +1119,7 @@ export async function buildConsolidatedWorkbook(
             case 'hotel': return h.hotel_name.replace(/\n/g, ' ').trim()
             case 'rate': return bid ? kingRate ?? null : null
             case 'comp_suite': return bid && Number.isFinite(compSuites) && compSuites > 0 ? compSuites : null
-            case 'suite_ug': return bid && suiteUg != null && Number.isFinite(suiteUg) ? suiteUg : null
+            case 'suite_ug': return bid ? (suiteUg ?? null) : null
             case 'postseason': return bid ? postGte : ''
             case 'notes': return noteFrags.join('\n')
           }
