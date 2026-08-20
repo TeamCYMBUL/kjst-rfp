@@ -184,24 +184,28 @@ export default function ClientProposalsPrint() {
           tripsWithBids.map((trip, ti) => {
             const tripInvs = invitations.filter((inv) => inv.trip_id === trip.id)
             const isLastTrip = ti === tripsWithBids.length - 1
+            const subtitle = `Hotel Proposals — ${awardedMode ? 'Selected (Awarded) Hotels' : newMode ? 'New Since Last Print' : 'Full Copy'}`
+            // The trip info header repeats above EACH hotel's offer (not just once
+            // per city) so every hotel's page carries its own trip context.
             return (
-              <div key={trip.id} style={!isLastTrip ? { pageBreakAfter: 'always' } : undefined}>
-                <TripHeader
-                  trip={trip}
-                  subtitle={`Hotel Proposals — ${awardedMode ? 'Selected (Awarded) Hotels' : newMode ? 'New Since Last Print' : 'Full Copy'}`}
-                />
-                {tripInvs.map((inv, hi) => (
-                  <HotelFull
-                    key={inv.id}
-                    inv={inv}
-                    resp={responses.find((r) => r.invitation_id === inv.id) ?? null}
-                    answers={answers}
-                    concessionItems={concessionItems}
-                    pageBreak={hi !== tripInvs.length - 1}
-                    trip={trip}
-                  />
-                ))}
-                {ProposalFooter}
+              <div key={trip.id}>
+                {tripInvs.map((inv, hi) => {
+                  const isLastHotel = isLastTrip && hi === tripInvs.length - 1
+                  return (
+                    <div key={inv.id} style={!isLastHotel ? { pageBreakAfter: 'always' } : undefined}>
+                      <TripHeader trip={trip} subtitle={subtitle} />
+                      <HotelFull
+                        inv={inv}
+                        resp={responses.find((r) => r.invitation_id === inv.id) ?? null}
+                        answers={answers}
+                        concessionItems={concessionItems}
+                        pageBreak={false}
+                        trip={trip}
+                      />
+                      {ProposalFooter}
+                    </div>
+                  )
+                })}
               </div>
             )
           })

@@ -173,25 +173,31 @@ export default function ProposalPrint() {
         {PrintStyles}
         {PrintControls}
         <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 900, margin: '0 auto', padding: '0 24px 48px' }}>
-          <TripHeader trip={trip} subtitle="Hotel Proposal — Full Copy" />
-          {(allHotelsMode || newMode) && invitations.length === 0 ? (
-            <div style={{ border: '1px solid #e2e8f0', borderTop: 'none', padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>
-              {newMode ? 'No new proposals since your last print.' : 'No submitted bids yet.'}
-            </div>
+          {invitations.length === 0 ? (
+            <>
+              <TripHeader trip={trip} subtitle="Hotel Proposal — Full Copy" />
+              <div style={{ border: '1px solid #e2e8f0', borderTop: 'none', padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>
+                {newMode ? 'No new proposals since your last print.' : 'No submitted bids yet.'}
+              </div>
+              {ProposalFooter}
+            </>
           ) : (
+            // Trip info header repeats above each hotel's offer.
             invitations.map((inv, i) => (
-              <HotelFull
-                key={inv.id}
-                inv={inv}
-                resp={responses.find((r) => r.invitation_id === inv.id) ?? null}
-                answers={answers}
-                concessionItems={concessionItems}
-                pageBreak={allHotelsMode && i !== invitations.length - 1}
-                trip={trip}
-              />
+              <div key={inv.id} style={i !== invitations.length - 1 ? { pageBreakAfter: 'always' } : undefined}>
+                <TripHeader trip={trip} subtitle="Hotel Proposal — Full Copy" />
+                <HotelFull
+                  inv={inv}
+                  resp={responses.find((r) => r.invitation_id === inv.id) ?? null}
+                  answers={answers}
+                  concessionItems={concessionItems}
+                  pageBreak={false}
+                  trip={trip}
+                />
+                {ProposalFooter}
+              </div>
             ))
           )}
-          {ProposalFooter}
         </div>
       </>
     )

@@ -291,19 +291,26 @@ function docShell(children: (Paragraph | Table)[]): Document {
 /** Full-copy proposal doc: trip groups, each with a header + every hotel's write-up. */
 export function buildProposalDoc(input: { subtitle: string; groups: { trip: DocxTrip; hotels: DocxHotel[] }[] }): Document {
   const children: (Paragraph | Table)[] = []
-  input.groups.forEach((g, gi) => {
-    if (gi > 0) children.push(pageBreakPara())
-    children.push(bandTable('KJ SPORTS TRAVEL', input.subtitle))
-    children.push(tripHeaderTable(g.trip))
+  // The band + trip info header repeats above EACH hotel's offer (each hotel on
+  // its own page), so every hotel's write-up carries its own trip context.
+  let firstPage = true
+  const newPage = () => { if (!firstPage) children.push(pageBreakPara()); firstPage = false }
+  input.groups.forEach((g) => {
     if (g.hotels.length === 0) {
+      newPage()
+      children.push(bandTable('KJ SPORTS TRAVEL', input.subtitle))
+      children.push(tripHeaderTable(g.trip))
       children.push(new Paragraph({ spacing: { before: 160 }, children: [new TextRun({ text: 'No submitted bids yet.', italics: true, font: BODY, size: 20, color: '94A3B8' })] }))
+      children.push(footerPara())
     } else {
-      g.hotels.forEach((h, hi) => {
-        if (hi > 0) children.push(pageBreakPara())
+      g.hotels.forEach((h) => {
+        newPage()
+        children.push(bandTable('KJ SPORTS TRAVEL', input.subtitle))
+        children.push(tripHeaderTable(g.trip))
         hotelBlock(h, g.trip).forEach((c) => children.push(c))
+        children.push(footerPara())
       })
     }
-    children.push(footerPara())
   })
   return docShell(children)
 }
