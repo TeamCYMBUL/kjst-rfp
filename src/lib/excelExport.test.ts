@@ -129,6 +129,40 @@ describe('buildConsolidatedWorkbook', () => {
   })
 })
 
+describe('non-finite cell guard (the real "we found a problem" cause)', () => {
+  it('never writes NaN/Infinity when free-text tax/fee has a comma before digits', async () => {
+    // "charge now, which ... 1.5%" — the lone comma used to match firstNum's
+    // [\d,]+ regex, strip to "", and produce parseFloat("")=NaN, poisoning the
+    // Taxes & Fees / Total / Est. Cost columns with NaN (which Excel repairs).
+    const taxCity: ConsolidatedCity = {
+      trip: { city: 'Chicago', opponent_label: 'Chicago Bulls', arrival_date: '2026-12-01',
+        departure_date: '2026-12-03', game_date: '2026-12-02', total_rooms_requested: 50,
+        king_rooms_requested: 45, suites_requested: 5 },
+      hotels: [{
+        hotel_name: 'Peninsula', status: 'submitted', staff_notes: null,
+        awarded_stay1: false, awarded_stay2: false, visit1_declined: false, visit1_decline_reason: null,
+        visit2_declined: false, visit2_decline_reason: null, best_king_rate: 380, best_suite_rate: 900,
+        current_selling_rate: null, occupancy_tax: '17.4%',
+        resort_fee: 'We have a Chicago Fee we have to charge now, which is called Tourism Improvement Fee- 1.5%',
+        standard_checkin_time: null, general_comments: null, meeting_space_type: null, meeting_space_count: null,
+        answers: {},
+      }],
+      items: [],
+    } as any
+    const gridColumns = [
+      { type: 'system', key: 'taxes_fees', label: 'Taxes & Fees', width: 12 },
+      { type: 'system', key: 'total_per_night', label: 'Total / Night', width: 12 },
+      { type: 'system', key: 'est_total_cost', label: 'Est. Total Cost', width: 12 },
+    ] as any
+    const { wb } = await buildConsolidatedWorkbook([taxCity], 'Chicago Bulls', { logoUrl: null, gridColumns })
+    let nonFinite = 0
+    wb.worksheets[0].eachRow((row: any) => row.eachCell((c: any) => {
+      if (typeof c.value === 'number' && !Number.isFinite(c.value)) nonFinite++
+    }))
+    expect(nonFinite).toBe(0)
+  })
+})
+
 describe('sanitizeDrawingXfrm (Excel-safe logo drawing)', () => {
   const PNG = Uint8Array.from([
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,

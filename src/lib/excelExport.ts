@@ -866,8 +866,15 @@ export async function buildConsolidatedWorkbook(
   }
   // ── Custom grid column plumbing ──
   const firstNum = (s: any): number | null => {
-    const m = String(s ?? '').match(/[\d,]+(\.\d+)?/)
-    return m ? parseFloat(m[0].replace(/,/g, '')) : null
+    // Must START with a digit — a bare comma from free text (e.g. "charge now,
+    // which…") otherwise matched, stripped to "" and gave parseFloat("") = NaN,
+    // which then poisoned tax/fee math and wrote NaN into cells (Excel repairs
+    // those). Guard the parsed result too, so this can only ever return a finite
+    // number or null.
+    const m = String(s ?? '').match(/\d[\d,]*(?:\.\d+)?/)
+    if (!m) return null
+    const n = parseFloat(m[0].replace(/,/g, ''))
+    return Number.isFinite(n) ? n : null
   }
   // Best-effort parse of the free-text tax/fee fields into a % and a $/night fee.
   // Rules chosen to be MORE accurate without ever guessing wildly high:
@@ -1176,6 +1183,9 @@ export async function buildConsolidatedWorkbook(
         vals.forEach((v, i) => {
           const spec = layoutSpecs[i]
           const cell = row.getCell(i + 1)
+          // Universal guard: Excel repairs a cell holding NaN/Infinity. A blank
+          // is the correct output for a value that couldn't be computed.
+          if (typeof v === 'number' && !Number.isFinite(v)) v = null
           cell.value = v as any
           cell.font = struck
             ? { name: 'Arial', size: 10, color: { argb: RED }, strike: true }
