@@ -39,7 +39,13 @@ const readSuiteUpgrade = (
 ): { display: string | number | null; count: number } => {
   if (!ans) return { display: null, count: 0 }
   if (ans.answer_yes_no != null) {
-    return { display: ans.answer_yes_no ? 'Yes' : 'No', count: ans.answer_yes_no ? (parseRequestedCount(item) ?? 0) : 0 }
+    // Yes/No teams: show the NUMBER the question asks for (the requested count,
+    // e.g. "(4) suite upgrades" -> 4) so the column reads the same as the teams
+    // that store a quantity. A Yes honors that count; a No is 0. Fall back to
+    // "Yes" only if no number can be parsed (shouldn't happen with current data).
+    const reqN = parseRequestedCount(item)
+    if (ans.answer_yes_no) return { display: reqN ?? 'Yes', count: reqN ?? 0 }
+    return { display: 0, count: 0 }
   }
   const n = Number(ans.answer_value)
   if (ans.answer_value != null && ans.answer_value !== '' && Number.isFinite(n)) return { display: n, count: n }

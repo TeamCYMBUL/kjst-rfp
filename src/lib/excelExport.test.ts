@@ -115,8 +115,10 @@ describe('buildConsolidatedWorkbook', () => {
     } as any
     const { wb } = await buildConsolidatedWorkbook([yesNoCity], 'Orlando Magic', { logoUrl: null })
     const ws = wb.worksheets[0]
-    let foundYes = false
-    ws.eachRow((row: any) => row.eachCell((c: any) => { if (c.value === 'Yes') foundYes = true }))
-    expect(foundYes).toBe(true) // was blank before the yes/no fix
+    // A Yes to a "(4) suite upgrades" question shows the number 4 (was blank
+    // before the fix), matching how quantity-storing teams display the column.
+    let found4 = false
+    ws.eachRow((row: any) => row.eachCell((c: any) => { if (c.value === 4) found4 = true }))
+    expect(found4).toBe(true)
   })
 })
