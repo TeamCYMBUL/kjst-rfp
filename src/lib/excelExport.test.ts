@@ -68,4 +68,41 @@ describe('buildConsolidatedWorkbook', () => {
     expect(found325).toBe(true)
     expect(found399).toBe(true)
   })
+
+  it('embeds a client logo as a single image with no cell comments (no Excel-repair)', async () => {
+    // A tiny valid 1x1 PNG.
+    const png = Uint8Array.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+      0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+      0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+      0x42, 0x60, 0x82,
+    ])
+    const orig = globalThis.fetch
+    ;(globalThis as any).fetch = async () => ({
+      ok: true,
+      headers: { get: () => 'image/png' },
+      arrayBuffer: async () => png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength),
+    })
+    try {
+      const { wb } = await buildConsolidatedWorkbook([city], 'Orlando Magic', {
+        logoUrl: 'https://example.com/logo.png',
+      })
+      const ws = wb.worksheets[0]
+      // Exactly one embedded image (the logo).
+      expect(ws.getImages().length).toBe(1)
+      // No cell comments anywhere — a comment + image is what made ExcelJS emit a
+      // legacy VML drawing alongside the image drawing, which Excel then "repaired".
+      let hasComment = false
+      ws.eachRow((row: any) => row.eachCell((c: any) => { if (c.note) hasComment = true }))
+      expect(hasComment).toBe(false)
+      // Round-trips to a valid ZIP.
+      const buf = await wb.xlsx.writeBuffer()
+      const bytes = new Uint8Array(buf as ArrayBuffer)
+      expect(bytes[0]).toBe(0x50)
+      expect(bytes[1]).toBe(0x4b)
+    } finally {
+      globalThis.fetch = orig
+    }
+  })
 })

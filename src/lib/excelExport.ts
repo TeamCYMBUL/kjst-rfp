@@ -607,20 +607,41 @@ export type GridColumnSpec =
 export async function loadLogoForExcel(
   url: string,
 ): Promise<{ buffer: Uint8Array; extension: 'png' | 'jpeg' | 'gif' } | null> {
-  try {
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const ct = (res.headers.get('content-type') ?? '').toLowerCase()
-    const urlExt = url.split('.').pop()?.toLowerCase() ?? ''
-    let extension: 'png' | 'jpeg' | 'gif' | null = null
-    if (ct.includes('png') || urlExt === 'png') extension = 'png'
-    else if (ct.includes('jpeg') || ct.includes('jpg') || urlExt === 'jpg' || urlExt === 'jpeg') extension = 'jpeg'
-    else if (ct.includes('gif') || urlExt === 'gif') extension = 'gif'
-    if (!extension) return null // svg/webp/unknown → text-only fallback
-    const buf = await res.arrayBuffer()
-    return { buffer: new Uint8Array(buf), extension }
-  } catch {
+  // Sniff the real image type from the first bytes so a mislabeled response
+  // (e.g. an HTML error page served with a 200) can never be embedded — an
+  // embedded non-image is exactly what makes Excel flag the file as corrupt.
+  const sniff = (b: Uint8Array): 'png' | 'jpeg' | 'gif' | null => {
+    if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'png'
+    if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'jpeg'
+    if (b.length >= 6 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'gif' // "GIF"
     return null
+  }
+  try {
+    // Bound the fetch so a slow/hung logo host can't stall (or silently swallow)
+    // the whole export — that was the "first click does nothing" symptom.
+    const ac = new AbortController()
+    const timer = setTimeout(() => ac.abort(), 6000)
+    let res: Response
+    try {
+      res = await fetch(url, { signal: ac.signal })
+    } finally {
+      clearTimeout(timer)
+    }
+    if (!res.ok) return null
+    const buf = new Uint8Array(await res.arrayBuffer())
+    // Magic bytes are authoritative; content-type/extension are only a fallback.
+    let extension = sniff(buf)
+    if (!extension) {
+      const ct = (res.headers.get('content-type') ?? '').toLowerCase()
+      const urlExt = url.split('.').pop()?.toLowerCase() ?? ''
+      if (ct.includes('png') || urlExt === 'png') extension = 'png'
+      else if (ct.includes('jpeg') || ct.includes('jpg') || urlExt === 'jpg' || urlExt === 'jpeg') extension = 'jpeg'
+      else if (ct.includes('gif') || urlExt === 'gif') extension = 'gif'
+    }
+    if (!extension || buf.length === 0) return null // svg/webp/unknown/empty → text-only fallback
+    return { buffer: buf, extension }
+  } catch {
+    return null // includes AbortError on timeout → text-only fallback
   }
 }
 
@@ -733,12 +754,20 @@ export async function buildConsolidatedWorkbook(
   ws.getRow(1).height = 46
   ws.getRow(2).height = 18
 
-  // NOTE: the client logo image is intentionally NOT embedded. An embedded image
-  // made ExcelJS write a drawing part that Excel flagged as needing "repair" (the
-  // scary corruption prompt), and the logo fetch could also fail on the first
-  // click so nothing downloaded. The branded text header above is enough; the
-  // grid is now a clean, single-part workbook with no drawings. (opts.logoUrl is
-  // accepted but unused, kept for signature compatibility.)
+  // ── Client logo (top-left of the branding band) ──
+  // Safe to embed as long as the sheet has NO cell comments (.note): an image
+  // alone produces a single, valid drawing part. The corruption people saw came
+  // from a cell comment + image together, which made ExcelJS emit a legacy VML
+  // drawing AND an image drawing that Excel then "repaired". We keep this sheet
+  // comment-free (see the header note below), so a lone image is fine — this is
+  // the same embed the delinquent-hotels export uses without issue.
+  if (opts.logoUrl) {
+    const logo = await loadLogoForExcel(opts.logoUrl)
+    if (logo) {
+      const imgId = wb.addImage({ buffer: logo.buffer, extension: logo.extension })
+      ws.addImage(imgId, { tl: { col: 0.15, row: 0.12 }, ext: { width: 52, height: 52 } })
+    }
+  }
 
   // ── Column header row (row 4; row 3 is a thin spacer) ──
   ws.getRow(3).height = 6
