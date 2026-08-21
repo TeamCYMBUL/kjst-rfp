@@ -208,8 +208,7 @@ function buildInviteHtml(p: {
         <p style="margin:0 0 16px;font-size:15px;color:#1e293b">Greetings,</p>
         <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6">I hope this email finds you well.</p>
         <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6">
-          We are reaching out on behalf of the <strong>${teamName}</strong> to request pricing and availability
-          for the ${seasonLabel} season. Please use the link below to view specific dates and requirements and submit your response.
+          We are reaching out on behalf of the <strong>${teamName}</strong> to request pricing and availability${isSponsorBlock ? '.' : ` for the ${seasonLabel} season.`} Please use the link below to view specific dates and requirements and submit your response.
         </p>
         <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:24px">
           <tr><td style="padding:20px 24px">

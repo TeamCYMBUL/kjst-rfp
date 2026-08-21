@@ -1628,7 +1628,7 @@ export default function RfpForm() {
           <h1 className="text-xl font-bold text-slate-900">Thank you!</h1>
           <p className="mt-2 text-sm text-slate-600">
             Your bid for <strong>{data.invitation.hotel_name}</strong> on the{' '}
-            <strong>{trip.clients.team_name}</strong> trip to{' '}
+            <strong>{publicClientName(trip.clients.team_name)}</strong> trip to{' '}
             <strong>{trip.city || trip.opponent_label}</strong> has been received.
           </p>
           <p className="mt-3 text-xs text-slate-400">
@@ -1649,7 +1649,7 @@ export default function RfpForm() {
           <p className="mt-2 text-sm text-slate-600">
             Thank you for letting us know. We've noted that{' '}
             <strong>{data.invitation.hotel_name}</strong> is unable to bid on the{' '}
-            <strong>{trip.clients.team_name}</strong> trip to{' '}
+            <strong>{publicClientName(trip.clients.team_name)}</strong> trip to{' '}
             <strong>{trip.city || trip.opponent_label}</strong>.
           </p>
           <p className="mt-3 text-xs text-slate-400">
