@@ -1691,6 +1691,12 @@ export default function RfpForm() {
   const meetingSpaceYesNoItems = allConcessionItems.filter(isMeetingSpaceYesNoItem)
   const meetingSpaceExtraItems = allConcessionItems.filter(isMeetingSpaceExtraItem)
   const namedFunctionSpaceItems = allConcessionItems.filter(isNamedFunctionSpaceItem)
+  // "Simple" meeting-space mode (sponsor-block stays): hide the full meeting-space
+  // box (per-room details + "additional spaces" count) and ask only a plain Yes/No
+  // "does the hotel offer complimentary function space?" — informational, not a
+  // deal-breaker. Toggled per client via default_terms.meeting_space_mode.
+  const simpleFunctionSpace =
+    (data.invitation.trips.clients.default_terms as any)?.meeting_space_mode === 'simple'
   const postseasonItems = data.items.filter((i) => i.section === 'postseason')
   const inSeasonItems = data.items.filter((i) => i.section === 'in_season_tournament')
 
@@ -1968,7 +1974,8 @@ export default function RfpForm() {
             </div>
           )}
 
-          {/* ── Section 4: Meeting Space ─── */}
+          {/* ── Section 4: Meeting Space ─── (hidden in simple/sponsor-block mode) */}
+          {!simpleFunctionSpace && (
           <div className="rounded-xl border border-slate-200 bg-white p-6">
             <SectionHeading>Meeting Space</SectionHeading>
             {data.invitation.trips.clients.default_terms?.default_meeting_spaces && (
@@ -2174,6 +2181,7 @@ export default function RfpForm() {
               ))}
             </div>
           </div>
+          )}
 
           {/* ── Section 4b: Named Function Spaces ─── */}
           {namedFunctionSpaceItems.map((item) => {
@@ -2201,7 +2209,7 @@ export default function RfpForm() {
                   </div>
                 </div>
 
-                {answeredYes && (
+                {answeredYes && !simpleFunctionSpace && (
                   <div className="mt-3 space-y-3">
                     {NAMED_FUNCTION_SPACES.map((space) => {
                       const detail = forItem[space.key] ?? emptyNamedSpace(space.label)
