@@ -260,9 +260,11 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
   const tripMatchesMetric = (t: DashTrip, metric: string): boolean => {
     const invited = t.rfp_invitations.length
     const submitted = t.rfp_invitations.filter((i) => i.submitted_at != null).length
+    const declined = t.rfp_invitations.filter((i) => ['declined', 'unavailable'].includes(i.status)).length
     if (metric === 'invited') return invited > 0
     if (metric === 'bids') return submitted > 0
-    if (metric === 'awaiting') return invited - submitted > 0
+    if (metric === 'declined') return declined > 0
+    if (metric === 'awaiting') return invited - submitted - declined > 0
     return true // 'trips' / no filter
   }
 
@@ -287,6 +289,14 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
           (n, t) => n + t.rfp_invitations.filter((i) => i.submitted_at != null).length,
           0,
         )
+        // Hotels that responded but won't bid (declined / unavailable). Pulled out
+        // of "awaiting" so it doesn't look like more replies are still coming, and
+        // removed from the "bids in" denominator (they can't bid).
+        const allDeclined = group.trips.reduce(
+          (n, t) => n + t.rfp_invitations.filter((i) => ['declined', 'unavailable'].includes(i.status)).length,
+          0,
+        )
+        const stillOut = Math.max(0, allInvited - allDeclined) // could still bid
         const urgentDeadline = soonestUrgentDeadline(group)
         const groupDelinquent = group.trips.reduce((n, t) => n + delinquentCount(t), 0)
         const isOpen = openKeys.has(key)
@@ -343,21 +353,22 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
                   {countVisits(group.trips) !== 1 ? 's' : ''}
                 </span>
                 {allInvited > 0 && (
-                  <span>
+                  <span title={allDeclined > 0 ? `${allDeclined} declined/unavailable excluded from the total` : undefined}>
                     <strong className="text-emerald-600">{allSubmitted}</strong>
-                    <span className="text-slate-400 dark:text-slate-500">/{allInvited}</span> bids in
+                    <span className="text-slate-400 dark:text-slate-500">/{stillOut}</span> bids in
                   </span>
                 )}
               </div>
             </button>
 
-            {/* Condensed 4 stat bubbles for this team — click to open + filter */}
-            <div className="grid grid-cols-2 gap-2 border-t border-slate-100 dark:border-slate-700 px-4 py-3 sm:grid-cols-4">
+            {/* Condensed stat bubbles for this team — click to open + filter */}
+            <div className="grid grid-cols-2 gap-2 border-t border-slate-100 dark:border-slate-700 px-4 py-3 sm:grid-cols-5">
               {([
                 { m: 'trips', label: 'Active trips', value: countVisits(group.trips), color: 'text-slate-800 dark:text-slate-100' },
                 { m: 'invited', label: 'Hotels invited', value: allInvited, color: 'text-slate-800 dark:text-slate-100' },
                 { m: 'bids', label: 'Bids received', value: allSubmitted, color: 'text-emerald-600' },
-                { m: 'awaiting', label: 'Awaiting response', value: Math.max(0, allInvited - allSubmitted), color: 'text-orange-500' },
+                { m: 'awaiting', label: 'Awaiting response', value: Math.max(0, allInvited - allSubmitted - allDeclined), color: 'text-orange-500' },
+                { m: 'declined', label: 'Declined', value: allDeclined, color: 'text-rose-500' },
               ] as const).map((b) => {
                 const active = bubbleFilter[key] === b.m
                 return (
@@ -382,7 +393,7 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
               <div className="space-y-3 border-t border-slate-100 dark:border-slate-700 p-4">
                 {bubbleFilter[key] && (
                   <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                    <span>Filtered to <strong className="text-slate-700 dark:text-slate-300">{({ invited: 'Hotels invited', bids: 'Bids received', awaiting: 'Awaiting response' } as Record<string, string>)[bubbleFilter[key]] ?? 'Active trips'}</strong></span>
+                    <span>Filtered to <strong className="text-slate-700 dark:text-slate-300">{({ invited: 'Hotels invited', bids: 'Bids received', awaiting: 'Awaiting response', declined: 'Declined' } as Record<string, string>)[bubbleFilter[key]] ?? 'Active trips'}</strong></span>
                     <button onClick={() => setBubbleFilter((prev) => ({ ...prev, [key]: '' }))} className="font-medium text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">Clear filter</button>
                   </div>
                 )}
