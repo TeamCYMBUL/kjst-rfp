@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { logActivity } from '../../lib/activity'
+import { diffBid } from '../../lib/bidChanges'
 import { awardStay as awardStayLib, undoAwardStay as undoAwardStayLib } from '../../lib/award'
 import { assertSaved } from '../../lib/saveGuard'
 import { makeHotelMatcher, normalizeSearch } from '../../lib/hotelSearch'
@@ -645,6 +646,14 @@ function BidSummaryTable({
     return answers.get(invId)?.find((a) => a.concession_item_id === itemId) ?? null
   }
 
+  // Original (first-submission) value of a response field, for "was X" tooltips
+  // on cells the hotel later changed.
+  const orig = (inv: any, field: string, money: boolean): string => {
+    const v = inv?.original_bid?.response?.[field]
+    if (v == null || v === '') return '—'
+    return money ? `$${Number(v).toLocaleString()}` : String(v)
+  }
+
   // Trips with a second stay show both stays' rates side by side, not just Stay 1.
   const hasStay2 = submitted.some((inv) => responses.get(inv.id)?.stay2_king_rate != null)
 
@@ -694,6 +703,25 @@ function BidSummaryTable({
                 const commAns    = getAnswer(inv.id, commissionItem?.id)
                 const compSuites = getAnswer(inv.id, compSuitesItem?.id)
                 const suiteUpg   = getAnswer(inv.id, suiteUpgItem?.id)
+                // What the hotel changed since its original submission (for a
+                // reopened bid). Marks changed cells amber + an "Updated" badge.
+                const diff = diffBid({
+                  original_bid: (inv as any).original_bid,
+                  best_king_rate: resp?.best_king_rate ?? null,
+                  best_suite_rate: resp?.best_suite_rate ?? null,
+                  stay2_king_rate: resp?.stay2_king_rate ?? null,
+                  stay2_suite_rate: resp?.stay2_suite_rate ?? null,
+                  current_selling_rate: resp?.current_selling_rate ?? null,
+                  occupancy_tax: resp?.occupancy_tax ?? null,
+                  resort_fee: resp?.resort_fee ?? null,
+                  meeting_space_type: (resp as any)?.meeting_space_type ?? null,
+                  meeting_space_count: (resp as any)?.meeting_space_count ?? null,
+                  general_comments: resp?.general_comments ?? null,
+                  answers: Object.fromEntries((answers.get(inv.id) ?? []).map((a) => [a.concession_item_id, a])),
+                }, (id) => concessionItems.find((i) => i.id === id)?.label ?? 'Field')
+                const chg = (k: string) => diff.changedFields.has(k)
+                const chgAns = (itemId?: string) => !!itemId && diff.changedAnswers.has(itemId)
+                const changedCls = 'bg-amber-100 dark:bg-amber-900/25'
                 const isSelected = inv.id === selectedId
                 const isAwarded  = inv.status === 'awarded'
                 const isPassed   = inv.status === 'passed'
@@ -724,36 +752,47 @@ function BidSummaryTable({
                         {result?.noCommission && (
                           <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-orange-100 text-orange-600">No commission</span>
                         )}
+                        {diff.summary.length > 0 && (
+                          <span
+                            title={`Changed since original submission:\n${diff.summary.join('\n')}`}
+                            className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-400"
+                          >
+                            Updated ({diff.summary.length})
+                          </span>
+                        )}
                       </div>
                     </td>
                     {/* King rate — Stay 1 */}
-                    <td className="py-2.5 pr-6 text-right font-medium text-slate-700 dark:text-slate-300">
+                    <td className={`py-2.5 pr-6 text-right font-medium text-slate-700 dark:text-slate-300 ${chg('best_king_rate') ? changedCls : ''}`}
+                      title={chg('best_king_rate') ? `was ${orig(inv, 'best_king_rate', true)}` : undefined}>
                       {resp?.best_king_rate != null ? `$${resp.best_king_rate.toLocaleString()}` : '—'}
                     </td>
                     {/* King rate — Stay 2 */}
                     {hasStay2 && (
-                      <td className="py-2.5 pr-6 text-right font-medium text-slate-700 dark:text-slate-300">
+                      <td className={`py-2.5 pr-6 text-right font-medium text-slate-700 dark:text-slate-300 ${chg('stay2_king_rate') ? changedCls : ''}`}
+                        title={chg('stay2_king_rate') ? `was ${orig(inv, 'stay2_king_rate', true)}` : undefined}>
                         {resp?.stay2_king_rate != null ? `$${resp.stay2_king_rate.toLocaleString()}` : '—'}
                       </td>
                     )}
                     {/* Resort fee */}
-                    <td className="py-2.5 pr-6 text-right text-slate-600 dark:text-slate-400">
+                    <td className={`py-2.5 pr-6 text-right text-slate-600 dark:text-slate-400 ${chg('resort_fee') ? changedCls : ''}`}
+                      title={chg('resort_fee') ? `was ${orig(inv, 'resort_fee', false)}` : undefined}>
                       {resp?.resort_fee || '—'}
                     </td>
                     {/* Free (comp) suites — quantity or Yes/No depending on template */}
-                    <td className="py-2.5 pr-6 text-center">
+                    <td className={`py-2.5 pr-6 text-center ${chgAns(compSuitesItem?.id) ? changedCls : ''}`}>
                       {(() => { const v = suiteAnswerView(compSuites); return (
                         <span className={`font-semibold ${v.positive ? 'text-emerald-600' : 'text-slate-400 dark:text-slate-500'}`}>{v.display}</span>
                       )})()}
                     </td>
                     {/* Suite upgrades at king rate — quantity or Yes/No depending on template */}
-                    <td className="py-2.5 pr-6 text-center">
+                    <td className={`py-2.5 pr-6 text-center ${chgAns(suiteUpgItem?.id) ? changedCls : ''}`}>
                       {(() => { const v = suiteAnswerView(suiteUpg); return (
                         <span className={`font-semibold ${v.positive ? 'text-emerald-600' : 'text-slate-400 dark:text-slate-500'}`}>{v.display}</span>
                       )})()}
                     </td>
                     {/* Commission */}
-                    <td className={`py-2.5 pr-6 text-right font-medium ${result?.noCommission ? 'text-orange-500' : 'text-slate-700 dark:text-slate-300'}`}>
+                    <td className={`py-2.5 pr-6 text-right font-medium ${result?.noCommission ? 'text-orange-500' : 'text-slate-700 dark:text-slate-300'} ${chgAns(commissionItem?.id) ? changedCls : ''}`}>
                       {commAns?.answer_value || '—'}
                     </td>
                     {/* Score */}

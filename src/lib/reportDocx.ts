@@ -13,6 +13,7 @@ import {
   WidthType, BorderStyle, ShadingType, AlignmentType, PageBreak, VerticalAlign,
 } from 'docx'
 import { parseMeetingSpaces } from './format'
+import { diffBid, type OriginalBid } from './bidChanges'
 
 // ── Brand + layout constants ─────────────────────────────────────────────────
 const DARK = '1C1008'
@@ -50,6 +51,8 @@ export type DocxResp = {
   stay2_king_rate: number | null
   stay2_suite_rate: number | null
   meeting_space_notes: string | null
+  meeting_space_type?: string | null
+  meeting_space_count?: number | null
   general_comments: string | null
   distance_to_arena: string | null
   standard_checkin_time: string | null
@@ -61,6 +64,7 @@ export type DocxInv = {
   submitted_at: string | null
   visit1_declined: boolean
   visit2_declined: boolean
+  original_bid?: OriginalBid // snapshot of first submission, for change-flagging
 }
 export type DocxItem = { id: string; section: string; label: string; answer_type: string; sort_order: number }
 export type DocxAnswer = { concession_item_id: string; answer_yes_no: boolean | null; answer_value: string | null; comment: string | null }
@@ -242,6 +246,27 @@ function hotelBlock(h: DocxHotel, trip?: DocxTrip): (Paragraph | Table)[] {
   if (!h.resp) {
     out.push(new Paragraph({ children: [new TextRun({ text: 'No response submitted yet.', italics: true, font: BODY, size: 20, color: '94A3B8' })] }))
     return out
+  }
+  // What the hotel changed since its original submission (reopened bids).
+  const bidDiff = diffBid({
+    original_bid: h.inv.original_bid,
+    best_king_rate: h.resp.best_king_rate, best_suite_rate: h.resp.best_suite_rate,
+    stay2_king_rate: h.resp.stay2_king_rate, stay2_suite_rate: h.resp.stay2_suite_rate,
+    current_selling_rate: h.resp.current_selling_rate, occupancy_tax: h.resp.occupancy_tax,
+    resort_fee: h.resp.resort_fee,
+    meeting_space_type: h.resp.meeting_space_type ?? null, meeting_space_count: h.resp.meeting_space_count ?? null,
+    general_comments: h.resp.general_comments,
+    answers: Object.fromEntries(h.answers.map((a) => [a.concession_item_id, a])),
+  }, (id) => h.concessionItems.find((c) => c.id === id)?.label ?? 'Field')
+  if (bidDiff.summary.length) {
+    out.push(new Paragraph({
+      spacing: { after: 120 },
+      shading: { type: ShadingType.CLEAR, fill: 'FEF3C7', color: 'auto' },
+      children: [
+        new TextRun({ text: 'Updated by hotel since original: ', bold: true, font: BODY, size: 18, color: '92400E' }),
+        new TextRun({ text: bidDiff.summary.join('; '), font: BODY, size: 18, color: '92400E' }),
+      ],
+    }))
   }
   out.push(sectionHeading('Rates'))
   out.push(kvTable(rateRowsFor(h.inv, h.resp, trip)))

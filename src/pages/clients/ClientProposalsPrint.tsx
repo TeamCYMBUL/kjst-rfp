@@ -66,7 +66,7 @@ export default function ClientProposalsPrint() {
       // not yet printed.
       let invQuery = supabase
         .from('rfp_invitations')
-        .select('id, trip_id, hotel_name, hotel_contact_name, hotel_contact_email, status, submitted_at, visit1_declined, visit2_declined')
+        .select('id, trip_id, hotel_name, hotel_contact_name, hotel_contact_email, status, submitted_at, visit1_declined, visit2_declined, original_bid')
         .in('trip_id', tripIds)
         .in('status', awardedMode ? ['awarded'] : ['submitted', 'awarded'])
       if (newMode) invQuery = invQuery.is('printed_at', null)
@@ -97,7 +97,7 @@ export default function ClientProposalsPrint() {
         const invIds = invs.map((i) => i.id)
         const { data: respData } = await supabase
           .from('rfp_responses')
-          .select('id, invitation_id, best_king_rate, best_suite_rate, current_selling_rate, occupancy_tax, resort_fee, stay2_king_rate, stay2_suite_rate, meeting_space_notes, general_comments, distance_to_arena, standard_checkin_time')
+          .select('id, invitation_id, best_king_rate, best_suite_rate, current_selling_rate, occupancy_tax, resort_fee, stay2_king_rate, stay2_suite_rate, meeting_space_notes, meeting_space_type, meeting_space_count, general_comments, distance_to_arena, standard_checkin_time')
           .in('invitation_id', invIds)
         const resps = (respData as unknown as Response[]) ?? []
         setResponses(resps)
