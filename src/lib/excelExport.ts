@@ -7,7 +7,7 @@
 import * as XLSX from 'xlsx'
 import JSZip from 'jszip'
 import type { ConcessionItem } from './rfpApi'
-import { formatMeetingSpaceNotes } from './format'
+import { formatMeetingSpaceNotes, publicClientName } from './format'
 import { diffBid, type OriginalBid } from './bidChanges'
 
 // Post-process an ExcelJS .xlsx buffer so its picture drawings match the
@@ -810,7 +810,7 @@ export async function buildConsolidatedWorkbook(
   ws.mergeCells(1, 1, 1, NCOL)
   ws.mergeCells(2, 1, 2, NCOL)
   const titleCell = ws.getCell(1, 1)
-  titleCell.value = clientName + (seasonLabel ? `  —  ${seasonLabel}` : '')
+  titleCell.value = publicClientName(clientName) + (seasonLabel ? `  —  ${seasonLabel}` : '')
   titleCell.font = { name: 'Arial', size: 18, bold: true, color: { argb: 'FFFFFFFF' } }
   titleCell.alignment = { horizontal: 'center', vertical: 'middle' }
   const subCell = ws.getCell(2, 1)
@@ -1246,7 +1246,7 @@ export async function buildConsolidatedWorkbook(
     }
   }
 
-  const clientStr = clientName.replace(/\s+/g, '_')
+  const clientStr = publicClientName(clientName).replace(/\s+/g, '_')
   const fileDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   const outputFile = opts.filename ?? `${clientStr}_Hotel_Options_${fileDate}.xlsx`
   return { wb, outputFile }

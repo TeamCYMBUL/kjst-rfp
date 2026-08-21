@@ -158,6 +158,7 @@ Deno.serve(async (req: Request) => {
 
   const trip = inv.trips as any
   const client = trip?.clients as any
+  if (client?.team_name) client.team_name = client.team_name.replace(/\s*—\s*Sponsor Block\s*$/i, '') // hotel-facing: team name only
   const rfpLink = `${base_url}/rfp/${inv.token}`
   const monY = (iso: string | null | undefined) =>
     iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' }) : ''

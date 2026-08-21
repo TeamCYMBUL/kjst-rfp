@@ -225,6 +225,7 @@ Deno.serve(async (req: Request) => {
 
   const trip = tripData as any
   const client = trip?.clients as any
+  if (client?.team_name) client.team_name = client.team_name.replace(/\s*—\s*Sponsor Block\s*$/i, '') // hotel-facing: team name only
   const deadline = trip?.response_deadline ? new Date(trip.response_deadline) : null
   const daysLeft = deadline ? Math.ceil((deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 999
 

@@ -231,6 +231,7 @@ Deno.serve(async (req: Request) => {
 
   const trip = inv.trips as any
   const client = trip?.clients as any
+  if (client?.team_name) client.team_name = client.team_name.replace(/\s*—\s*Sponsor Block\s*$/i, '') // hotel-facing: team name only
   const teamName = client?.team_name ?? 'the team'
   const clientId = trip?.client_id ?? null
   const orClause = clientId ? `client_id.is.null,client_id.eq.${clientId}` : 'client_id.is.null'

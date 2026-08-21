@@ -1,6 +1,6 @@
 // Shared proposal print/render pieces, used by both the per-trip ProposalPrint
 // and the client-wide ClientProposalsPrint so the two always look identical.
-import { parseMeetingSpaces } from '../../lib/format'
+import { parseMeetingSpaces, publicClientName } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 
 export const PRIMARY = '#1C1008'
@@ -170,7 +170,7 @@ export function TripHeader({ trip, subtitle }: { trip: ProposalTrip; subtitle: s
         <div style={{ fontSize: 13, marginTop: 4, opacity: 0.7 }}>{subtitle}</div>
       </div>
       <div style={{ border: '1px solid #e2e8f0', borderTop: 'none', padding: '20px 32px', background: '#f8fafc' }}>
-        <div style={{ marginBottom: 6, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>{trip.clients?.team_name ?? 'Client'}</div>
+        <div style={{ marginBottom: 6, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>{publicClientName(trip.clients?.team_name) || 'Client'}</div>
         <div style={{ fontSize: 14, color: '#475569', marginBottom: 4 }}>
           {trip.opponent_label ?? 'Trip'}{trip.city ? ` · ${trip.city}` : ''}
         </div>

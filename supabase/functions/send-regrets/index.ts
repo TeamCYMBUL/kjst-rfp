@@ -136,6 +136,7 @@ Deno.serve(async (req: Request) => {
     .single()
   if (tErr || !trip) return Response.json({ error: 'Trip not found' }, { status: 404, headers: CORS })
   const client = (trip as any).clients
+  if (client?.team_name) client.team_name = client.team_name.replace(/\s*—\s*Sponsor Block\s*$/i, '') // hotel-facing: team name only
 
   // Losers = submitted bids that did not win either visit.
   const { data: invs } = await sb

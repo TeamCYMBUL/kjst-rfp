@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import { getRfp, respondRfp, declineRfp, fetchRfpPrefill } from '../../lib/rfpApi'
 import type { RfpPrefill } from '../../lib/rfpApi'
 import { supabase } from '../../lib/supabase'
-import { formatDate, formatGameTime } from '../../lib/format'
+import { formatDate, formatGameTime, publicClientName } from '../../lib/format'
 import type {
   AnswerPayload,
   ConcessionItem,
@@ -607,7 +607,7 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
             </thead>
             <tbody>
               {[
-                ['Company', client.team_name, org?.name || 'KJ Sports Travel'],
+                ['Company', publicClientName(client.team_name), org?.name || 'KJ Sports Travel'],
                 ['Name', client.primary_contact_name, org?.contact_name],
                 ['Title', client.primary_contact_title, org?.contact_title],
                 ['Address', client.primary_contact_address, org?.contact_address],
@@ -1505,13 +1505,19 @@ export default function RfpForm() {
         item.label.toLowerCase().includes('function space') &&
         !item.label.toLowerCase().includes('complimentary meeting space'),
     )
-    for (const item of namedFnItems) {
-      if (answers[item.id]?.answer_yes_no === true) {
-        const forItem = namedSpaceDetails[item.id] ?? {}
-        for (const space of NAMED_FUNCTION_SPACES) {
-          const detail = forItem[space.key]
-          if (!detail?.name?.trim()) msErrors.push(`${space.label} — Room name`)
-          if (!detail?.dimensions?.trim()) msErrors.push(`${space.label} — Square footage`)
+    // Simple/sponsor-block mode: the function-space question is informational —
+    // a "Yes" must never require the Meal/Treatment/Coaches room detail fields
+    // (they aren't even shown) or block submission.
+    const simpleSpace = (data as any)?.invitation?.trips?.clients?.default_terms?.meeting_space_mode === 'simple'
+    if (!simpleSpace) {
+      for (const item of namedFnItems) {
+        if (answers[item.id]?.answer_yes_no === true) {
+          const forItem = namedSpaceDetails[item.id] ?? {}
+          for (const space of NAMED_FUNCTION_SPACES) {
+            const detail = forItem[space.key]
+            if (!detail?.name?.trim()) msErrors.push(`${space.label} — Room name`)
+            if (!detail?.dimensions?.trim()) msErrors.push(`${space.label} — Square footage`)
+          }
         }
       }
     }

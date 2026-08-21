@@ -12,7 +12,7 @@ import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   WidthType, BorderStyle, ShadingType, AlignmentType, PageBreak, VerticalAlign,
 } from 'docx'
-import { parseMeetingSpaces } from './format'
+import { parseMeetingSpaces, publicClientName } from './format'
 import { diffBid, type OriginalBid } from './bidChanges'
 
 // ── Brand + layout constants ─────────────────────────────────────────────────
@@ -167,7 +167,7 @@ function tripHeaderTable(trip: DocxTrip): Table {
             shading: { fill: PANEL, type: ShadingType.CLEAR, color: 'auto' },
             margins: { top: 160, bottom: 160, left: 240, right: 240 },
             children: [
-              new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: trip.team_name, bold: true, font: HEAD, size: 24, color: '0F172A' })] }),
+              new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: publicClientName(trip.team_name), bold: true, font: HEAD, size: 24, color: '0F172A' })] }),
               new Paragraph({ spacing: { after: meta.length ? 100 : 0 }, children: [new TextRun({ text: `${trip.opponent_label ?? 'Trip'}${trip.city ? ` · ${trip.city}` : ''}`, font: BODY, size: 20, color: '475569' })] }),
               ...meta,
             ],
@@ -343,7 +343,7 @@ export function buildProposalDoc(input: { subtitle: string; groups: { trip: Docx
 export type DelinquentDocRow = { hotelName: string; city: string | null; arrivalDate: string | null; departureDate: string | null; responseDeadline: string | null; statusLabel: string; contactName: string | null; contactEmail: string | null }
 export function buildDelinquentDoc(input: { teamName: string; season: string | null; dateStr: string; rows: DelinquentDocRow[] }): Document {
   const children: (Paragraph | Table)[] = []
-  children.push(bandTable('KJ SPORTS TRAVEL', `${input.teamName}${input.season ? ` · ${input.season}` : ''} — Delinquent Hotels`))
+  children.push(bandTable('KJ SPORTS TRAVEL', `${publicClientName(input.teamName)}${input.season ? ` · ${input.season}` : ''} — Delinquent Hotels`))
   children.push(new Paragraph({ spacing: { before: 120, after: 160 }, children: [new TextRun({ text: `Hotels invited to bid that are past the RFP response deadline without submitting — as of ${input.dateStr}.`, font: BODY, size: 18, color: MUTED })] }))
   if (input.rows.length === 0) {
     children.push(new Paragraph({ children: [new TextRun({ text: 'No delinquent hotels — everyone has responded or is still within their deadline.', italics: true, font: BODY, size: 20, color: '94A3B8' })] }))

@@ -1,5 +1,12 @@
 // Small shared helpers for dates, nights, and invite tokens.
 
+// Sponsor/partner blocks are stored as "<Team> — Sponsor Block" so we can tell
+// them apart internally (dashboard, template list). Anything a hotel or client
+// sees — RFP form, emails, grid, proposals — must show the team name only.
+export function publicClientName(name: string | null | undefined): string {
+  return (name ?? '').replace(/\s*—\s*Sponsor Block\s*$/i, '')
+}
+
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
   // iso is a YYYY-MM-DD date string; render without timezone surprises.

@@ -131,13 +131,15 @@ function buildInviteHtml(p: {
   ccRecipients: CcRecipient[]
   sampleMenusHtml: string
 }): string {
-  const teamName = p.teamName ?? 'our client'
+  // Sponsor/partner blocks are labeled "<Team> — Sponsor Block" internally for
+  // our own differentiation, but hotels should only ever see the team name.
+  const isSponsorBlock = /—\s*sponsor block\s*$/i.test(p.teamName ?? '')
+  const teamName = (p.teamName ?? 'our client').replace(/\s*—\s*Sponsor Block\s*$/i, '')
   const seasonLabel = p.season || (p.arrivalDate
     ? (() => { const d = new Date(p.arrivalDate); const y = d.getUTCFullYear(); return d.getUTCMonth() >= 6 ? `${y}-${y + 1}` : `${y - 1}-${y}` })()
     : '2026-2027')
-  const deadlineText = p.responseDeadline ? fmt(p.responseDeadline) : 'as soon as possible'
-  // Trip heading — team then opponent only (city intentionally omitted).
-  const tripDesc = [p.teamName, p.opponentLabel ? `vs. ${p.opponentLabel}` : null].filter(Boolean).join(' · ')
+  // Trip heading — team then opponent only (sponsor blocks have no opponent).
+  const tripDesc = [teamName, (!isSponsorBlock && p.opponentLabel) ? `vs. ${p.opponentLabel}` : null].filter(Boolean).join(' · ')
   const roomParts = [
     p.kingRooms ? `${p.kingRooms} king rooms` : null,
     p.doubleRooms ? `${p.doubleRooms} double rooms` : null,
@@ -225,13 +227,13 @@ function buildInviteHtml(p: {
           If there are any requested concessions your property is unable to approve, we welcome counteroffers in the spaces provided.
         </p>
         <p style="margin:0 0 16px;font-size:14px;color:#475569;line-height:1.6">
-          Hotel selections will be made based on overall value, including rates, concessions, and suite upgrade offerings.
+          Hotel selections will be made based on overall value, ${isSponsorBlock ? 'including rates and concessions.' : 'including rates, concessions, and suite upgrade offerings.'}
         </p>
         <p style="margin:0 0 16px;font-size:14px;color:#475569;line-height:1.6">
-          We kindly ask that you complete and return the attached RFP by <strong>${deadlineText}</strong>.
+          We kindly ask that you complete and return the attached RFP ${p.responseDeadline ? `by <strong>${fmt(p.responseDeadline)}</strong>` : '<strong>as soon as possible</strong>'}.
         </p>
         <p style="margin:0 0 24px;font-size:14px;color:#475569;line-height:1.6">
-          Thank you in advance for your time and consideration. We look forward to the opportunity to work together during the ${seasonLabel} season.
+          Thank you in advance for your time and consideration. We look forward to the opportunity to work together${isSponsorBlock ? '.' : ` during the ${seasonLabel} season.`}
         </p>
         <table cellpadding="0" cellspacing="0" style="margin-bottom:16px">
           <tr><td style="background:#1C1008;border-radius:8px">
@@ -313,7 +315,8 @@ Deno.serve(async (req: Request) => {
   ].filter(Boolean)
   const datesText = stayMonths.join(' & ')
   const subjectHotel = (inv.hotel_name || '').replace(/\s+/g, ' ').trim() || 'Hotel'
-  const subject = `RFP Request: ${subjectHotel} – ${client?.team_name ?? 'KJ Sports Travel Client'} @ ${trip?.city ?? 'Trip'}${datesText ? ` (${datesText})` : ''}`
+  const publicTeam = (client?.team_name ?? 'KJ Sports Travel Client').replace(/\s*—\s*Sponsor Block\s*$/i, '')
+  const subject = `RFP Request: ${subjectHotel} – ${publicTeam} @ ${trip?.city ?? 'Trip'}${datesText ? ` (${datesText})` : ''}`
 
   const ccRecipients = await getCcRecipients(sb, client?.id ?? null)
 

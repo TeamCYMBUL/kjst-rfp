@@ -380,7 +380,9 @@ Deno.serve(async (req: Request) => {
     if (resendKey && !staffEntry) {
       const trip = inv.trips as any
       const client = (trip as any)?.clients as any
-      const teamName = client?.team_name ?? 'the team'
+      // Hotel-facing confirmation: show the team name only (strip our internal
+      // "— Sponsor Block" label). The staff notification below keeps the full label.
+      const teamName = (client?.team_name ?? 'the team').replace(/\s*—\s*Sponsor Block\s*$/i, '')
 
       const clientIdForAssignment = trip?.client_id ?? null
       const assignedManagers = await getAssignedManagers(supabase, clientIdForAssignment)
