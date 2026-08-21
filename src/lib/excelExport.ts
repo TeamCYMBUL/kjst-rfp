@@ -461,7 +461,7 @@ export function exportTeamGrid(
     ]
   })
 
-  const teamName = (trip.clients?.team_name ?? 'Team').replace(/\s+/g, '_')
+  const teamName = (publicClientName(trip.clients?.team_name) || 'Team').replace(/\s+/g, '_')
   const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   const filename = `${teamName} ${trip.city ?? 'City'} Proposals ${dateStr}.xlsx`
 

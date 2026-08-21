@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { publicClientName } from '../../lib/format'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { fetchAllAnswersByResponseIds } from '../../lib/answers'
@@ -129,7 +130,7 @@ export default function ProposalPrint() {
     const t = { ...trip, team_name: trip.clients?.team_name ?? 'Client' }
     downloadDocx(
       buildProposalDoc({ subtitle: 'Hotel Proposal — Full Copy', groups: [{ trip: t, hotels }] }),
-      `${trip.clients?.team_name ?? 'KJST'} ${trip.opponent_label ?? 'Trip'} Proposal.docx`,
+      `${publicClientName(trip.clients?.team_name) || 'KJST'} ${trip.opponent_label ?? 'Trip'} Proposal.docx`,
     )
   }
 

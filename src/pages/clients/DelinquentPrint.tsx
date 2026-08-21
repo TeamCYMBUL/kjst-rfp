@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { publicClientName } from '../../lib/format'
 import { Link, useParams } from 'react-router-dom'
 import {
   fetchDelinquentForClient,
@@ -54,7 +55,7 @@ export default function DelinquentPrint() {
               dateStr,
               rows: rows.map((r) => ({ hotelName: r.hotelName, city: r.city, arrivalDate: r.arrivalDate, departureDate: r.departureDate, responseDeadline: r.responseDeadline, statusLabel: overdueLabel(r), contactName: r.contactName, contactEmail: r.contactEmail })),
             }),
-            `${client.team_name} Delinquent Hotels.docx`,
+            `${publicClientName(client.team_name)} Delinquent Hotels.docx`,
           )}
           style={{ background: PRIMARY, color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
         >Download Word (.docx)</button>
@@ -70,7 +71,7 @@ export default function DelinquentPrint() {
           )}
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#d6c3b0' }}>KJ Sports Travel</div>
-            <div style={{ fontSize: 20, fontWeight: 700 }}>{client.team_name}{client.season ? `  ·  ${client.season}` : ''}</div>
+            <div style={{ fontSize: 20, fontWeight: 700 }}>{publicClientName(client.team_name)}{client.season ? `  ·  ${client.season}` : ''}</div>
           </div>
         </div>
         <div style={{ border: '1px solid #e2e8f0', borderTop: 'none', padding: '16px 28px', background: '#f8fafc' }}>

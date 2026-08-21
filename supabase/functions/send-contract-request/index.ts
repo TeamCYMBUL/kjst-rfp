@@ -195,6 +195,7 @@ Deno.serve(async (req: Request) => {
 
   const trip = inv.trips as any
   const client = trip?.clients as any
+  if (client?.team_name) client.team_name = client.team_name.replace(/\s*—\s*Sponsor Block\s*$/i, '') // hotel-facing: team name only
 
   // Ensure a contract record + upload token exists for this awarded hotel.
   let { data: contract } = await sb

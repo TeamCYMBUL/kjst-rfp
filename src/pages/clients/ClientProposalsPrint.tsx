@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { publicClientName } from '../../lib/format'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { fetchAllAnswersByResponseIds } from '../../lib/answers'
@@ -149,7 +150,7 @@ export default function ClientProposalsPrint() {
         return { inv, resp, answers: resp ? answers.filter((a) => a.response_id === resp.id) : [], concessionItems }
       }),
     }))
-    downloadDocx(buildProposalDoc({ subtitle, groups }), `${client?.team_name ?? 'KJST'} Proposals.docx`)
+    downloadDocx(buildProposalDoc({ subtitle, groups }), `${publicClientName(client?.team_name) || 'KJST'} Proposals.docx`)
   }
 
   const PrintControls = (

@@ -2,6 +2,7 @@
 // Shows their trip context and lets them upload the signed room agreement
 // straight into the platform. No login; the token in the URL scopes everything.
 import { useEffect, useRef, useState } from 'react'
+import { publicClientName } from '../../lib/format'
 import { useParams } from 'react-router-dom'
 import { getContract, uploadContract } from '../../lib/contractsApi'
 import type { ContractContext } from '../../lib/contractsApi'
@@ -62,7 +63,7 @@ export default function ContractUpload() {
     )
   }
 
-  const tripLine = [ctx.team_name, ctx.city, ctx.opponent_label ? `vs. ${ctx.opponent_label}` : null].filter(Boolean).join(' · ')
+  const tripLine = [publicClientName(ctx.team_name), ctx.city, ctx.opponent_label ? `vs. ${ctx.opponent_label}` : null].filter(Boolean).join(' · ')
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: 'system-ui', padding: '32px 16px' }}>

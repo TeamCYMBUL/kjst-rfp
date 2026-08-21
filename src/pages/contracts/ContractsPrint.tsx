@@ -2,6 +2,7 @@
 // hotel and where its room agreement stands, grouped by client. Rendered
 // outside the dashboard chrome so Print / Save-as-PDF flows cleanly.
 import { useEffect, useMemo, useState } from 'react'
+import { publicClientName } from '../../lib/format'
 import { Link } from 'react-router-dom'
 import { listAwardedContracts } from '../../lib/contractsApi'
 import type { AwardedContract, ContractStatus } from '../../lib/contractsApi'
@@ -27,7 +28,7 @@ export default function ContractsPrint() {
     const byClient = new Map<string, { name: string; items: AwardedContract[] }>()
     for (const r of rows) {
       const key = r.client?.id ?? 'unknown'
-      if (!byClient.has(key)) byClient.set(key, { name: r.client?.team_name ?? 'Unknown client', items: [] })
+      if (!byClient.has(key)) byClient.set(key, { name: publicClientName(r.client?.team_name) || 'Unknown client', items: [] })
       byClient.get(key)!.items.push(r)
     }
     return [...byClient.values()].sort((a, b) => a.name.localeCompare(b.name))
