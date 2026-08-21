@@ -2434,7 +2434,10 @@ export default function RfpForm() {
           {!isReadOnly && (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-slate-400">
-                Your progress is auto-saved. You can return to this link to finish later.
+                Your progress is auto-saved. You can return to this link to finish later.{' '}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-600">Privacy</a>
+                {' · '}
+                <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-600">Terms</a>
               </p>
               <button
                 type="submit"

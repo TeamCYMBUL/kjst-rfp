@@ -138,6 +138,11 @@ export default function ContractUpload() {
 
         <div style={{ background: '#f8fafc', borderTop: '1px solid #e2e8f0', padding: '16px 32px' }}>
           <p style={{ margin: 0, fontSize: 11, color: '#94a3b8' }}>KJ Sports Travel, Inc. · IATA #05732731 · This link is unique to your property.</p>
+          <p style={{ margin: '6px 0 0', fontSize: 11, color: '#94a3b8' }}>
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: '#94a3b8', textDecoration: 'underline' }}>Privacy Policy</a>
+            {' · '}
+            <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#94a3b8', textDecoration: 'underline' }}>Terms of Service</a>
+          </p>
         </div>
       </div>
     </div>

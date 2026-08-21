@@ -3,6 +3,7 @@ import ProtectedRoute from './auth/ProtectedRoute'
 import DashboardLayout from './components/DashboardLayout'
 import ErrorBoundary from './components/ErrorBoundary'
 import VersionGate from './components/VersionGate'
+import { PrivacyPolicy, TermsOfService } from './pages/Legal'
 import Login from './pages/Login'
 import ClientsList from './pages/clients/ClientsList'
 import ClientForm from './pages/clients/ClientForm'
@@ -37,6 +38,10 @@ export default function App() {
       <Route path="/contract/:token" element={<ContractUpload />} />
 
       <Route path="/login" element={<Login />} />
+
+      {/* Public legal pages */}
+      <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/terms" element={<TermsOfService />} />
 
       <Route element={<ProtectedRoute />}>
         {/* Standalone print page — no sidebar/scroll-container chrome, so the

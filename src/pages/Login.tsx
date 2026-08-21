@@ -178,6 +178,11 @@ export default function Login() {
             </button>
           )}
         </div>
+        <p className="mt-6 text-center text-xs text-slate-400">
+          <a href="/privacy" className="underline hover:text-slate-600">Privacy Policy</a>
+          {' · '}
+          <a href="/terms" className="underline hover:text-slate-600">Terms of Service</a>
+        </p>
       </div>
     </div>
   )
