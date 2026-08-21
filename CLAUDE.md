@@ -70,6 +70,17 @@ staff data. Do not consider the build done until that test passes.
 - `npm run build` — production build.
 - Supabase changes go through the Supabase MCP (tables, policies, Edge Functions).
 
+## Deploy & git authorship
+- This is a CYMBUL project. Commits in this repo MUST be authored as **Team CYMBUL
+  <info@cymbul.co>** (set repo-locally: `git config --local user.email info@cymbul.co`).
+  That account owns the Vercel team.
+- Do NOT author commits here as `mike@trykona.ai` (that is the Kona identity). If a commit
+  is attributed to a GitHub account that is not a member of the Vercel team, a **private**
+  repo will BLOCK all deploys (Vercel's git-author authorization). Keep authorship as CYMBUL
+  so the repo can be private without breaking the deploy pipeline.
+- Force a build without a code change: `curl -X POST https://api.vercel.com/v1/integrations/deploy/prj_FOvSASR4z21XKak2UJv0VZuGy8UW/pVTIIfY3qK`.
+  Verify the live commit: `curl https://rfp.kjsportstravel.com/version.json`.
+
 ## Working style for this repo
 - Default to Plan Mode for anything non-trivial; show the plan before writing code.
 - After each stage, stop so I can preview in the browser before continuing.
