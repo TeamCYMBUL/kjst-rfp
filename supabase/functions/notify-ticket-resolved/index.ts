@@ -4,7 +4,12 @@ import { createClient } from "jsr:@supabase/supabase-js@2"
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const FROM_EMAIL = Deno.env.get('FROM_EMAIL') ?? 'KJ Sports Travel RFP Platform <noreply@kjsportstravel.com>'
+// Resolved-ticket notifications come from the CYMBUL team inbox — NOT the global
+// FROM_EMAIL secret (which is set to a staffer's personal address and made these
+// look like they came from Tammy). Fall back to the verified KJST sender only if
+// cymbul.co isn't a verified Resend domain, so the email can never silently fail.
+const PREFERRED_FROM = 'KJ Sports Travel RFP Platform <info@cymbul.co>'
+const FALLBACK_FROM = 'KJ Sports Travel RFP Platform <noreply@kjsportstravel.com>'
 // Where replies from the submitter should land (the team inbox).
 const TICKET_RECIPIENT = 'info@cymbul.co'
 
@@ -92,11 +97,11 @@ Deno.serve(async (req: Request) => {
 </table>
 </body></html>`
 
-  const resendRes = await fetch('https://api.resend.com/emails', {
+  const send = (from: string) => fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: FROM_EMAIL,
+      from,
       to: [ticket.created_by_email],
       reply_to: TICKET_RECIPIENT,
       subject: `[Resolved] ${ticket.title}`,
@@ -104,10 +109,19 @@ Deno.serve(async (req: Request) => {
     }),
   })
 
+  let usedFrom = PREFERRED_FROM
+  let resendRes = await send(PREFERRED_FROM)
+  if (!resendRes.ok) {
+    // Most likely cause: cymbul.co isn't a verified Resend sending domain yet.
+    // Retry from the verified KJST address so the submitter still hears back.
+    usedFrom = FALLBACK_FROM
+    resendRes = await send(FALLBACK_FROM)
+  }
+
   if (!resendRes.ok) {
     const errText = await resendRes.text()
     return json({ error: `Resend API error: ${errText}` }, 500)
   }
 
-  return json({ ok: true, sent_to: ticket.created_by_email })
+  return json({ ok: true, sent_to: ticket.created_by_email, from: usedFrom })
 })
