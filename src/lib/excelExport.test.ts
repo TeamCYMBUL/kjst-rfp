@@ -93,6 +93,30 @@ describe('buildConsolidatedWorkbook', () => {
     expect(ws.pageSetup.verticalDpi).toBe(300)
   })
 
+  it('flags what the hotel changed since its original bid in the Notes column', async () => {
+    const changedCity: ConsolidatedCity = {
+      trip: { city: 'Denver', opponent_label: 'Colorado Rockies', arrival_date: '2026-09-01',
+        departure_date: '2026-09-02', game_date: '2026-09-01', total_rooms_requested: 40 },
+      hotels: [{
+        hotel_name: 'Changed Hotel', status: 'submitted', staff_notes: null,
+        awarded_stay1: false, awarded_stay2: false, visit1_declined: false, visit1_decline_reason: null,
+        visit2_declined: false, visit2_decline_reason: null, best_king_rate: 380, best_suite_rate: 900,
+        current_selling_rate: null, occupancy_tax: null, resort_fee: null, standard_checkin_time: null,
+        general_comments: null, meeting_space_type: null, meeting_space_count: null,
+        original_bid: { response: { best_king_rate: 350 }, answers: {} },
+        answers: {},
+      }],
+      items: [],
+    } as any
+    const { wb } = await buildConsolidatedWorkbook([changedCity], 'Colorado Rockies', { logoUrl: null })
+    const ws = wb.worksheets[0]
+    let flagged = false
+    ws.eachRow((row: any) => row.eachCell((c: any) => {
+      if (typeof c.value === 'string' && c.value.includes('Updated by hotel') && c.value.includes('King rate $350 → $380')) flagged = true
+    }))
+    expect(flagged).toBe(true)
+  })
+
   it('shows Suite Upgrade for teams that store it as Yes/No (Magic, Sharks)', async () => {
     const suiteItem = {
       id: 'itm-upg',

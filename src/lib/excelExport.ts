@@ -8,6 +8,7 @@ import * as XLSX from 'xlsx'
 import JSZip from 'jszip'
 import type { ConcessionItem } from './rfpApi'
 import { formatMeetingSpaceNotes } from './format'
+import { diffBid, type OriginalBid } from './bidChanges'
 
 // Post-process an ExcelJS .xlsx buffer so its picture drawings match the
 // Excel-safe structure openpyxl emits. ExcelJS writes a contradictory zero-size
@@ -604,6 +605,7 @@ export type ConsolidatedHotel = {
   general_comments: string | null
   meeting_space_type: string | null
   meeting_space_count: number | null
+  original_bid?: OriginalBid // snapshot of the hotel's first submission, for change-flagging
   answers: Record<string, { answer_yes_no: boolean | null; answer_value: string | null; comment: string | null }>
 }
 
@@ -1081,6 +1083,7 @@ export async function buildConsolidatedWorkbook(
   const OUTLINE = { style: 'medium' as const, color: { argb: 'FF9C8F80' } }
   const AWARD_FILL = 'FFD8F3E3'
   const AWARD_TEXT = 'FF166534'
+  const CHANGED_FILL = 'FFFFF3CD' // light amber: a field the hotel changed since its original bid
   let firstTrip = true
 
   for (const { trip, hotels, items } of cities) {
@@ -1089,6 +1092,7 @@ export async function buildConsolidatedWorkbook(
     firstTrip = false
     const tripStartRow = rowIdx + 1
 
+    const itemLabelById = new Map(items.map((i) => [i.id, i.label]))
     const compSuitesItem = items.find((i) => isCompSuiteItem(i.label))
     const suiteUpgItem = items.find((i) => isSuiteUpgradeItem(i.label))
     const playoffItem = items.find(
@@ -1134,6 +1138,22 @@ export async function buildConsolidatedWorkbook(
         const row = ws.getRow(rowIdx)
 
         const kingRate = (h as any)[visit.kingKey] as number | null
+        // What did the hotel change from its original submission? Used to mark
+        // changed cells and to list "field was X → now Y" in the Notes column.
+        const diff = diffBid(h, (id) => itemLabelById.get(id) ?? 'Field')
+        const cellChanged = (spec: GridColumnSpec): boolean => {
+          if (spec.type === 'item') return diff.changedAnswers.has(spec.item_id)
+          if (spec.type === 'system') {
+            if (spec.key === 'taxes_fees') return diff.changedFields.has('occupancy_tax') || diff.changedFields.has('resort_fee')
+            if (spec.key === 'suite_rate') return diff.changedFields.has('best_suite_rate')
+            return false
+          }
+          if (spec.key === 'rate') return diff.changedFields.has(visit.index === 1 ? 'best_king_rate' : 'stay2_king_rate')
+          if (spec.key === 'comp_suite') return !!compSuitesItem && diff.changedAnswers.has(compSuitesItem.id)
+          if (spec.key === 'suite_ug') return !!suiteUpgItem && diff.changedAnswers.has(suiteUpgItem.id)
+          if (spec.key === 'postseason') return !!playoffItem && diff.changedAnswers.has(playoffItem.id)
+          return false
+        }
         const compAns = compSuitesItem ? h.answers[compSuitesItem.id] : undefined
         const upgAns = suiteUpgItem ? h.answers[suiteUpgItem.id] : undefined
         const playoffAns = playoffItem ? h.answers[playoffItem.id] : undefined
@@ -1153,6 +1173,9 @@ export async function buildConsolidatedWorkbook(
         // Yes/No suite-upgrade teams (Magic, Sharks): carry the hotel's note into
         // the Notes column so the real offer (count/sq ft/rate) is never lost.
         if (bid && suiteUpgRead.note) noteFrags.push(`Suite upgrade: ${suiteUpgRead.note}`)
+        // Flag exactly what the hotel changed from its original submission, so
+        // KJST doesn't compare the bid line by line after a reopen.
+        if (bid && diff.summary.length) noteFrags.push(`Updated by hotel: ${diff.summary.join('; ')}`)
 
         // One value per column, in the configured layout order.
         const baseCellValue = (key: GridBaseKey): string | number | Date | null => {
@@ -1194,6 +1217,12 @@ export async function buildConsolidatedWorkbook(
               : { name: 'Arial', size: 10 }
           if (awardedRow) {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AWARD_FILL } }
+          }
+          // Amber-highlight a cell the hotel changed since its original bid (takes
+          // precedence over the awarded-row green for that specific cell so the
+          // change still stands out). Only on live bids, never on sold-out rows.
+          if (bid && !struck && cellChanged(spec)) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CHANGED_FILL } }
           }
           cell.alignment = { vertical: 'top', wrapText: specWrap(spec), horizontal: specCenter(spec) ? 'center' : 'left' }
           const nf = specNumFmt(spec)

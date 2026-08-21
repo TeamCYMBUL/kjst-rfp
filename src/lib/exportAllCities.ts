@@ -42,6 +42,7 @@ export async function exportAllCitiesForClient(
       .select(`
         id, hotel_name, status, staff_notes, awarded_stay1, awarded_stay2,
         visit1_declined, visit1_decline_reason, visit2_declined, visit2_decline_reason,
+        original_bid,
         rfp_responses(
           best_king_rate, best_suite_rate, current_selling_rate, occupancy_tax, resort_fee,
           standard_checkin_time,
@@ -85,6 +86,7 @@ export async function exportAllCitiesForClient(
         general_comments: r?.general_comments ?? null,
         meeting_space_type: r?.meeting_space_type ?? null,
         meeting_space_count: r?.meeting_space_count ?? null,
+        original_bid: inv.original_bid ?? null,
         answers: answerMap,
       }
     })
