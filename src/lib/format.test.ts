@@ -1,5 +1,29 @@
 import { describe, it, expect } from 'vitest'
-import { parseMeetingSpaces, formatMeetingSpaceNotes } from './format'
+import { parseMeetingSpaces, formatMeetingSpaceNotes, publicClientName } from './format'
+
+// publicClientName strips the internal "— Sponsor Block" label from anything a
+// hotel or client sees (emails, RFP form, proposals, export filenames). A
+// regression here would leak our internal labeling onto forward-facing surfaces,
+// so it is under test on every shape it can receive.
+describe('publicClientName', () => {
+  it('strips the "— Sponsor Block" suffix', () => {
+    expect(publicClientName('Pelicans — Sponsor Block')).toBe('Pelicans')
+  })
+  it('is case-insensitive and trims surrounding whitespace', () => {
+    expect(publicClientName('Magic  —  sponsor block  ')).toBe('Magic')
+  })
+  it('leaves a normal team name untouched', () => {
+    expect(publicClientName('Orlando Magic')).toBe('Orlando Magic')
+  })
+  it('does not strip the phrase when it appears mid-name', () => {
+    expect(publicClientName('Sponsor Block Classic')).toBe('Sponsor Block Classic')
+  })
+  it('handles null / undefined / empty as empty string', () => {
+    expect(publicClientName(null)).toBe('')
+    expect(publicClientName(undefined)).toBe('')
+    expect(publicClientName('')).toBe('')
+  })
+})
 
 // The meeting-space parser drives the proposal's "Meeting Space" section on the
 // web, Word, and (indirectly) the grid. It caused two reopened tickets, so it's
