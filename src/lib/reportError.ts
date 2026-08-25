@@ -15,6 +15,20 @@ const DEDUPE_MS = 60_000
 let sent = 0
 const MAX_PER_LOAD = 25
 
+// Messages we deliberately do NOT report — they are not actionable bugs in this
+// app, so logging them only buries real errors in the daily digest:
+//  - Navigator LockManager chatter from Supabase's cross-tab auth-token refresh
+//    (benign; also mitigated at the source in lib/supabase.ts).
+//  - "Object Not Found Matching Id ... MethodName:update" is injected by browser
+//    password-manager / autofill extensions on the user's device, not our code.
+//  - ResizeObserver loop notices are a benign browser quirk.
+const IGNORE_PATTERNS: RegExp[] = [
+  /Navigator ?LockManager lock/i,
+  /Acquiring an exclusive Navigator/i,
+  /Object Not Found Matching Id/i,
+  /ResizeObserver loop/i,
+]
+
 export function reportError(input: {
   kind: ErrorKind
   message: string
@@ -25,6 +39,7 @@ export function reportError(input: {
   try {
     const message = (input.message || '').trim()
     if (!message) return
+    if (IGNORE_PATTERNS.some((re) => re.test(message))) return
     if (sent >= MAX_PER_LOAD) return
 
     const now = Date.now()
