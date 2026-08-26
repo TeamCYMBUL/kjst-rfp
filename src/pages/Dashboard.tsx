@@ -547,6 +547,13 @@ export default function Dashboard() {
     0,
   )
   const closedCount = scopedTrips.filter((t) => t.status === 'closed').length
+  // Bids awarded = hotels marked as the winner. Awards live on closed trips
+  // (awarding closes the trip), which activeTrips excludes — so count across all
+  // scoped trips, matching how awardedHotel is detected per trip.
+  const totalAwarded = scopedTrips.reduce(
+    (n, t) => n + t.rfp_invitations.filter((i) => i.status === 'awarded').length,
+    0,
+  )
 
   // What the list actually shows. "Show closed" flips to ONLY closed trips, so
   // open and closed are never mixed together.
@@ -672,10 +679,10 @@ export default function Dashboard() {
       )}
 
       {/* Stats bar */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {[
-          { label: 'Active trips', sublabel: 'in progress · 2-visit trips count twice', value: countVisits(activeTrips), color: 'text-[#1C1008]' },
-          { label: 'Hotels invited', sublabel: 'this cycle', value: totalInvited, color: 'text-slate-800' },
+          { label: 'Active trips', sublabel: 'in progress · 2-visit trips count twice', value: countVisits(activeTrips), color: 'text-[#1C1008] dark:text-slate-100' },
+          { label: 'Hotels invited', sublabel: 'this cycle', value: totalInvited, color: 'text-slate-800 dark:text-slate-100' },
           { label: 'Bids received', sublabel: 'submitted', value: totalSubmitted, color: 'text-emerald-600' },
           {
             label: 'Awaiting response',
@@ -683,6 +690,7 @@ export default function Dashboard() {
             value: totalOutstanding,
             color: totalOutstanding > 0 ? 'text-amber-600' : 'text-slate-400',
           },
+          { label: 'Bids awarded', sublabel: 'hotel selected', value: totalAwarded, color: 'text-emerald-700 dark:text-emerald-400' },
         ].map((s) => (
           <div
             key={s.label}
