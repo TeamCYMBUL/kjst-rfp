@@ -174,7 +174,11 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
 }
 
 /** By Client — trips grouped under collapsible team sections */
-function ClientView({ trips }: { trips: DashTrip[] }) {
+function ClientView({ trips, awardedByClient, onShowAwarded }: {
+  trips: DashTrip[]
+  awardedByClient: Record<string, number>
+  onShowAwarded: () => void
+}) {
   const [exportingClient, setExportingClient] = useState<string | null>(null)
   const [tripsExportKey, setTripsExportKey] = useState<string | null>(null)
   const exportTeamTrips = async (clientId: string, teamName: string) => {
@@ -265,6 +269,7 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
     if (metric === 'bids') return submitted > 0
     if (metric === 'declined') return declined > 0
     if (metric === 'awaiting') return invited - submitted - declined > 0
+    if (metric === 'awarded') return t.rfp_invitations.some((i) => i.status === 'awarded')
     return true // 'trips' / no filter
   }
 
@@ -362,19 +367,25 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
             </button>
 
             {/* Condensed stat bubbles for this team — click to open + filter */}
-            <div className="grid grid-cols-2 gap-2 border-t border-slate-100 dark:border-slate-700 px-4 py-3 sm:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 border-t border-slate-100 dark:border-slate-700 px-4 py-3 sm:grid-cols-3 lg:grid-cols-6">
               {([
                 { m: 'trips', label: 'Active trips', value: countVisits(group.trips), color: 'text-slate-800 dark:text-slate-100' },
                 { m: 'invited', label: 'Hotels invited', value: allInvited, color: 'text-slate-800 dark:text-slate-100' },
                 { m: 'bids', label: 'Bids received', value: allSubmitted, color: 'text-emerald-600' },
                 { m: 'awaiting', label: 'Awaiting response', value: Math.max(0, allInvited - allSubmitted - allDeclined), color: 'text-orange-500' },
                 { m: 'declined', label: 'Declined', value: allDeclined, color: 'text-rose-500' },
+                { m: 'awarded', label: 'Bids awarded', value: awardedByClient[key] ?? 0, color: 'text-emerald-700 dark:text-emerald-400' },
               ] as const).map((b) => {
                 const active = bubbleFilter[key] === b.m
                 return (
                   <button
                     key={b.m}
-                    onClick={() => clickBubble(key, b.m)}
+                    onClick={() => {
+                      // Awarded bids live on closed trips, hidden by the default
+                      // active view — flip to closed so the filtered list isn't empty.
+                      if (b.m === 'awarded' && bubbleFilter[key] !== 'awarded') onShowAwarded()
+                      clickBubble(key, b.m)
+                    }}
                     title={`Show ${group.name} trips for: ${b.label}`}
                     className={`rounded-lg border px-3 py-2 text-left transition-colors ${
                       active
@@ -393,7 +404,7 @@ function ClientView({ trips }: { trips: DashTrip[] }) {
               <div className="space-y-3 border-t border-slate-100 dark:border-slate-700 p-4">
                 {bubbleFilter[key] && (
                   <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                    <span>Filtered to <strong className="text-slate-700 dark:text-slate-300">{({ invited: 'Hotels invited', bids: 'Bids received', awaiting: 'Awaiting response', declined: 'Declined' } as Record<string, string>)[bubbleFilter[key]] ?? 'Active trips'}</strong></span>
+                    <span>Filtered to <strong className="text-slate-700 dark:text-slate-300">{({ invited: 'Hotels invited', bids: 'Bids received', awaiting: 'Awaiting response', declined: 'Declined', awarded: 'Bids awarded' } as Record<string, string>)[bubbleFilter[key]] ?? 'Active trips'}</strong></span>
                     <button onClick={() => setBubbleFilter((prev) => ({ ...prev, [key]: '' }))} className="font-medium text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">Clear filter</button>
                   </div>
                 )}
@@ -554,6 +565,15 @@ export default function Dashboard() {
     (n, t) => n + t.rfp_invitations.filter((i) => i.status === 'awarded').length,
     0,
   )
+  // Awarded bids per client, from ALL scoped trips (awards live on closed trips,
+  // which the default active view hides) — so the per-client "Bids awarded"
+  // bubble shows the true count regardless of the show-closed toggle.
+  const awardedByClient = scopedTrips.reduce<Record<string, number>>((acc, t) => {
+    const k = t.clients?.id ?? '__none__'
+    const n = t.rfp_invitations.filter((i) => i.status === 'awarded').length
+    if (n) acc[k] = (acc[k] ?? 0) + n
+    return acc
+  }, {})
 
   // What the list actually shows. "Show closed" flips to ONLY closed trips, so
   // open and closed are never mixed together.
@@ -768,7 +788,7 @@ export default function Dashboard() {
               : showClosed ? 'No closed trips yet.' : 'No active or draft trips right now.'}
           </div>
         ) : (
-          <ClientView key={clientFilter ?? 'all'} trips={clientFilteredTrips} />
+          <ClientView key={clientFilter ?? 'all'} trips={clientFilteredTrips} awardedByClient={awardedByClient} onShowAwarded={() => setShowClosed(true)} />
         )}
       </div>
 
