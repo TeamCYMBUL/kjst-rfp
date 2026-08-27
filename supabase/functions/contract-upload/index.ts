@@ -37,7 +37,10 @@ Deno.serve(async (req: Request) => {
   if (!(file instanceof File)) return json({ error: 'No file provided' }, 400)
   if (file.size === 0) return json({ error: 'The file is empty' }, 400)
   if (file.size > MAX_BYTES) return json({ error: 'File is too large (max 20 MB).' }, 400)
-  if (file.type && !ALLOWED.includes(file.type)) {
+  // Validate by extension AND (when present) declared type, so a file with a
+  // missing or spoofed MIME type can't slip through as octet-stream.
+  const extOk = /\.(pdf|doc|docx)$/i.test(file.name)
+  if (!extOk || (file.type && !ALLOWED.includes(file.type))) {
     return json({ error: 'Please upload a PDF or Word document (.pdf, .doc, .docx).' }, 400)
   }
 
