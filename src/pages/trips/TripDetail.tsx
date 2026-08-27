@@ -924,6 +924,7 @@ function HotelPanel({
   copyingId,
   reopeningId,
   onCopyLink,
+  onRevoke,
   onContactUpdated,
   sendingEmail,
   sendingReminder,
@@ -948,6 +949,7 @@ function HotelPanel({
   copyingId: string | null
   reopeningId: string | null
   onCopyLink: (token: string) => void
+  onRevoke: (inv: Invitation) => void
   onContactUpdated: (id: string, name: string | null, email: string | null) => void
   sendingEmail: string | null
   sendingReminder: string | null
@@ -1173,6 +1175,18 @@ function HotelPanel({
               className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
             >
               {copied === inv.token ? '✓Copied' : 'Copy link'}
+            </button>
+            {/* Deactivate a leaked/wrong link without deleting the record. */}
+            <button
+              onClick={() => onRevoke(inv)}
+              title={inv.revoked_at ? "Reactivate this hotel's link" : "Deactivate this hotel's link so it stops working"}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                inv.revoked_at
+                  ? 'border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+                  : 'border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20'
+              }`}
+            >
+              {inv.revoked_at ? '↺ Restore link' : '⃠ Revoke link'}
             </button>
             {/* Email this hotel a copy of its own completed RFP (on request, or
                 for a bid entered by KJST that never triggered the auto-email). */}
@@ -1850,6 +1864,19 @@ export default function TripDetail() {
       setCopied(token)
       setTimeout(() => setCopied((c) => (c === token ? null : c)), 1500)
     } catch { setError('Could not copy link.') }
+  }
+
+  // Deactivate (or reactivate) a hotel's link. A revoked link stops working on
+  // view/submit/decline without deleting the record — for a leaked or wrong link.
+  const revokeLink = async (inv: Invitation) => {
+    const reactivating = Boolean(inv.revoked_at)
+    if (!reactivating && !confirm(`Deactivate the RFP link for ${inv.hotel_name}? Their existing link will stop working until you restore it.`)) return
+    const { error } = await supabase
+      .from('rfp_invitations')
+      .update({ revoked_at: reactivating ? null : new Date().toISOString() })
+      .eq('id', inv.id)
+    if (error) { setError(`Could not ${reactivating ? 'restore' : 'revoke'} the link: ${error.message}`); return }
+    loadInvites()
   }
 
   const sendEmail = async (inv: Invitation) => {
@@ -2935,6 +2962,7 @@ export default function TripDetail() {
               copyingId={copyingId}
               reopeningId={reopeningId}
               onCopyLink={copyLink}
+              onRevoke={revokeLink}
               onContactUpdated={(id, name, email) => {
                 setInvites((prev) =>
                   prev?.map((i) =>

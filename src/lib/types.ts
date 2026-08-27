@@ -96,6 +96,8 @@ export type Invitation = {
   printed_at: string | null
   staff_notes: string | null
   created_at: string
+  // When set, the hotel's link is deactivated (view/submit/decline rejected).
+  revoked_at: string | null
   // Per-visit invitation scoping (2-visit trips only). 'both' = quote both stays
   // (default). 'stay1' / 'stay2' = only collect rates + dates for that one visit.
   visit_scope: 'both' | 'stay1' | 'stay2' | null
