@@ -32,7 +32,7 @@ Deno.serve(async (req: Request) => {
     .from('rfp_invitations')
     .select(`
       id, hotel_name, hotel_contact_name, hotel_contact_email,
-      status, sent_at, opened_at, submitted_at, reopened_at, visit_scope,
+      status, revoked_at, sent_at, opened_at, submitted_at, reopened_at, visit_scope,
       visit1_declined, visit1_decline_reason, visit1_decline_notes,
       visit2_declined, visit2_decline_reason, visit2_decline_notes,
       trips (
@@ -58,6 +58,13 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({ error: 'Invalid or expired link. Please contact KJST for a new link.' }),
       { status: 404, headers: { ...CORS, 'Content-Type': 'application/json' } }
+    )
+  }
+  // A revoked link is deactivated by staff — stop it working without deleting the record.
+  if ((inv as any).revoked_at) {
+    return new Response(
+      JSON.stringify({ error: 'This link has been deactivated. Please contact KJST for a new one.' }),
+      { status: 403, headers: { ...CORS, 'Content-Type': 'application/json' } }
     )
   }
 

@@ -270,11 +270,12 @@ Deno.serve(async (req: Request) => {
   // --- Validate token ---
   const { data: inv, error: invErr } = await supabase
     .from('rfp_invitations')
-    .select('id, status, submitted_at, reopened_at, original_bid, hotel_name, hotel_contact_name, hotel_contact_email, token, trips(id, client_id, opponent_label, city, arrival_date, departure_date, clients(team_name))')
+    .select('id, status, revoked_at, submitted_at, reopened_at, original_bid, hotel_name, hotel_contact_name, hotel_contact_email, token, trips(id, client_id, opponent_label, city, arrival_date, departure_date, clients(team_name))')
     .eq('token', token)
     .single()
 
   if (invErr || !inv) return json({ error: 'Invalid token' }, 404)
+  if ((inv as any).revoked_at) return json({ error: 'This link has been deactivated. Please contact KJST.' }, 403)
   // A submitted bid is locked UNLESS staff reopened it for edits (reopened_at is
   // newer than submitted_at). Reopening no longer changes status — it keeps the
   // bid on the grid — so we gate the resubmit on reopened_at, not on status.

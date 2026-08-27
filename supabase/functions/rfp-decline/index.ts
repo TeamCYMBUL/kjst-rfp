@@ -69,12 +69,13 @@ Deno.serve(async (req: Request) => {
 
   const { data: inv, error: invErr } = await supabase
     .from('rfp_invitations')
-    .select(`id, status, hotel_name, hotel_contact_name, visit1_declined, visit2_declined,
+    .select(`id, status, revoked_at, hotel_name, hotel_contact_name, visit1_declined, visit2_declined,
       trips(id, client_id, city, opponent_label, arrival_date, departure_date, stay2_arrival_date, stay2_departure_date, clients(team_name))`)
     .eq('token', token)
     .single()
 
   if (invErr || !inv) return json({ error: 'Invalid token' }, 404)
+  if ((inv as any).revoked_at) return json({ error: 'This link has been deactivated. Please contact KJST.' }, 403)
   if (inv.status === 'submitted') return json({ error: 'This RFP has already been submitted.' }, 409)
   if (inv.status === 'declined') return json({ ok: true, already_declined: true })
 
