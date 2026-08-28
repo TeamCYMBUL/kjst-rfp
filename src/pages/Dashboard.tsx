@@ -174,12 +174,14 @@ function TripCard({ trip, showClient = true }: { trip: DashTrip; showClient?: bo
 }
 
 /** By Client — trips grouped under collapsible team sections */
-function ClientView({ trips, awardedByClient, onShowAwarded }: {
+function ClientView({ trips, awardedByClient, onShowAwarded, showClosed }: {
   trips: DashTrip[]
   awardedByClient: Record<string, number>
   onShowAwarded: () => void
+  showClosed: boolean
 }) {
   const [exportingClient, setExportingClient] = useState<string | null>(null)
+  const [awardedExportKey, setAwardedExportKey] = useState<string | null>(null)
   const [tripsExportKey, setTripsExportKey] = useState<string | null>(null)
   const exportTeamTrips = async (clientId: string, teamName: string) => {
     setTripsExportKey(clientId)
@@ -430,6 +432,24 @@ function ClientView({ trips, awardedByClient, onShowAwarded }: {
                     >
                       {exportingClient === key ? 'Exporting…' : '↓ Export hotel options'}
                     </button>
+                    {/* Awarded-only grid — only meaningful in the closed (won) view. */}
+                    {showClosed && (
+                      <button
+                        onClick={async () => {
+                          setAwardedExportKey(key)
+                          try {
+                            const { count } = await exportAllCitiesForClient(key, group.name, { awardedOnly: true })
+                            if (count === 0) alert('No awarded hotels to export for this client yet.')
+                          } catch (e: any) { alert(`Could not export: ${e.message ?? e}`) }
+                          finally { setAwardedExportKey(null) }
+                        }}
+                        disabled={awardedExportKey === key}
+                        title="Download the grid with only this client's awarded (winning) hotels."
+                        className="rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 disabled:opacity-40 transition-colors"
+                      >
+                        {awardedExportKey === key ? 'Exporting…' : '↓ Export awarded only'}
+                      </button>
+                    )}
                   </div>
                 )}
                 {[...group.trips]
@@ -788,7 +808,7 @@ export default function Dashboard() {
               : showClosed ? 'No closed trips yet.' : 'No active or draft trips right now.'}
           </div>
         ) : (
-          <ClientView key={clientFilter ?? 'all'} trips={clientFilteredTrips} awardedByClient={awardedByClient} onShowAwarded={() => setShowClosed(true)} />
+          <ClientView key={clientFilter ?? 'all'} trips={clientFilteredTrips} awardedByClient={awardedByClient} onShowAwarded={() => setShowClosed(true)} showClosed={showClosed} />
         )}
       </div>
 

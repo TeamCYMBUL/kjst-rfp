@@ -8,6 +8,7 @@ import type { ConsolidatedCity } from './excelExport'
 export async function exportAllCitiesForClient(
   clientId: string,
   clientName: string,
+  opts: { awardedOnly?: boolean } = {},
 ): Promise<{ count: number }> {
   // Client branding for the grid header (logo + team name + season)
   const { data: client } = await supabase
@@ -91,6 +92,12 @@ export async function exportAllCitiesForClient(
       }
     })
 
+    // Awarded-only: keep just the winning hotel(s); skip trips with no winner.
+    const cityHotels = opts.awardedOnly
+      ? hotels.filter((h) => h.awarded_stay1 || h.awarded_stay2 || h.status === 'awarded')
+      : hotels
+    if (opts.awardedOnly && cityHotels.length === 0) continue
+
     cityData.push({
       trip: {
         city: trip.city,
@@ -108,10 +115,12 @@ export async function exportAllCitiesForClient(
         stay2_game_dates: trip.stay2_game_dates ?? null,
         stay2_game_date: trip.stay2_game_date,
       },
-      hotels,
+      hotels: cityHotels,
       items: allItems as any,
     })
   }
+
+  if (cityData.length === 0) return { count: 0 }
 
   await exportMultiCityConsolidatedXlsx(cityData, clientName, {
     logoUrl: client?.logo_url ?? null,
@@ -119,6 +128,9 @@ export async function exportAllCitiesForClient(
     gridColumns: (client as any)?.grid_columns ?? [],
     gridLayout: (client as any)?.grid_layout ?? null,
     fnbHeadcount: (client as any)?.fnb_headcount ?? null,
+    ...(opts.awardedOnly
+      ? { filename: `${clientName.replace(/\s+/g, '_')}_Awarded_Hotels.xlsx` }
+      : {}),
   })
   return { count: cityData.length }
 }
