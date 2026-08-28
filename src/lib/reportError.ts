@@ -27,6 +27,14 @@ const IGNORE_PATTERNS: RegExp[] = [
   /Acquiring an exclusive Navigator/i,
   /Object Not Found Matching Id/i,
   /ResizeObserver loop/i,
+  // Transient network conditions (connection dropped, offline, tab throttled,
+  // request aborted on navigation) — not app bugs. Every error tracker filters
+  // these; a real backend outage is caught by the uptime monitor instead.
+  /Failed to fetch/i,
+  /NetworkError/i,
+  /Load failed/i,
+  /The (network )?connection was lost/i,
+  /aborted/i,
 ]
 
 export function reportError(input: {

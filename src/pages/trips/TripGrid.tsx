@@ -547,8 +547,8 @@ export default function TripGrid() {
     }
   }
 
-  // For Excel export
-  const handleExport = () => {
+  // For Excel export. awardedOnly = export just the winning hotel(s).
+  const handleExport = (awardedOnly = false) => {
     if (!trip) return
     const hotels = invitations.map((inv) => {
       const resp = inv.rfp_responses ?? null
@@ -570,6 +570,7 @@ export default function TripGrid() {
         answers: answerMaps[inv.id] ?? {},
       }
     })
+    const exportHotels = awardedOnly ? hotels.filter((h) => h.status === 'awarded') : hotels
     const tripClient = trip as any
     exportComparisonXlsx(
       {
@@ -588,9 +589,9 @@ export default function TripGrid() {
         total_rooms_requested: trip.total_rooms_requested,
         nights: trip.nights,
       },
-      hotels,
+      exportHotels,
       items,
-      `KJST_${(tripClient.clients?.team_name ?? 'RFP').replace(/\s+/g, '_')}_${trip.opponent_label?.replace(/\s+/g, '_') ?? 'Trip'}.xlsx`,
+      `KJST_${(tripClient.clients?.team_name ?? 'RFP').replace(/\s+/g, '_')}_${trip.opponent_label?.replace(/\s+/g, '_') ?? 'Trip'}${awardedOnly ? '_Awarded' : ''}.xlsx`,
     )
   }
 
@@ -626,12 +627,21 @@ export default function TripGrid() {
             {versionSaving ? 'Saving…' : 'Save Version'}
           </button>
           <button
-            onClick={handleExport}
+            onClick={() => handleExport(false)}
             disabled={invitations.length === 0}
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
           >
             ↓ Export (.xlsx)
           </button>
+          {invitations.some((i) => i.status === 'awarded') && (
+            <button
+              onClick={() => handleExport(true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
+              title="Export the grid with only the awarded hotel(s)"
+            >
+              ↓ Export awarded only (.xlsx)
+            </button>
+          )}
           {(() => {
             // Notify not selected — surfaced on the grid too, but only once a
             // winner has been awarded so nobody gets a decline mid-comparison.
