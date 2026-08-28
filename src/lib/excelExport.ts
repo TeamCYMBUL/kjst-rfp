@@ -718,6 +718,7 @@ export type ConsolidatedOpts = {
   gridColumns?: GridColumnSpec[]
   gridLayout?: GridColumnSpec[] // full column order (base + custom); overrides the default layout
   fnbHeadcount?: number | null
+  awardedOnly?: boolean // render only the awarded (winning) stay rows
 }
 
 // Builds the workbook (no download) so it can be exercised in tests. The public
@@ -735,6 +736,7 @@ export async function buildConsolidatedWorkbook(
   const RED = 'FFFF0000'
 
   const gridCols = opts.gridColumns ?? []
+  const awardedOnly = !!opts.awardedOnly // when set, render only won stay rows
   const fnbHeadcount = Number(opts.fnbHeadcount) || 0 // client-level F&B headcount
 
   // Built-in (base) column defaults.
@@ -1131,6 +1133,11 @@ export async function buildConsolidatedWorkbook(
 
       let first = true
       for (const h of ordered) {
+        // Awarded per stay: this hotel won only the visit(s) flagged. In
+        // awarded-only mode, render just those won rows (so a 2-visit trip split
+        // between two hotels shows each hotel only on the stay it actually won).
+        const wonThisVisit = visit.index === 1 ? !!h.awarded_stay1 : !!h.awarded_stay2
+        if (awardedOnly && !wonThisVisit) continue
         counter += 1
         rowIdx += 1
         const struck = soldOut(h)
@@ -1163,8 +1170,7 @@ export async function buildConsolidatedWorkbook(
         const postGte = playoffAns?.answer_yes_no === true ? 'YES' : playoffAns?.answer_yes_no === false ? 'NO' : ''
 
         const reason = visit.index === 1 ? h.visit1_decline_reason : h.visit2_decline_reason
-        // Awarded per stay: mark AWARDED only on the visit this hotel actually won.
-        const wonThisVisit = visit.index === 1 ? !!h.awarded_stay1 : !!h.awarded_stay2
+        // wonThisVisit is computed at the top of the loop (drives the awarded-only skip).
         const noteFrags: string[] = []
         if (wonThisVisit) noteFrags.push('AWARDED')
         if (struck) noteFrags.push(reason ? REASON_LABELS[reason] ?? 'Not available' : 'Not available')

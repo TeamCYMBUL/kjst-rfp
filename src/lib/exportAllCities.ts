@@ -129,7 +129,7 @@ export async function exportAllCitiesForClient(
     gridLayout: (client as any)?.grid_layout ?? null,
     fnbHeadcount: (client as any)?.fnb_headcount ?? null,
     ...(opts.awardedOnly
-      ? { filename: `${clientName.replace(/\s+/g, '_')}_Awarded_Hotels.xlsx` }
+      ? { awardedOnly: true, filename: `${clientName.replace(/\s+/g, '_')}_Awarded_Hotels.xlsx` }
       : {}),
   })
   return { count: cityData.length }

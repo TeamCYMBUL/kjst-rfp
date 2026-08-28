@@ -104,6 +104,7 @@ export default function ClientDetail() {
   const [savingItem, setSavingItem] = useState(false)
   const [itemError, setItemError] = useState<string | null>(null)
   const [exportingAllCities, setExportingAllCities] = useState(false)
+  const [exportingAwarded, setExportingAwarded] = useState(false)
   const [activeTab, setActiveTab] = useState<'trips' | 'import' | 'details'>('trips')
   // Submitted bids across all this client's trips, and how many haven't been
   // printed yet — drives the progressive batch-print card.
@@ -243,6 +244,19 @@ export default function ClientDetail() {
     }
   }
 
+  const handleExportAwarded = async () => {
+    if (!client || !trips || trips.length === 0) return
+    setExportingAwarded(true)
+    try {
+      const { count } = await exportAllCitiesForClient(id!, client.team_name, { awardedOnly: true })
+      if (count === 0) alert('No awarded hotels to export for this client yet.')
+    } catch (e: any) {
+      alert(`Could not export: ${e.message ?? e}`)
+    } finally {
+      setExportingAwarded(false)
+    }
+  }
+
   const remove = async () => {
     if (!confirm('Delete this client? This cannot be undone.')) return
     setDeleting(true)
@@ -279,6 +293,14 @@ export default function ClientDetail() {
               disabled={exportingAllCities || !trips || trips.length === 0}
             >
               {exportingAllCities ? 'Exporting…' : '↓ Export Hotel Options'}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleExportAwarded}
+              disabled={exportingAwarded || !trips || trips.length === 0}
+              title="Download the grid with only this client's awarded (winning) hotels."
+            >
+              {exportingAwarded ? 'Exporting…' : '↓ Export awarded only'}
             </Button>
             <LinkButton
               to={`/clients/${id}/delinquent`}

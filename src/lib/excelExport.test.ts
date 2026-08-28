@@ -70,6 +70,43 @@ describe('buildConsolidatedWorkbook', () => {
     expect(found399).toBe(true)
   })
 
+  it('awardedOnly renders ONLY the won stay rows (2-visit split between hotels)', async () => {
+    // Brooklyn-style split: Four Seasons won Stay 1, 1 Hotel won Stay 2. The
+    // awarded-only export must show each hotel ONLY on the stay it actually won,
+    // never the losing stay (the bug: both hotels' both stays showed up).
+    const splitCity: ConsolidatedCity = {
+      trip: {
+        city: 'New York', opponent_label: 'Brooklyn Nets',
+        arrival_date: '2026-12-12', departure_date: '2026-12-13', game_date: null,
+        total_rooms_requested: 65, king_rooms_requested: 65, suites_requested: 2,
+        stay2_arrival_date: '2027-03-22', stay2_departure_date: '2027-03-23',
+      },
+      hotels: [
+        { hotel_name: 'Four Seasons New York', status: 'awarded', staff_notes: null,
+          awarded_stay1: true, awarded_stay2: false,
+          visit1_declined: false, visit1_decline_reason: null, visit2_declined: false, visit2_decline_reason: null,
+          best_king_rate: 1625, best_suite_rate: null, current_selling_rate: null, occupancy_tax: null, resort_fee: null,
+          standard_checkin_time: null, stay2_king_rate: 1000, stay2_suite_rate: null, general_comments: null,
+          meeting_space_type: null, meeting_space_count: null, answers: {} },
+        { hotel_name: '1 Hotel Brooklyn Bridge', status: 'awarded', staff_notes: null,
+          awarded_stay1: false, awarded_stay2: true,
+          visit1_declined: false, visit1_decline_reason: null, visit2_declined: false, visit2_decline_reason: null,
+          best_king_rate: 999, best_suite_rate: null, current_selling_rate: null, occupancy_tax: null, resort_fee: null,
+          standard_checkin_time: null, stay2_king_rate: 499, stay2_suite_rate: null, general_comments: null,
+          meeting_space_type: null, meeting_space_count: null, answers: {} },
+      ],
+      items: [],
+    }
+    const { wb } = await buildConsolidatedWorkbook([splitCity], 'Brooklyn Nets', { logoUrl: null, awardedOnly: true })
+    const ws = wb.worksheets[0]
+    const nums = new Set<number>()
+    ws.eachRow((row: any) => row.eachCell((c: any) => { if (typeof c.value === 'number') nums.add(c.value) }))
+    expect(nums.has(1625)).toBe(true)   // Four Seasons Stay 1 rate — won
+    expect(nums.has(499)).toBe(true)    // 1 Hotel Stay 2 rate — won
+    expect(nums.has(1000)).toBe(false)  // Four Seasons Stay 2 — NOT won, must be absent
+    expect(nums.has(999)).toBe(false)   // 1 Hotel Stay 1 — NOT won, must be absent
+  })
+
   it('stays drawing-free and comment-free even when a logoUrl is given (no Excel "repair")', async () => {
     // Real Excel repairs any grid carrying an image drawing part ("Drawing shape")
     // or a cell comment (legacy VML drawing). The grid must therefore contain
