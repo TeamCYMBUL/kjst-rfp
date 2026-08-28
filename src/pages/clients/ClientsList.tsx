@@ -114,6 +114,7 @@ export default function ClientsList() {
   const [clients, setClients] = useState<Client[] | null>(null)
   const [selected, setSelected] = useState<Client | null>(null)
   const [exportingCities, setExportingCities] = useState(false)
+  const [exportingAwarded, setExportingAwarded] = useState(false)
   const [search, setSearch] = useState('')
   const [leagueFilter, setLeagueFilter] = useState<string>('all')
   // "My teams" vs "All teams". Managers default to just the teams they're
@@ -434,6 +435,23 @@ export default function ClientsList() {
                       className="rounded-lg border border-slate-200 dark:border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
                     >
                       {exportingCities ? 'Exporting…' : '↓ Export Hotel Options'}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!selected) return
+                        setExportingAwarded(true)
+                        try {
+                          const { count } = await exportAllCitiesForClient(selected.id, selected.team_name, { awardedOnly: true })
+                          if (count === 0) alert('No awarded hotels yet for this team.')
+                        } finally {
+                          setExportingAwarded(false)
+                        }
+                      }}
+                      disabled={exportingAwarded || selTrips.length === 0}
+                      title="Export a grid of only the winning (awarded) hotels for this team."
+                      className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 transition-colors hover:bg-emerald-100 dark:hover:bg-emerald-900/40 disabled:opacity-50"
+                    >
+                      {exportingAwarded ? 'Exporting…' : '↓ Export awarded only'}
                     </button>
                     <Link
                       to={`/clients/${selected.id}/delinquent`}
