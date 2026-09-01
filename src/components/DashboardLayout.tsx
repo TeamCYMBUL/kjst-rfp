@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useProfile } from '../hooks/useProfile'
 import { useRole } from '../lib/useRole'
-import { isTimelineAdmin, isContractsUser } from '../lib/activity'
+import { isTimelineAdmin, isContractsUser, isStatusViewer } from '../lib/activity'
 
 
 function KJLogoMark({ dark = false }: { dark?: boolean }) {
@@ -220,18 +220,20 @@ export default function DashboardLayout() {
           >
             Submit a Ticket
           </NavLink>
-          <NavLink
-            to="/status"
-            className={({ isActive }) =>
-              `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-white/15 text-white'
-                  : 'text-white/60 hover:bg-white/10 hover:text-white'
-              }`
-            }
-          >
-            Status
-          </NavLink>
+          {isStatusViewer(user?.email) && (
+            <NavLink
+              to="/status"
+              className={({ isActive }) =>
+                `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-white/15 text-white'
+                    : 'text-white/60 hover:bg-white/10 hover:text-white'
+                }`
+              }
+            >
+              Status
+            </NavLink>
+          )}
           <NavLink
             to="/settings"
             className={({ isActive }) =>

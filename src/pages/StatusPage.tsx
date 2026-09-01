@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../auth/AuthContext'
+import { isStatusViewer } from '../lib/activity'
 
 // Live platform health. Reads the SAME public.monitoring_scoreboard() SQL
 // function the daily heartbeat email uses, so this page and the email can never
@@ -18,6 +20,8 @@ function fmt(iso: string): string {
 }
 
 export default function StatusPage() {
+  const { user } = useAuth()
+  const allowed = isStatusViewer(user?.email)
   const [sb, setSb] = useState<Scoreboard | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -32,11 +36,23 @@ export default function StatusPage() {
   }, [])
 
   useEffect(() => {
+    if (!allowed) return
     load()
     // Light auto-refresh so a tab left open stays current.
     const t = setInterval(load, 60_000)
     return () => clearInterval(t)
-  }, [load])
+  }, [load, allowed])
+
+  // Private to the CYMBUL owner. Anyone else who navigates here directly sees
+  // nothing (the DB function also denies them, so this is defense-in-depth).
+  if (!allowed) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-16 text-center">
+        <h1 className="text-lg font-semibold text-slate-700 dark:text-slate-200">Not available</h1>
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">This page is restricted.</p>
+      </div>
+    )
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8">

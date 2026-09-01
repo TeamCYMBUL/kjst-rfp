@@ -37,6 +37,18 @@ export function isContractRulesAdmin(email: string | null | undefined): boolean 
   return CONTRACT_RULES_ADMIN_EMAILS.includes((email ?? '').trim().toLowerCase())
 }
 
+// The Platform Status page (monitoring heartbeat scoreboard) is private to the
+// CYMBUL owner only — not visible to any KJST staff. Both owner addresses are
+// allowed so Mike sees it whichever he's signed in with. Mirrors the email
+// check ENFORCED inside the SQL monitoring_scoreboard() function — keep in sync.
+export const STATUS_VIEWER_EMAILS = [
+  'info@cymbul.co',
+  'team@cymbul.co',
+]
+export function isStatusViewer(email: string | null | undefined): boolean {
+  return STATUS_VIEWER_EMAILS.includes((email ?? '').trim().toLowerCase())
+}
+
 // Lifecycle moments that have no timestamp home on a base table and so must be
 // logged explicitly. Everything else (trip_created, invite_sent, bid_received,
 // bid_declined, build_saved) is derived from base-table timestamps by the
