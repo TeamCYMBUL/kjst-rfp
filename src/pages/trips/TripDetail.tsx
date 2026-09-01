@@ -1079,9 +1079,9 @@ function HotelPanel({
                   {[inv.hotel_contact_name, inv.hotel_contact_email].filter(Boolean).join(' · ') || <span className="italic text-slate-400 dark:text-slate-500">No contact info</span>}
                 </p>
                 <button onClick={() => setEditingContact(true)}
-                  className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 transition-colors"
+                  className="text-xs font-medium text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                   title="Edit contact">
-                  
+                  Edit
                 </button>
               </div>
             )}
@@ -1186,7 +1186,7 @@ function HotelPanel({
                   : 'border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20'
               }`}
             >
-              {inv.revoked_at ? '↺ Restore link' : '⃠ Revoke link'}
+              {inv.revoked_at ? '↺ Restore link' : '⊘ Revoke link'}
             </button>
             {/* Email this hotel a copy of its own completed RFP (on request, or
                 for a bid entered by KJST that never triggered the auto-email). */}
