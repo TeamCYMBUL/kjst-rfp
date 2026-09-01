@@ -279,9 +279,13 @@ Deno.serve(async (req: Request) => {
   // A submitted bid is locked UNLESS staff reopened it for edits (reopened_at is
   // newer than submitted_at). Reopening no longer changes status — it keeps the
   // bid on the grid — so we gate the resubmit on reopened_at, not on status.
+  // Staff editing on the hotel's behalf (?entry=staff, e.g. a rate renegotiated
+  // offline via the "Edit bid" button) can always save — this mirrors the
+  // client's own isReadOnly rule, which also unlocks the form for staffEntry.
+  // Without this exception the fields look editable but every save returned 409.
   const reopenedForEdit = !!(inv as any).reopened_at &&
     (!(inv as any).submitted_at || new Date((inv as any).reopened_at).getTime() > new Date((inv as any).submitted_at).getTime())
-  if (inv.status === 'submitted' && !reopenedForEdit) return json({ error: 'This RFP has already been submitted.' }, 409)
+  if (inv.status === 'submitted' && !reopenedForEdit && !staffEntry) return json({ error: 'This RFP has already been submitted.' }, 409)
 
   // --- Upsert rfp_response ---
   const { data: existingResp } = await supabase

@@ -107,6 +107,23 @@ Deno.serve(async (req: Request) => {
       allow_comment: s.allow_comment,
       optional: s.optional ?? false,
     }))
+    // Drop snapshot items KJST has since ARCHIVED in the master catalog. The
+    // snapshot freezes the template at send time, but an archived item is a
+    // retired question the form no longer renders (e.g. meeting-space items are
+    // hidden in sponsor-block mode) — leaving it in demands an answer the hotel
+    // can never give, permanently blocking submission. This mirrors the live-
+    // fallback path below, which already excludes archived items. Custom snapshot
+    // items (source_item_id null, no master row) are always kept.
+    const srcIds = (items as any[]).map((i) => i.id).filter(Boolean)
+    if (srcIds.length > 0) {
+      const { data: archivedRows } = await supabase
+        .from('concession_items')
+        .select('id')
+        .in('id', srcIds)
+        .eq('archived', true)
+      const archivedSet = new Set((archivedRows ?? []).map((r: any) => r.id))
+      if (archivedSet.size > 0) items = (items as any[]).filter((i) => !archivedSet.has(i.id))
+    }
   } else {
     // Live fallback: master items + client-specific items
     const { data: liveItems } = await supabase
