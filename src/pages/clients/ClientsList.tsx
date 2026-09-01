@@ -7,6 +7,7 @@ import { PageHint } from '../../components/PageHint'
 import { useRole } from '../../lib/useRole'
 import ScheduleImportModal from '../trips/ScheduleImport'
 import { exportAllCitiesForClient } from '../../lib/exportAllCities'
+import SeasonSavings from '../../components/SeasonSavings'
 import { logActivity } from '../../lib/activity'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -509,6 +510,11 @@ export default function ClientsList() {
                       <div className="text-xs text-slate-400 dark:text-slate-500">{s.label}</div>
                     </div>
                   ))}
+                </div>
+
+                {/* What this platform has saved this client vs. market rates. */}
+                <div className="mt-3">
+                  <SeasonSavings clientId={selected.id} />
                 </div>
               </div>
 
