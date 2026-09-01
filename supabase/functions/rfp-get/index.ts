@@ -35,7 +35,7 @@ Deno.serve(async (req: Request) => {
     .from('rfp_invitations')
     .select(`
       id, hotel_name, hotel_contact_name, hotel_contact_email,
-      status, revoked_at, sent_at, opened_at, submitted_at, reopened_at, visit_scope,
+      status, revoked_at, expires_at, sent_at, opened_at, submitted_at, reopened_at, visit_scope,
       visit1_declined, visit1_decline_reason, visit1_decline_notes,
       visit2_declined, visit2_decline_reason, visit2_decline_notes,
       trips (
@@ -67,6 +67,14 @@ Deno.serve(async (req: Request) => {
   if ((inv as any).revoked_at) {
     return new Response(
       JSON.stringify({ error: 'This link has been deactivated. Please contact KJST for a new one.' }),
+      { status: 403, headers: { ...CORS, 'Content-Type': 'application/json' } }
+    )
+  }
+  // Links expire after a generous window (see expires_at). Staff still have the
+  // full bid on the dashboard; an expired link just can't be re-opened by a hotel.
+  if ((inv as any).expires_at && new Date((inv as any).expires_at).getTime() < Date.now()) {
+    return new Response(
+      JSON.stringify({ error: 'This link has expired. Please contact KJST for a new one.' }),
       { status: 403, headers: { ...CORS, 'Content-Type': 'application/json' } }
     )
   }
