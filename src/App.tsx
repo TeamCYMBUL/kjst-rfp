@@ -27,6 +27,7 @@ import HotelsList from './pages/hotels/HotelsList'
 import Tickets from './pages/tickets/Tickets'
 import TeamPage from './pages/team/TeamPage'
 import TimelinePage from './pages/timeline/TimelinePage'
+import StatusPage from './pages/StatusPage'
 
 export default function App() {
   return (
@@ -77,6 +78,7 @@ export default function App() {
           <Route path="settings" element={<SettingsPage />} />
           <Route path="team" element={<TeamPage />} />
           <Route path="timeline" element={<TimelinePage />} />
+          <Route path="status" element={<StatusPage />} />
         </Route>
       </Route>
     </Routes>

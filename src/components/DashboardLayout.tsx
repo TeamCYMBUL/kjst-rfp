@@ -221,6 +221,18 @@ export default function DashboardLayout() {
             Submit a Ticket
           </NavLink>
           <NavLink
+            to="/status"
+            className={({ isActive }) =>
+              `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-white/15 text-white'
+                  : 'text-white/60 hover:bg-white/10 hover:text-white'
+              }`
+            }
+          >
+            Status
+          </NavLink>
+          <NavLink
             to="/settings"
             className={({ isActive }) =>
               `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
