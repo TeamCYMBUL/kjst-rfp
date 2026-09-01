@@ -14,8 +14,11 @@ export function isTimelineAdmin(email: string | null | undefined): boolean {
 // Kept for existing imports.
 export const TIMELINE_ADMIN_EMAIL = 'info@cymbul.co'
 
-// The Contracts page is limited to these accounts for now (rolling out on the
-// Sharks contracts first). Add emails here to widen access.
+// The Contracts page is available to every signed-in KJST staff member (opened
+// up Sep 2026 at Mike's request; it was previously limited to a rollout list).
+// The contracts table already permits any authenticated staff to read/write
+// (RLS `using (true)`), so this only lifts the UI gate. CONTRACTS_EMAILS is kept
+// as historical reference and is no longer used as the gate.
 export const CONTRACTS_EMAILS = [
   'info@cymbul.co',
   'cgibson@kjsportstravel.com',
@@ -23,7 +26,7 @@ export const CONTRACTS_EMAILS = [
   'tlopez@kjsportstravel.com',
 ]
 export function isContractsUser(email: string | null | undefined): boolean {
-  return CONTRACTS_EMAILS.includes((email ?? '').trim().toLowerCase())
+  return !!(email && email.trim())
 }
 
 // Who can edit the AI fact-check rules (matches the DB RLS on
