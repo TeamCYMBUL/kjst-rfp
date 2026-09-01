@@ -6,6 +6,7 @@
 // hotel's OWN past answers — never another hotel's. verify_jwt = false.
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { rateLimited, tooManyRequests } from '../_shared/rateLimit.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -20,6 +21,8 @@ const clean = (v: unknown): string => (v == null ? '' : String(v)).trim()
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
+
+  if (await rateLimited(req, 'rfp-prefill', 60)) return tooManyRequests(CORS)
 
   let body: { token?: string }
   try { body = await req.json() } catch { return json({ error: 'Invalid JSON' }, 400) }

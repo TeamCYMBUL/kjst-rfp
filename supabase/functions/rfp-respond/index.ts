@@ -1,5 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { rateLimited, tooManyRequests } from '../_shared/rateLimit.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -247,6 +248,9 @@ function staffNotificationHtml(p: {
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
+
+  // Generous: autosave fires while a hotel fills the form, so this only bites a grinder.
+  if (await rateLimited(req, 'rfp-respond', 180)) return tooManyRequests(CORS)
 
   let body: any
   try {

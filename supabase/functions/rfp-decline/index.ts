@@ -1,5 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { rateLimited, tooManyRequests } from '../_shared/rateLimit.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -51,6 +52,8 @@ async function getAssignedManagers(sb: ReturnType<typeof createClient>, clientId
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
+
+  if (await rateLimited(req, 'rfp-decline', 30)) return tooManyRequests(CORS)
 
   let body: { token?: string; decline_reason?: string; decline_notes?: string; visit?: number }
   try { body = await req.json() } catch { return json({ error: 'Invalid JSON' }, 400) }

@@ -4,6 +4,7 @@
 // service role behind the token check. verify_jwt = false (link-only, like RFP).
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { rateLimited, tooManyRequests } from '../_shared/rateLimit.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -17,6 +18,8 @@ function json(data: unknown, status = 200) {
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
+
+  if (await rateLimited(req, 'contract-get', 60)) return tooManyRequests(CORS)
 
   const url = new URL(req.url)
   const token = url.searchParams.get('token')

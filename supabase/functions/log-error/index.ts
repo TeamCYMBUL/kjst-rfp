@@ -6,6 +6,7 @@
 // misbehaving or malicious client can't bloat the table.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "jsr:@supabase/supabase-js@2"
+import { rateLimited, tooManyRequests } from "../_shared/rateLimit.ts"
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -30,6 +31,8 @@ function json(data: unknown, status = 200) {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS })
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405)
+
+  if (await rateLimited(req, "log-error", 90)) return tooManyRequests(CORS)
 
   // Reject oversized bodies outright (a stack trace should never be this big).
   const len = Number(req.headers.get("content-length") ?? "0")

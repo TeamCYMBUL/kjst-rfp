@@ -4,6 +4,7 @@
 // 'uploaded'. A token only ever writes to its OWN contract. verify_jwt = false.
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { rateLimited, tooManyRequests } from '../_shared/rateLimit.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -27,6 +28,8 @@ function safeName(name: string): string {
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
+
+  if (await rateLimited(req, 'contract-upload', 30)) return tooManyRequests(CORS)
 
   let form: FormData
   try { form = await req.formData() } catch { return json({ error: 'Expected multipart form data' }, 400) }

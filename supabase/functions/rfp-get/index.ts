@@ -1,5 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { rateLimited, tooManyRequests } from '../_shared/rateLimit.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -14,6 +15,8 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'GET') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: { ...CORS, 'Content-Type': 'application/json' } })
   }
+
+  if (await rateLimited(req, 'rfp-get', 120)) return tooManyRequests(CORS)
 
   const url = new URL(req.url)
   const token = url.searchParams.get('token')
