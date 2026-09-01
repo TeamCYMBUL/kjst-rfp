@@ -59,7 +59,7 @@ const parseRequestedCount = (item: any): number | null => {
 // Keying off the ANSWER shape (not the item type) makes every client resolve the
 // same way: a Yes shows "Yes" and, for cost math, counts as the requested
 // quantity; a number shows/counts as itself; no answer is blank/0.
-const readSuiteUpgrade = (
+export const readSuiteUpgrade = (
   item: any,
   ans: { answer_yes_no?: boolean | null; answer_value?: string | null; comment?: string | null } | null | undefined,
 ): { display: string | number | null; count: number; note: string | null } => {
