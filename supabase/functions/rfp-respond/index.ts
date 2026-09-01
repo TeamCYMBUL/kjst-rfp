@@ -260,9 +260,9 @@ Deno.serve(async (req: Request) => {
   }
 
   const { token, response: responseFields, answers, submit } = body
-  // When a KJST staff member enters the bid on the hotel's behalf, suppress the
-  // automated emails (the hotel didn't actually submit; KJST logged it).
-  const staffEntry = body?.staff_entry === true
+  // A staffer entering a bid on the hotel's behalf CLAIMS staff_entry; we verify
+  // it below before honoring it.
+  const claimedStaffEntry = body?.staff_entry === true
   if (!token) return json({ error: 'Missing token' }, 400)
 
   const supabase = createClient(
@@ -270,6 +270,26 @@ Deno.serve(async (req: Request) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     { auth: { persistSession: false } }
   )
+
+  // VERIFY staff entry instead of trusting the request. Previously any caller
+  // could set staff_entry:true and edit a submitted bid (a hotel could revise
+  // its own locked bid). Now staff entry is honored only for a real signed-in
+  // KJST staff account, proven by the session token the frontend attaches. A
+  // hotel is never signed in, so it can't forge this. Fails closed to a normal
+  // hotel submission (the submitted-bid lock then applies) if the session is
+  // missing or invalid.
+  let staffEntry = false
+  if (claimedStaffEntry) {
+    const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
+    if (jwt) {
+      const { data: authData } = await supabase.auth.getUser(jwt)
+      const uid = authData?.user?.id
+      if (uid) {
+        const { data: prof } = await supabase.from('staff_profiles').select('id').eq('id', uid).maybeSingle()
+        staffEntry = !!prof
+      }
+    }
+  }
 
   // --- Validate token ---
   const { data: inv, error: invErr } = await supabase

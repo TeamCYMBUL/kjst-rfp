@@ -1,5 +1,8 @@
 // Typed wrappers for the two hotel-facing Edge Functions.
-// These are called by unauthenticated hotel users — no Supabase client needed.
+// Hotel users are unauthenticated; the only place a session matters is a KJST
+// staffer filling a bid on a hotel's behalf (?entry=staff), where we pass their
+// session token so the backend can VERIFY staff entry instead of trusting a flag.
+import { supabase } from './supabase'
 
 const BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
 
@@ -185,11 +188,19 @@ export async function respondRfp(args: {
   submit: boolean
   staffEntry?: boolean
 }): Promise<{ ok: boolean; response_id: string; submitted: boolean }> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  // If a staffer is signed in (the ?entry=staff flow), send their session so the
+  // backend can confirm they're real staff before honoring staff_entry. Hotels
+  // are never signed in, so no header is sent and staff_entry can't be forged.
+  if (args.staffEntry) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
+  }
   const res = await fetch(`${BASE}/rfp-respond`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     // When a KJST staff member fills the bid on the hotel's behalf, flag it so
-    // the backend skips the hotel-facing confirmation email.
+    // the backend skips the hotel-facing confirmation email (verified server-side).
     body: JSON.stringify({ ...args, staff_entry: args.staffEntry === true }),
   })
   const data = await res.json()
