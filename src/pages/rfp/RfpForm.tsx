@@ -1413,8 +1413,9 @@ export default function RfpForm() {
       }
     }
 
-    // Required: VS. Current Selling Rate
-    if (!visit1Declined && !isMultiScenario && !resp.current_selling_rate.trim()) {
+    // Required: VS. Current Selling Rate (Visit 1 only — a Stay-2-only hotel is
+    // never shown this field, so it must not be required for them).
+    if (scopeShowsV1 && !visit1Declined && !isMultiScenario && !resp.current_selling_rate.trim()) {
       setValidationError('VS. Current Selling Rate is required before submitting.')
       focusField('rate-selling')
       return
@@ -1428,8 +1429,9 @@ export default function RfpForm() {
       return
     }
 
-    // Required: Suite Rate (always)
-    if (!visit1Declined && !isMultiScenario && !resp.best_suite_rate.trim()) {
+    // Required: Suite Rate (Visit 1 only — skip for a Stay-2-only hotel, which
+    // quotes its suite rate under Visit 2 instead).
+    if (scopeShowsV1 && !visit1Declined && !isMultiScenario && !resp.best_suite_rate.trim()) {
       setValidationError('Best Available Suite Rate is required before submitting.')
       focusField('rate-suite')
       return
