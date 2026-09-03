@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTheme, type Theme } from '../../contexts/ThemeContext'
 import { useAuth } from '../../auth/AuthContext'
+import MfaSetup from '../../components/MfaSetup'
 
 // ── Theme preview mini-mockups ──────────────────────────────────────────────
 
@@ -194,6 +195,14 @@ export default function Settings() {
             )
           })}
         </div>
+      </Section>
+
+      {/* Two-factor authentication (optional) */}
+      <Section
+        title="Two-factor authentication"
+        description="Optional. Add an authenticator-app code to your sign-in for stronger account security."
+      >
+        <MfaSetup />
       </Section>
 
       {/* Account */}
