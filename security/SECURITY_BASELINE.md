@@ -1,103 +1,157 @@
 # CYMBUL Backend Security Baseline
 
-The standard every CYMBUL product must meet before a client's data lands in it.
-KJST is the reference implementation: this file describes what KJST actually
-does, so a new product inherits the same posture by copying these patterns (and
-the `cymbul-app-starter`) rather than re-deciding security each time.
+The security standard for every CYMBUL product. KJST is the reference build; a new
+product copies these patterns (and the `cymbul-app-starter`) rather than
+re-deciding security. Measured against two yardsticks:
 
-It is written to two yardsticks:
-- **CVSS** — no open Critical or High vulnerability, and a process to score and
-  fix new ones. (CVSS rates individual vulns; it is not a certification.)
-- **NIST CSF** — controls mapped across the five functions: Identify, Protect,
-  Detect, Respond, Recover. (A framework you map to, not a pass/fail exam.)
+- **CVSS** — no open Critical/High vulnerability + a process to score and fix new ones.
+- **NIST CSF** — controls mapped across Identify, Protect, Detect, Respond, Recover.
 
----
+Aligned to SOC 2 Trust Services and ISO 27001 Annex A so it reads as a real
+program, right-sized: at a small scale many controls are a one-page policy or
+"N/A until we hire," and that is a legitimate, defensible posture.
 
-## 1. The baseline controls (must-have on every product)
-
-| # | Control | How KJST does it |
-|---|---------|------------------|
-| 1 | **Tenant isolation** | Row-Level Security on every table; each tenant table scoped `organization_id = current_org_id()`, children scoped by joining up to it. No `using(true)` on tenant data. |
-| 2 | **Isolation is tested, not assumed** | `src/lib/rls-isolation.test.ts` + `backend-security.test.ts` prove one token/tenant cannot read another, run in CI. |
-| 3 | **Strong capability tokens** | Public links are 24 CSPRNG bytes (192-bit), url-safe, unique (`generateToken`), **rate-limited** and **expiring** (`expires_at`). |
-| 4 | **No secrets in the client** | Only the publishable key ships; `.env` gitignored; grep the build (`sb_secret|re_|sk-ant`) before deploy. Service-role key lives only in edge-function secrets. |
-| 5 | **Schema + RLS in source control** | `supabase/schema/` snapshot — reviewable, diffable, showable to a reviewer. |
-| 6 | **Advisor to intentional-only** | Run the Supabase security advisor; 0 Critical/High; every remaining WARN either fixed or listed in Section 4. |
-| 7 | **Backups + restore drill** | Nightly backup workflow; restore tested at least once. |
-| 8 | **Monitoring** | Uptime check (every 2 min), client-error logging + daily digest, daily health heartbeat, `/status` page. |
-| 9 | **Incident response** | One-page IR plan (rotate service key, revoke sessions, Attack Mode, take down) kept where on-call can find it. |
-| 10 | **Least-privilege functions** | `SECURITY DEFINER` only where required; `EXECUTE` revoked from `authenticated`/`anon`/`public` on any function only the service role or a trigger uses. |
-| 11 | **Public edge endpoints gated** | `verify_jwt=false` public functions are token-gated, rate-limited, and fail-open on the limiter. Staff-only actions verify a real staff session, never a trusted request flag. |
-| 12 | **Leaked-password protection ON** | Supabase Auth → enable HaveIBeenPwned check. (Dashboard toggle; may require Pro.) |
+**Status legend:** `IN PLACE` implemented & verified · `PARTIAL` partly done ·
+`DOC` a short policy/decision (little to build) · `PLANNED` open · `PAID` needs
+spend · `N/A` right-sized out at current scale.
 
 ---
 
-## 2. NIST CSF mapping
+## Control matrix
 
-- **Identify** — schema + RLS in source control; data classified (e.g., KJST holds
-  athlete-travel + trade-secret pricing); vendor/subprocessor list + DPAs on file.
-- **Protect** — controls 1, 3, 4, 10, 11, 12 above; encryption in transit/at rest
-  (infra); staff MFA; role + org access gates.
-- **Detect** — control 8 (uptime, errors, heartbeat) + regular advisor runs.
-- **Respond** — control 9 (IR plan); know the breach-notification obligations for
-  the states your users live in; run one 30-minute tabletop.
-- **Recover** — control 7 (backups + tested restore); documented RTO/RPO; PITR if
-  the data warrants seconds-level recovery.
+### 1. Governance & risk
+| Control | Status | Note |
+|---|---|---|
+| Security baseline standard | IN PLACE | This document |
+| Named security owner | DOC | CYMBUL principal; state it in writing |
+| Asset & data inventory | IN PLACE | Schema snapshot + subprocessor list; refresh on change |
+| Data classification | DOC | Athlete-travel (safety) + trade-secret pricing identified |
+| Annual risk assessment | PLANNED | One-page risk register |
+| InfoSec / acceptable-use policy set | PLANNED | Policy pack |
+| Vendor / subprocessor management + DPAs | PARTIAL | Subprocessor list live (/trust); accept + file the DPAs |
+
+### 2. Access & identity
+| Control | Status | Note |
+|---|---|---|
+| RBAC / least privilege | IN PLACE | Roles + per-org scoping; least-privilege DB functions |
+| MFA available for staff | IN PLACE | Opt-in TOTP in Settings |
+| MFA enforced | PLANNED | Flip only after staff enroll (avoid lockout) |
+| Unique accounts, no shared logins | DOC | Standard practice |
+| Strong password policy | PARTIAL | Min length set; leaked-password check = dashboard toggle |
+| Session management | PARTIAL | Supabase defaults; tighter timeout via Pro |
+| Access reviews (periodic) | PLANNED | Quarterly review of who has access |
+| Offboarding / deprovisioning | PLANNED | Checklist + revoke on staff exit |
+
+### 3. Data protection
+| Control | Status | Note |
+|---|---|---|
+| Tenant isolation (RLS) | IN PLACE | RLS on all tables; cross-tenant test in CI |
+| Encryption in transit | IN PLACE | TLS 1.2+ |
+| Encryption at rest | IN PLACE | AES-256 (infra) |
+| Secrets management | IN PLACE | Env only; no keys in bundle; scanned |
+| Log retention | IN PLACE | error 180d, activity + audit 2y |
+| Client-data deletion on termination | IN PLACE | Delete path + documented in /trust |
+| Backups + tested restore | IN PLACE | Nightly; restore drilled |
+| Point-in-time recovery | PAID | Optional; seconds-level RPO |
+| Regulated-data handling | DOC | AUP forbids PHI/PCI/biometric/children without agreement |
+
+### 4. Application security
+| Control | Status | Note |
+|---|---|---|
+| Secure SDLC / change control | IN PLACE | Migrations + schema in source control, PR-based |
+| Dependency management | IN PLACE | Dependabot (weekly) |
+| Secret scanning | IN PLACE | gitleaks in CI (pre-commit hook = nice-to-have) |
+| Vulnerability scanning | IN PLACE | Supabase advisor + npm audit |
+| SBOM | IN PLACE | CycloneDX generated in CI |
+| Security testing | IN PLACE | Cross-tenant + backend-security tests in CI |
+| Rate limiting / abuse protection | IN PLACE | Per-IP on public endpoints |
+| Input validation | IN PLACE | Form + edge-function validation |
+| Security headers / CSP | IN PLACE | CSP, HSTS, nosniff, frame-deny, referrer, permissions |
+
+### 5. Infrastructure & network
+| Control | Status | Note |
+|---|---|---|
+| Environment separation (prod/preview) | IN PLACE | Separate deploys |
+| Hardened config / no public secrets | IN PLACE | Verified clean bundle |
+| WAF / DDoS | PARTIAL | Vercel free WAF available; enable in dashboard |
+| Deployment protection | PLANNED | Vercel toggle for preview URLs |
+| Infra event logging | PARTIAL | Vercel + Supabase logs (short retention on lower tiers) |
+
+### 6. Logging & monitoring
+| Control | Status | Note |
+|---|---|---|
+| Uptime monitoring | IN PLACE | Every 2 min |
+| Error logging + digest | IN PLACE | Daily grouped email |
+| Audit trail (who did what) | IN PLACE | DB-trigger audit_log; admin-read |
+| Alerting | IN PLACE | Down/recovery + daily heartbeat |
+| Log retention | IN PLACE | See Data protection |
+
+### 7. Incident response & resilience
+| Control | Status | Note |
+|---|---|---|
+| Incident response plan | IN PLACE | One-page runbook |
+| Status page / comms | IN PLACE | Internal /status + public /trust |
+| Breach-notification process | PLANNED | Per-state quick-reference + template |
+| Tabletop exercise | PLANNED | One 30-minute run |
+| Business continuity / DR | PARTIAL | Backups + restore drill; document RTO/RPO |
+
+### 8. Compliance & legal
+| Control | Status | Note |
+|---|---|---|
+| Claims substantiation | IN PLACE | Substantiation record per marketing/AI claim |
+| Trust Center | IN PLACE | Public /trust |
+| Terms + liability cap | DOC | Drafted; needs signing |
+| Privacy policy matching practice | PLANNED | Rewrite to reality |
+| DPAs / subprocessor list | PARTIAL | List live; accept + file vendor DPAs |
+| Applicable-law tracking | PLANNED | State-privacy thresholds monitor |
+| SOC 2 | N/A | Defer until a deal is blocked on it; inherit infra SOC 2 |
+
+### 9. People / operational
+| Control | Status | Note |
+|---|---|---|
+| Security awareness | PLANNED | One-pager; formalizes on hire |
+| Confidentiality agreements | PLANNED | Template for contractors/staff |
+| Background checks | N/A | Hiring-dependent |
 
 ---
 
-## 3. Vulnerability (CVSS) process
+## NIST CSF mapping
+- **Identify** — asset/data inventory, data classification, subprocessor list, risk register (planned).
+- **Protect** — RLS, encryption, RBAC + MFA, secrets mgmt, rate limiting, security headers, AUP.
+- **Detect** — uptime, error logging, audit trail, alerting, advisor/scans.
+- **Respond** — IR plan, breach-notification process (planned), tabletop (planned), status/trust pages.
+- **Recover** — nightly backups + tested restore, documented RTO/RPO (planned), optional PITR.
 
+## Vulnerability (CVSS) process
 1. Run the security advisor (Supabase MCP `get_advisors`, or the dashboard).
-2. Any **Critical/High** is fixed before launch. **Medium/Low** is fixed or logged.
-3. Re-run after any schema/DDL change (new tables/functions can reopen RLS gaps).
-4. Record the run (date, findings, what was accepted) on the product's scorecard.
+2. Critical/High fixed before launch; Medium/Low fixed or logged.
+3. Re-run after any schema/DDL change.
+4. Record the run (date, findings, accepted items) on the product scorecard.
 
----
+## Accepted-by-design advisor findings (register)
+- `authenticated` may execute the RLS helper functions (`current_org_id`,
+  `is_admin`, `is_assigned_to_client`, `is_timeline_admin`, `is_viewer`) — required;
+  RLS policies call them.
+- `authenticated` may execute `get_lifecycle_metrics` / `get_lifecycle_timeline` /
+  `monitoring_scoreboard` — app-called; each gates internally.
+- `mark_proposal_sent` — writes only an org-scoped activity row.
+- `pg_net` in the public schema — Supabase default (cron).
+Anything a signed-in user does not need has had `EXECUTE` revoked.
 
-## 4. Accepted-by-design advisor findings (register)
-
-These WARN-level items are understood and intentionally accepted on KJST. A future
-audit should recognize them as decisions, not gaps:
-
-- **`authenticated` can execute the RLS helper functions** (`current_org_id`,
-  `is_admin`, `is_assigned_to_client`, `is_timeline_admin`, `is_viewer`) — required:
-  RLS policies call these, so the querying role must be able to execute them.
-  This is Supabase's recommended RLS pattern.
-- **`authenticated` can execute `get_lifecycle_metrics` / `get_lifecycle_timeline`
-  / `monitoring_scoreboard`** — called by the app; each gates internally
-  (timeline-admin or owner-email check) and returns nothing to anyone else.
-- **`mark_proposal_sent`** — writes only an org-scoped activity-log row for the
-  caller; negligible impact.
-- **`pg_net` in the public schema** — Supabase default; used by cron.
-
-Everything a signed-in user does NOT need (`check_rate_limit`,
-`snapshot_concession_items_for_trip`) has had `EXECUTE` revoked.
-
----
-
-## 5. Per-product launch: run this every time
-
-- [ ] Controls 1-11 in place (10 & 11 = least privilege + gated endpoints)
-- [ ] Advisor at 0 Critical/High; remaining WARNs fixed or added to this register
+## Per-product launch checklist
+- [ ] Domains 2-6 core controls IN PLACE (isolation + test, tokens, headers, scanning, monitoring, backups)
+- [ ] Advisor 0 Critical/High; remaining WARNs fixed or in the register
 - [ ] Cross-tenant isolation test passing in CI
-- [ ] Backup taken and a restore tested once
-- [ ] Monitoring live (uptime + errors + heartbeat)
-- [ ] IR plan written; leaked-password protection enabled (control 12)
-- [ ] NIST CSF mapping filled for the product
-- [ ] Security scorecard stamped and filed (date, findings, coverage)
+- [ ] Backup taken + one restore tested
+- [ ] Signed agreement with liability cap + data-responsibility (Compliance domain)
+- [ ] Privacy policy + Trust Center published; DPAs filed
+- [ ] Claims substantiation on file for any published number/AI claim
+- [ ] NIST CSF mapping filled; scorecard stamped (date, findings, coverage)
 
----
-
-## 6. Verify quickly
-
+## Verify quickly
 ```bash
-# secrets not in the shipped bundle
 npm run build && grep -rE "sb_secret|re_|sk-ant" dist/ || echo "clean"
-# isolation + backend security tests
 npx vitest run src/lib/rls-isolation.test.ts src/lib/backend-security.test.ts
-# live commit check
 curl -s https://rfp.kjsportstravel.com/version.json
 ```
-
 Advisor: Supabase MCP `get_advisors` (type: security) or Dashboard → Advisors.
