@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
+import { reportError } from '../../lib/reportError'
 import { getRfp, respondRfp, declineRfp, fetchRfpPrefill } from '../../lib/rfpApi'
 import type { RfpPrefill } from '../../lib/rfpApi'
 import { supabase } from '../../lib/supabase'
@@ -1262,6 +1263,10 @@ export default function RfpForm() {
         if (!submit) {
           setSaveStatus('error')
           setSaveError((e as Error).message)
+          // Auto-report the save failure so the team is notified without the
+          // hotel needing to file anything. Transient network errors are ignored
+          // by reportError's filters.
+          reportError({ kind: 'window-error', message: 'RFP autosave failed: ' + ((e as Error).message || 'unknown'), context: { where: 'rfp-autosave' } })
         }
         return false
       }
@@ -1929,7 +1934,7 @@ export default function RfpForm() {
           >
             {saveStatus === 'saving' && 'Saving draft…'}
             {saveStatus === 'saved' && '✓Draft saved — you can return to this link to finish later.'}
-            {saveStatus === 'error' && `Couldn't auto-save: ${saveError}`}
+            {saveStatus === 'error' && `Couldn't save just now — your entries are safe and our team has been notified. Keep editing and it will retry; if it persists, contact KJST.`}
           </div>
         )}
 

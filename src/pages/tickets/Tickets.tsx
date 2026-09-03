@@ -83,6 +83,27 @@ export default function Tickets() {
   const [submitting, setSubmitting] = useState(false)
   const [justSubmitted, setJustSubmitted] = useState(false)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [platformUp, setPlatformUp] = useState<boolean | null>(null)
+
+  // Best-effort live status for the "Before you file" card. If it can't read,
+  // we just hide the status line.
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const { data } = await supabase
+          .from('uptime_checks')
+          .select('ok')
+          .order('checked_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (alive) setPlatformUp((data as { ok?: boolean } | null)?.ok ?? null)
+      } catch {
+        if (alive) setPlatformUp(null)
+      }
+    })()
+    return () => { alive = false }
+  }, [])
 
   const uploadFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return
@@ -208,6 +229,25 @@ export default function Tickets() {
           <ErrorNote message={error} />
         </div>
       )}
+
+      <Card className="mb-6 border-blue-200 bg-blue-50/60 p-5 dark:border-blue-900/40 dark:bg-blue-900/10">
+        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Before you file</h2>
+        <ul className="mt-2 space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
+          <li>
+            Most glitches clear with a quick refresh — the app auto-updates, and a refresh makes sure you're on the newest version.{' '}
+            <button type="button" onClick={() => window.location.reload()} className="font-medium text-blue-700 hover:underline dark:text-blue-400">
+              Refresh now
+            </button>
+          </li>
+          <li>Errors are reported to our team automatically, so we may already be looking into it.</li>
+          {platformUp !== null && (
+            <li className="flex items-center gap-2">
+              <span className={`inline-block h-2 w-2 rounded-full ${platformUp ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+              Platform status: {platformUp ? 'operational' : 'checking recent activity'}
+            </li>
+          )}
+        </ul>
+      </Card>
 
       <Card className="p-6 mb-6">
         <form onSubmit={submit} className="space-y-4">

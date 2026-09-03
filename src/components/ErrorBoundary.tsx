@@ -2,27 +2,39 @@ import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { reportError } from '../lib/reportError'
 
 type Props = { children: ReactNode }
-type State = { error: Error | null }
+type State = { error: Error | null; ref: string | null }
+
+// Short, human-friendly reference so a user's report ties to the logged error.
+function makeRef(): string {
+  try {
+    return 'E-' + crypto.randomUUID().slice(0, 6).toUpperCase()
+  } catch {
+    return 'E-' + Math.random().toString(36).slice(2, 8).toUpperCase()
+  }
+}
 
 export default class ErrorBoundary extends Component<Props, State> {
-  state: State = { error: null }
+  state: State = { error: null, ref: null }
 
   static getDerivedStateFromError(error: Error): State {
-    return { error }
+    return { error, ref: null }
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('[ErrorBoundary]', error, info.componentStack)
+    const ref = makeRef()
+    this.setState({ ref })
+    console.error('[ErrorBoundary]', ref, error, info.componentStack)
     reportError({
       kind: 'react-boundary',
       message: error.message,
       stack: error.stack ?? null,
       componentStack: info.componentStack ?? null,
+      context: { ref },
     })
   }
 
   render() {
-    const { error } = this.state
+    const { error, ref } = this.state
     if (!error) return this.props.children
 
     return (
@@ -37,8 +49,14 @@ export default class ErrorBoundary extends Component<Props, State> {
             Something went wrong
           </h1>
           <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-            An unexpected error occurred. The error has been logged.
+            This was <span className="font-medium text-slate-700 dark:text-slate-300">automatically reported to our team</span>, so you usually don't need to submit a ticket. A reload often fixes it. If it keeps happening, contact us with the reference below.
           </p>
+          {ref && (
+            <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900">
+              <span className="text-slate-500 dark:text-slate-400">Reference:</span>{' '}
+              <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">{ref}</span>
+            </div>
+          )}
           <details className="mb-5 rounded-lg bg-slate-50 p-3 dark:bg-slate-900">
             <summary className="cursor-pointer text-xs font-medium text-slate-500 dark:text-slate-400">
               Error details
@@ -53,6 +71,12 @@ export default class ErrorBoundary extends Component<Props, State> {
           >
             Reload page
           </button>
+          <a
+            href={`mailto:info@cymbul.co?subject=${encodeURIComponent('Error ' + (ref ?? '') )}&body=${encodeURIComponent('What I was doing when it happened:\n\n\n(Reference: ' + (ref ?? '') + ')')}`}
+            className="mt-2 block w-full rounded-lg border border-slate-200 px-4 py-2.5 text-center text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors"
+          >
+            Still stuck? Contact support
+          </a>
         </div>
       </div>
     )
