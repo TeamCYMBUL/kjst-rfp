@@ -1,0 +1,17 @@
+version: 2
+updates:
+  # Weekly PRs for vulnerable/outdated npm dependencies.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Batch minor/patch bumps into one PR to reduce noise.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+  # Keep GitHub Actions pinned versions current.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

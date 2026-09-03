@@ -1,0 +1,17 @@
+# gitleaks config for KJST. Extends the default rules and allowlists the
+# intentionally-public values so the scan flags only real leaks.
+title = "KJST gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Publishable/anon keys and test fixtures that are public by design"
+paths = [
+  # These test files hardcode the PUBLIC anon/publishable key on purpose, to
+  # prove RLS blocks it. That key is meant to ship to browsers; it is not a secret.
+  '''src/lib/backend-security.test.ts''',
+  '''src/lib/rls-isolation.test.ts''',
+  # Example env file holds placeholders only.
+  '''\.env\.example''',
+]
