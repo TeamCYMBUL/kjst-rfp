@@ -212,17 +212,30 @@ Deno.serve(async (req: Request) => {
 
   // KJST-managed audit rules, edited in-app and stored in the DB, are appended to
   // the base instructions so the team can add/change checks without a code deploy.
+  // Each rule is one of two kinds:
+  //   check    -> the model returns exactly ONE pass/fail line for it.
+  //   guidance -> folded into the instructions to shape judgment and coverage,
+  //               with NO check line of its own (principles, broad coverage notes).
   const { data: ruleRows } = await sb
     .from('contract_check_rules')
-    .select('rule_text')
+    .select('rule_text, kind')
     .eq('active', true)
     .order('sort_order', { ascending: true })
-  const extraRules = (ruleRows ?? []).map((r: any) => String(r.rule_text ?? '').trim()).filter(Boolean)
-  const rulesSection = extraRules.length
-    ? '\n\nADDITIONAL MANDATORY RULES set by KJ Sports Travel. Evaluate EACH numbered rule below against the contract and include exactly ONE check per rule in your output: label = a short name for the rule; status = "mismatch" if the contract violates the rule or contains what the rule says to flag, otherwise "match"; contract_value = the specific offending text and where it appears (or "None found" / "Compliant"); bid_value = a short statement of what the rule requires. Rules:\n'
-      + extraRules.map((r, i) => `${i + 1}. ${r}`).join('\n')
+  const activeRules = (ruleRows ?? [])
+    .map((r: any) => ({ text: String(r.rule_text ?? '').trim(), kind: String(r.kind ?? 'check') }))
+    .filter((r) => r.text)
+  const checkRules = activeRules.filter((r) => r.kind !== 'guidance').map((r) => r.text)
+  const guidanceRules = activeRules.filter((r) => r.kind === 'guidance').map((r) => r.text)
+
+  const guidanceSection = guidanceRules.length
+    ? '\n\nREVIEW GUIDANCE set by KJ Sports Travel. This shapes how you judge and how thoroughly you cover the contract. Do NOT emit a separate check for any guidance item; apply it to every check instead:\n'
+      + guidanceRules.map((r, i) => `${i + 1}. ${r}`).join('\n')
     : ''
-  const system = baseSystem + rulesSection
+  const rulesSection = checkRules.length
+    ? '\n\nADDITIONAL MANDATORY RULES set by KJ Sports Travel. Evaluate EACH numbered rule below against the contract and include exactly ONE check per rule in your output: label = a short name for the rule; status = "mismatch" if the contract violates the rule or contains what the rule says to flag, otherwise "match"; contract_value = the specific offending text and where it appears (or "None found" / "Compliant"); bid_value = a short statement of what the rule requires. Rules:\n'
+      + checkRules.map((r, i) => `${i + 1}. ${r}`).join('\n')
+    : ''
+  const system = baseSystem + guidanceSection + rulesSection
 
   const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',

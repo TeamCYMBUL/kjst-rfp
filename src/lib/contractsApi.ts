@@ -359,10 +359,17 @@ export async function uploadSignedCopy(contractId: string, file: File): Promise<
 }
 
 // ── Fact-check rules (owner-editable; the analyzer reads the active ones) ───────
+// A rule is either a `check` (the AI returns exactly one pass/fail line for it) or
+// `guidance` (folded into the analyzer's instructions to shape judgment/coverage,
+// with NO check line of its own). Guidance is for principles and broad coverage
+// notes that don't have a single yes/no answer.
+export type ContractRuleKind = 'check' | 'guidance'
+
 export type ContractCheckRule = {
   id: string
   rule_text: string
   active: boolean
+  kind: ContractRuleKind
   sort_order: number
   created_by: string | null
   created_at: string
@@ -379,7 +386,11 @@ export async function listContractRules(): Promise<ContractCheckRule[]> {
   return (data ?? []) as ContractCheckRule[]
 }
 
-export async function addContractRule(rule_text: string, created_by: string | null): Promise<void> {
+export async function addContractRule(
+  rule_text: string,
+  created_by: string | null,
+  kind: ContractRuleKind = 'check',
+): Promise<void> {
   // Place new rules at the end.
   const { data: last } = await supabase
     .from('contract_check_rules')
@@ -390,13 +401,13 @@ export async function addContractRule(rule_text: string, created_by: string | nu
   const sort_order = ((last as any)?.sort_order ?? 0) + 1
   const { error } = await supabase
     .from('contract_check_rules')
-    .insert({ rule_text, sort_order, created_by })
+    .insert({ rule_text, sort_order, created_by, kind })
   if (error) throw error
 }
 
 export async function updateContractRule(
   id: string,
-  patch: Partial<Pick<ContractCheckRule, 'rule_text' | 'active'>>,
+  patch: Partial<Pick<ContractCheckRule, 'rule_text' | 'active' | 'kind'>>,
 ): Promise<void> {
   const { error } = await supabase
     .from('contract_check_rules')
