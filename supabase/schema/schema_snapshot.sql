@@ -141,14 +141,14 @@ create policy concession_items_all on public.concession_items as permissive for 
   using ((organization_id = current_org_id()))
   with check ((organization_id = current_org_id()));
 
--- contract_check_rules (edit limited to owner + Catherine + Anabel)
+-- contract_check_rules (edit limited to owner + Catherine + Anabel + Joseph)
 create policy contract_rules_editors_delete on public.contract_check_rules as permissive for delete to authenticated
-  using (((auth.jwt() ->> 'email'::text) = ANY (ARRAY['info@cymbul.co'::text, 'cgibson@kjsportstravel.com'::text, 'acabrera@kjsportstravel.com'::text])));
+  using (((auth.jwt() ->> 'email'::text) = ANY (ARRAY['info@cymbul.co'::text, 'cgibson@kjsportstravel.com'::text, 'acabrera@kjsportstravel.com'::text, 'jmercado@kjsportstravel.com'::text])));
 create policy contract_rules_editors_insert on public.contract_check_rules as permissive for insert to authenticated
-  with check (((auth.jwt() ->> 'email'::text) = ANY (ARRAY['info@cymbul.co'::text, 'cgibson@kjsportstravel.com'::text, 'acabrera@kjsportstravel.com'::text])));
+  with check (((auth.jwt() ->> 'email'::text) = ANY (ARRAY['info@cymbul.co'::text, 'cgibson@kjsportstravel.com'::text, 'acabrera@kjsportstravel.com'::text, 'jmercado@kjsportstravel.com'::text])));
 create policy contract_rules_editors_update on public.contract_check_rules as permissive for update to authenticated
-  using (((auth.jwt() ->> 'email'::text) = ANY (ARRAY['info@cymbul.co'::text, 'cgibson@kjsportstravel.com'::text, 'acabrera@kjsportstravel.com'::text])))
-  with check (((auth.jwt() ->> 'email'::text) = ANY (ARRAY['info@cymbul.co'::text, 'cgibson@kjsportstravel.com'::text, 'acabrera@kjsportstravel.com'::text])));
+  using (((auth.jwt() ->> 'email'::text) = ANY (ARRAY['info@cymbul.co'::text, 'cgibson@kjsportstravel.com'::text, 'acabrera@kjsportstravel.com'::text, 'jmercado@kjsportstravel.com'::text])))
+  with check (((auth.jwt() ->> 'email'::text) = ANY (ARRAY['info@cymbul.co'::text, 'cgibson@kjsportstravel.com'::text, 'acabrera@kjsportstravel.com'::text, 'jmercado@kjsportstravel.com'::text])));
 create policy contract_rules_read on public.contract_check_rules as permissive for select to authenticated
   using (true);
 

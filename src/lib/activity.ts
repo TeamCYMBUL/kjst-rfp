@@ -30,11 +30,12 @@ export function isContractsUser(email: string | null | undefined): boolean {
 }
 
 // Who can edit the AI fact-check rules (matches the DB RLS on
-// contract_check_rules — keep the two in sync). Owner + Anabel + Catherine.
+// contract_check_rules — keep the two in sync). Owner + Anabel + Catherine + Joseph.
 export const CONTRACT_RULES_ADMIN_EMAILS = [
   'info@cymbul.co',
   'cgibson@kjsportstravel.com',
   'acabrera@kjsportstravel.com',
+  'jmercado@kjsportstravel.com',
 ]
 export function isContractRulesAdmin(email: string | null | undefined): boolean {
   return CONTRACT_RULES_ADMIN_EMAILS.includes((email ?? '').trim().toLowerCase())
