@@ -9,9 +9,21 @@ type Mode = 'signin' | 'signup' | 'forgot' | 'reset'
 const inputCls =
   'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#1C1008] focus:ring-1 focus:ring-[#1C1008] focus:outline-none'
 
+// Where to land after signing in. Honors ?redirect= (e.g. a staffer sent to log
+// in from an "Edit bid" link), but only same-origin in-app paths — never a
+// protocol-relative or absolute URL — so it can't be used as an open redirect.
+function safeRedirect(): string {
+  try {
+    const raw = new URLSearchParams(window.location.search).get('redirect')
+    if (raw && raw.startsWith('/') && !raw.startsWith('//') && !raw.includes('://')) return raw
+  } catch { /* ignore */ }
+  return '/'
+}
+
 export default function Login() {
   const { session } = useAuth()
   const navigate = useNavigate()
+  const dest = safeRedirect()
   // A Supabase recovery link lands here with `type=recovery` in the URL hash and
   // also establishes a session. Detect it synchronously so we open the
   // "set a new password" form instead of the auto-redirect (line below) winning
@@ -36,7 +48,7 @@ export default function Login() {
 
   // Already signed in and not in reset flow → go to the dashboard.
   // Stay put during a recovery so the new-password form can render.
-  if (session && mode !== 'reset' && !isRecovery) return <Navigate to="/" replace />
+  if (session && mode !== 'reset' && !isRecovery) return <Navigate to={dest} replace />
 
   const clear = () => { setError(null); setNotice(null) }
 
@@ -48,7 +60,7 @@ export default function Login() {
     if (mode === 'signin') {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) setError(error.message)
-      else navigate('/', { replace: true })
+      else navigate(dest, { replace: true })
 
     } else if (mode === 'signup') {
       const { data, error } = await supabase.auth.signUp({

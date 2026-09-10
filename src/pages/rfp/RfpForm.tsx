@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { reportError } from '../../lib/reportError'
-import { getRfp, respondRfp, declineRfp, fetchRfpPrefill } from '../../lib/rfpApi'
+import { getRfp, respondRfp, declineRfp, fetchRfpPrefill, STAFF_SIGNIN_REQUIRED } from '../../lib/rfpApi'
 import type { RfpPrefill } from '../../lib/rfpApi'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../auth/AuthContext'
 import { formatDate, formatGameTime, publicClientName } from '../../lib/format'
 import type {
   AnswerPayload,
@@ -978,6 +979,11 @@ export default function RfpForm() {
   // KJST staff filling the bid on the hotel's behalf (?entry=staff): suppresses
   // the hotel's confirmation email on submit and shows an internal banner.
   const staffEntry = searchParams.get('entry') === 'staff'
+  // Staff entry unlocks an already-submitted bid ONLY if the server can verify a
+  // real KJST session. If this browser isn't signed in, the save fails closed —
+  // so we detect that here and warn up front instead of after wasted typing.
+  const { session, loading: authLoading } = useAuth()
+  const staffNotSignedIn = staffEntry && !authLoading && !session
   const [declineReason, setDeclineReason] = useState('')
   const [declineNotes, setDeclineNotes] = useState('')
   const [declining, setDeclining] = useState(false)
@@ -1261,12 +1267,16 @@ export default function RfpForm() {
         return true
       } catch (e: unknown) {
         if (!submit) {
+          const msg = (e as Error).message
           setSaveStatus('error')
-          setSaveError((e as Error).message)
+          setSaveError(msg)
           // Auto-report the save failure so the team is notified without the
           // hotel needing to file anything. Transient network errors are ignored
-          // by reportError's filters.
-          reportError({ kind: 'window-error', message: 'RFP autosave failed: ' + ((e as Error).message || 'unknown'), context: { where: 'rfp-autosave' } })
+          // by reportError's filters. The staff-not-signed-in case is a user
+          // state, not a platform fault, so don't log it as an error.
+          if (msg !== STAFF_SIGNIN_REQUIRED) {
+            reportError({ kind: 'window-error', message: 'RFP autosave failed: ' + (msg || 'unknown'), context: { where: 'rfp-autosave' } })
+          }
         }
         return false
       }
@@ -1787,11 +1797,28 @@ export default function RfpForm() {
         />
 
         {/* ── KJST staff-entry banner: filling the bid on the hotel's behalf ── */}
-        {staffEntry && (
+        {staffEntry && !staffNotSignedIn && (
           <div className="mb-6 rounded-xl border border-indigo-300 bg-indigo-50 px-4 py-3">
             <p className="text-sm font-semibold text-indigo-900">KJST entry mode — entering this bid on the hotel's behalf.</p>
             <p className="mt-1 text-sm text-indigo-800">
               Fill in the hotel's terms and submit. The hotel will NOT receive a confirmation email. When you're done, award them and send the contract request from the trip page.
+            </p>
+          </div>
+        )}
+
+        {/* ── Not signed in for staff entry: saving will fail until they log in ── */}
+        {staffNotSignedIn && (
+          <div className="mb-6 rounded-xl border border-red-300 bg-red-50 px-4 py-3">
+            <p className="text-sm font-semibold text-red-900">You're not signed in on this browser.</p>
+            <p className="mt-1 text-sm text-red-800">
+              This is a KJST entry link, but editing an already-submitted bid requires you to be signed in.{' '}
+              <a
+                href={`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`}
+                className="font-semibold underline underline-offset-2 hover:text-red-900"
+              >
+                Sign in to KJST
+              </a>{' '}
+              in this browser, then reopen this link. Anything you type before signing in won't save.
             </p>
           </div>
         )}
@@ -1934,7 +1961,9 @@ export default function RfpForm() {
           >
             {saveStatus === 'saving' && 'Saving draft…'}
             {saveStatus === 'saved' && '✓Draft saved — you can return to this link to finish later.'}
-            {saveStatus === 'error' && `Couldn't save just now — your entries are safe and our team has been notified. Keep editing and it will retry; if it persists, contact KJST.`}
+            {saveStatus === 'error' && (saveError === STAFF_SIGNIN_REQUIRED
+              ? saveError
+              : `Couldn't save just now — your entries are safe and our team has been notified. Keep editing and it will retry; if it persists, contact KJST.`)}
           </div>
         )}
 

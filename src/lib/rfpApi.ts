@@ -6,6 +6,13 @@ import { supabase } from './supabase'
 
 const BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
 
+// Shown when a staffer tries to save an already-submitted bid (?entry=staff) but
+// this browser has no valid KJST session. The server unlocks a submitted bid only
+// for a verified staff JWT; without one the save comes back as a confusing
+// "already been submitted" 409. This tells the staffer exactly what to do.
+export const STAFF_SIGNIN_REQUIRED =
+  'You are in KJST entry mode but not signed in on this browser, so this bid can’t be saved. Open the KJST dashboard, sign in, then reopen this "Edit bid" link. Anything you typed is safe.'
+
 // ── Shape returned by rfp-get ─────────────────────────────────────────────────
 
 export type RfpTrip = {
@@ -189,12 +196,18 @@ export async function respondRfp(args: {
   staffEntry?: boolean
 }): Promise<{ ok: boolean; response_id: string; submitted: boolean }> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  // If a staffer is signed in (the ?entry=staff flow), send their session so the
-  // backend can confirm they're real staff before honoring staff_entry. Hotels
-  // are never signed in, so no header is sent and staff_entry can't be forged.
+  // If a staffer is filling the bid on the hotel's behalf (?entry=staff), send
+  // their session so the backend can confirm they're real staff before honoring
+  // staff_entry. Hotels are never signed in, so no header is sent and staff_entry
+  // can't be forged. getSession() refreshes an expired access token when a valid
+  // refresh token exists; if it still comes back empty this browser has no KJST
+  // session, so the save would fail the server's staff check and bounce back as a
+  // confusing "already been submitted" 409. Stop here with a clear, actionable
+  // message instead of firing a doomed request.
   if (args.staffEntry) {
     const { data: { session } } = await supabase.auth.getSession()
-    if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
+    if (!session?.access_token) throw new Error(STAFF_SIGNIN_REQUIRED)
+    headers['Authorization'] = `Bearer ${session.access_token}`
   }
   const res = await fetch(`${BASE}/rfp-respond`, {
     method: 'POST',
@@ -204,7 +217,13 @@ export async function respondRfp(args: {
     body: JSON.stringify({ ...args, staff_entry: args.staffEntry === true }),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error ?? 'Failed to save')
+  if (!res.ok) {
+    // A staff-entry save that still hits the submitted-bid lock means the server
+    // couldn't verify the session (e.g. it expired between load and save). Give
+    // the staffer the sign-in fix rather than the hotel-facing "already submitted".
+    if (args.staffEntry && res.status === 409) throw new Error(STAFF_SIGNIN_REQUIRED)
+    throw new Error(data.error ?? 'Failed to save')
+  }
   return data
 }
 
