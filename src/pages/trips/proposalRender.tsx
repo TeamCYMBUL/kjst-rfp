@@ -49,6 +49,7 @@ export type ProposalResponse = {
   stay2_selling_rate: string | null
   meeting_space_notes: string | null
   general_comments: string | null
+  menu_attachments?: { name: string }[] | null
   distance_to_arena: string | null
   standard_checkin_time: string | null
 }
@@ -329,6 +330,13 @@ export function HotelFull({
             {resp.general_comments && (
               <div style={{ fontSize: 13, color: '#374151' }}>
                 <strong>General comments:</strong> {resp.general_comments}
+              </div>
+            )}
+            {Array.isArray(resp.menu_attachments) && resp.menu_attachments.length > 0 && (
+              <div style={{ fontSize: 13, color: '#374151', marginTop: 8 }}>
+                <strong>Menu attachments:</strong>{' '}
+                {resp.menu_attachments.map((m) => m?.name).filter(Boolean).join(', ')}{' '}
+                <span style={{ color: '#94a3b8' }}>(available in the KJST portal)</span>
               </div>
             )}
           </>

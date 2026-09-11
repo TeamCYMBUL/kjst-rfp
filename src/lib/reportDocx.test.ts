@@ -42,6 +42,7 @@ const hotel: DocxHotel = {
       __details: { item1: { name: 'Ballroom II & III', space_type: 'function_room', dimensions: '3,800' } },
     }),
     general_comments: null,
+    menu_attachments: [{ name: 'Banquet_Menu.pdf' }],
     distance_to_arena: null,
     standard_checkin_time: null,
   },

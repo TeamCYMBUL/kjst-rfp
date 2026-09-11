@@ -56,6 +56,7 @@ export type DocxResp = {
   meeting_space_type?: string | null
   meeting_space_count?: number | null
   general_comments: string | null
+  menu_attachments?: { name: string }[] | null
   distance_to_arena: string | null
   standard_checkin_time: string | null
 } | null
@@ -296,6 +297,13 @@ function hotelBlock(h: DocxHotel, trip?: DocxTrip): (Paragraph | Table)[] {
   }
   if (h.resp.general_comments) {
     out.push(new Paragraph({ spacing: { before: 160 }, children: [new TextRun({ text: 'General comments: ', bold: true, font: BODY, size: 20, color: '374151' }), new TextRun({ text: h.resp.general_comments, font: BODY, size: 20, color: '374151' })] }))
+  }
+  const menus = (h.resp.menu_attachments ?? []).map((m) => m?.name).filter(Boolean) as string[]
+  if (menus.length) {
+    out.push(new Paragraph({ spacing: { before: 160 }, children: [
+      new TextRun({ text: 'Menu attachments: ', bold: true, font: BODY, size: 20, color: '374151' }),
+      new TextRun({ text: `${menus.join(', ')} (available in the KJST portal)`, font: BODY, size: 20, color: '374151' }),
+    ] }))
   }
   return out
 }

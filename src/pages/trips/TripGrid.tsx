@@ -355,7 +355,7 @@ export default function TripGrid() {
               id, completed_by_name, completed_date, best_king_rate, king_rate_notes,
               current_selling_rate, stay2_king_rate, stay2_suite_rate, stay2_selling_rate,
               best_suite_rate, occupancy_tax, resort_fee, meeting_space_notes, meeting_space_type,
-              meeting_space_count, scenario_rates, scenario_availability, general_comments,
+              meeting_space_count, scenario_rates, scenario_availability, general_comments, menu_attachments,
               concession_answers (
                 id, concession_item_id, answer_yes_no, answer_value, comment
               )
@@ -567,6 +567,7 @@ export default function TripGrid() {
         occupancy_tax: resp?.occupancy_tax ?? null,
         meeting_space_notes: resp?.meeting_space_notes ?? null,
         general_comments: resp?.general_comments ?? null,
+        menu_attachments: (resp as any)?.menu_attachments ?? null,
         staff_notes: staffNotes[inv.id] || inv.staff_notes || null,
         answers: answerMaps[inv.id] ?? {},
       }

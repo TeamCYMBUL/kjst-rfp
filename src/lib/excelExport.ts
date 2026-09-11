@@ -131,6 +131,7 @@ export type GridHotel = {
   occupancy_tax: string | null
   meeting_space_notes: string | null
   general_comments: string | null
+  menu_attachments?: { name: string }[] | null
   staff_notes: string | null
   answers: Record<
     string,
@@ -303,6 +304,7 @@ export function exportComparisonXlsx(
   rows.push(['ADDITIONAL INFORMATION'])
   rows.push(row('MEETING SPACE NOTES', hotels.map((h) => fmt(formatMeetingSpaceNotes(h.meeting_space_notes) || null))))
   rows.push(row('GENERAL COMMENTS', hotels.map((h) => fmt(h.general_comments))))
+  rows.push(row('MENU ATTACHMENTS', hotels.map((h) => fmt((h.menu_attachments ?? []).map((m) => m?.name).filter(Boolean).join(', ') || null))))
   rows.push(row('STAFF NOTES (Team Export)', hotels.map((h) => fmt(h.staff_notes))))
   rows.push([])
 
