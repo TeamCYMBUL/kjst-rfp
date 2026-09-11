@@ -43,8 +43,10 @@ export type ProposalResponse = {
   current_selling_rate: string | null
   occupancy_tax: string | null
   resort_fee: string | null
+  king_rate_notes: string | null
   stay2_king_rate: number | null
   stay2_suite_rate: number | null
+  stay2_selling_rate: string | null
   meeting_space_notes: string | null
   general_comments: string | null
   distance_to_arena: string | null
@@ -241,6 +243,8 @@ export function HotelFull({
   if (inv.visit2_declined) rateRows.push([`King/Suite Rate${s2}`, 'Visit 2 declined'])
   else if (resp?.stay2_king_rate != null) rateRows.push([`King Rate${s2}`, fmtMoney(resp.stay2_king_rate)])
   if (!inv.visit2_declined && resp?.stay2_suite_rate != null) rateRows.push([`Suite Rate${s2}`, fmtMoney(resp.stay2_suite_rate)])
+  if (!inv.visit2_declined && resp?.stay2_selling_rate) rateRows.push([`Selling Rate${s2}`, resp.stay2_selling_rate])
+  if (resp?.king_rate_notes) rateRows.push(['Rate notes', resp.king_rate_notes])
   if (resp?.distance_to_arena) rateRows.push(['Distance to arena', resp.distance_to_arena])
   if (resp?.standard_checkin_time) rateRows.push(['Standard check-in', resp.standard_checkin_time])
 

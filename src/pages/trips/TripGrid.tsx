@@ -563,6 +563,7 @@ export default function TripGrid() {
         best_suite_rate: resp?.best_suite_rate ?? null,
         stay2_king_rate: (resp as any)?.stay2_king_rate ?? null,
         stay2_suite_rate: (resp as any)?.stay2_suite_rate ?? null,
+        stay2_selling_rate: (resp as any)?.stay2_selling_rate ?? null,
         occupancy_tax: resp?.occupancy_tax ?? null,
         meeting_space_notes: resp?.meeting_space_notes ?? null,
         general_comments: resp?.general_comments ?? null,

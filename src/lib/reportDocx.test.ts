@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { Packer } from 'docx'
-import { buildProposalDoc, type DocxTrip, type DocxHotel } from './reportDocx'
+import { buildProposalDoc, rateRowsFor, type DocxTrip, type DocxHotel } from './reportDocx'
 
 // Smoke test: a 2-visit trip with a meeting-space bid must build a valid .docx
 // (non-empty, real ZIP) without throwing. Exercises the stay-2 date/rate rows
@@ -34,8 +34,10 @@ const hotel: DocxHotel = {
     current_selling_rate: '900',
     occupancy_tax: '16.9% + $5 per night',
     resort_fee: null,
+    king_rate_notes: 'Visit 1 bid is contingent on a two-night stay.',
     stay2_king_rate: 399,
     stay2_suite_rate: 950,
+    stay2_selling_rate: '970',
     meeting_space_notes: JSON.stringify({
       __details: { item1: { name: 'Ballroom II & III', space_type: 'function_room', dimensions: '3,800' } },
     }),
@@ -57,6 +59,16 @@ describe('buildProposalDoc', () => {
     // .docx is a ZIP — first two bytes are "PK". A corrupt/empty build fails here.
     expect(buf[0]).toBe(0x50)
     expect(buf[1]).toBe(0x4b)
+  })
+
+  // Regression: the hotel's rate notes (e.g. "contingent on a two-night stay")
+  // and the stay-2 selling rate must appear on the proposal/Word rate block.
+  // Both were silently dropped from the Word renderer before Sep 2026.
+  it('includes rate notes and the stay-2 selling rate in the rate rows', () => {
+    const rows = rateRowsFor(hotel.inv, hotel.resp, trip)
+    const noteRow = rows.find((r) => r.label === 'Rate notes')
+    expect(noteRow?.value).toContain('two-night stay')
+    expect(rows.some((r) => r.label.startsWith('Selling Rate — Stay 2') && r.value === '970')).toBe(true)
   })
 
   it('builds when a trip has no bids yet', async () => {

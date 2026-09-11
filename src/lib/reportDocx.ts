@@ -48,8 +48,10 @@ export type DocxResp = {
   current_selling_rate: string | null
   occupancy_tax: string | null
   resort_fee: string | null
+  king_rate_notes: string | null
   stay2_king_rate: number | null
   stay2_suite_rate: number | null
+  stay2_selling_rate: string | null
   meeting_space_notes: string | null
   meeting_space_type?: string | null
   meeting_space_count?: number | null
@@ -210,7 +212,7 @@ function kvTable(rows: { label: string; value: string; isNo?: boolean; comment?:
   })
 }
 
-function rateRowsFor(inv: DocxInv, resp: DocxResp, trip?: DocxTrip): { label: string; value: string }[] {
+export function rateRowsFor(inv: DocxInv, resp: DocxResp, trip?: DocxTrip): { label: string; value: string }[] {
   const hasStay2 = inv.visit2_declined || resp?.stay2_king_rate != null || resp?.stay2_suite_rate != null
   // Tag each stay's rate rows with that stay's check-in date (rates can differ).
   const d1 = trip?.arrival_date ? ` (${fmtDateShort(trip.arrival_date)})` : ''
@@ -233,6 +235,8 @@ function rateRowsFor(inv: DocxInv, resp: DocxResp, trip?: DocxTrip): { label: st
   if (inv.visit2_declined) rows.push({ label: `King/Suite Rate${s2}`, value: 'Visit 2 declined' })
   else if (resp?.stay2_king_rate != null) rows.push({ label: `King Rate${s2}`, value: fmtMoney(resp.stay2_king_rate) })
   if (!inv.visit2_declined && resp?.stay2_suite_rate != null) rows.push({ label: `Suite Rate${s2}`, value: fmtMoney(resp.stay2_suite_rate) })
+  if (!inv.visit2_declined && resp?.stay2_selling_rate) rows.push({ label: `Selling Rate${s2}`, value: resp.stay2_selling_rate })
+  if (resp?.king_rate_notes) rows.push({ label: 'Rate notes', value: resp.king_rate_notes })
   if (resp?.distance_to_arena) rows.push({ label: 'Distance to arena', value: resp.distance_to_arena })
   if (resp?.standard_checkin_time) rows.push({ label: 'Standard check-in', value: resp.standard_checkin_time })
   return rows

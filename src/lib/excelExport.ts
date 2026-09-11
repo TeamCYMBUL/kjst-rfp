@@ -127,6 +127,7 @@ export type GridHotel = {
   // Second-visit rates (2-visit trips); null on single-visit trips.
   stay2_king_rate?: number | null
   stay2_suite_rate?: number | null
+  stay2_selling_rate?: string | null
   occupancy_tax: string | null
   meeting_space_notes: string | null
   general_comments: string | null
@@ -250,6 +251,7 @@ export function exportComparisonXlsx(
   if (twoVisit) {
     rows.push(row('RATE (Best King) — STAY 2', hotels.map((h) => h.stay2_king_rate ?? '—')))
     rows.push(row('BEST SUITE RATE — STAY 2', hotels.map((h) => h.stay2_suite_rate ?? '—')))
+    rows.push(row('CURRENT SELLING RATE — STAY 2', hotels.map((h) => fmt(h.stay2_selling_rate))))
   }
   rows.push(row('TAXES & FEES', hotels.map((h) => fmt(h.occupancy_tax))))
 
