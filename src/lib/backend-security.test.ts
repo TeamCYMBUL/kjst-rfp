@@ -93,6 +93,23 @@ describe('public edge functions — auth gating', () => {
   it('contract-upload with no token is rejected', async () => {
     expect((await fn('contract-upload', { method: 'POST', body: '{}' })).ok).toBe(false)
   }, T)
+  // Defense in depth (added Sep 2026): the expensive AI fact-check and the
+  // bid-reopen action must require a real staff session, not just a valid anon JWT.
+  it('contract-analyze without a staff session is rejected', async () => {
+    expect((await fn('contract-analyze', { method: 'POST', body: '{"contract_id":"00000000-0000-0000-0000-000000000000"}' })).ok).toBe(false)
+  }, T)
+  it('rfp-reopen without a staff session is rejected', async () => {
+    expect((await fn('rfp-reopen', { method: 'POST', body: '{"invitation_id":"00000000-0000-0000-0000-000000000000"}' })).ok).toBe(false)
+  }, T)
+  // staff_entry is verified server-side, so an anon caller claiming it can't bypass
+  // token validation or the finalized-bid lock — a bogus token still just 404s.
+  it('a forged staff_entry claim from anon cannot bypass token validation', async () => {
+    const res = await fn('rfp-respond', {
+      method: 'POST',
+      body: '{"token":"deadbeefdeadbeefdeadbeefdeadbeef","response":{},"answers":[],"submit":false,"staff_entry":true}',
+    })
+    expect(res.status).toBe(404)
+  }, T)
 })
 
 // 5) Secret-gated internal functions reject anyone without the shared secret.

@@ -93,6 +93,14 @@ Deno.serve(async (req: Request) => {
     return json({ test: true, email: r, slack })
   }
 
+  // Announce mode: post an arbitrary message to the monitor's Slack channel.
+  // Secret-gated (same x-cron-secret above), so only trusted callers can use it —
+  // lets us push a report/announcement through the monitor's existing Slack pipe.
+  if (typeof body?.post === "string" && body.post.trim()) {
+    const slack = await notifySlack(body.post)
+    return json({ posted: true, slack })
+  }
+
   // Probe with retries — only a run where every attempt fails counts as down.
   let result = await probe()
   for (let i = 1; i < ATTEMPTS && !result.ok; i++) {
