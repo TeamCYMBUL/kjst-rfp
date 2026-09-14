@@ -88,6 +88,8 @@ Deno.serve(async (req: Request) => {
       "[TEST] KJST portal monitor is working",
       `<p>This is a test alert from the KJST uptime monitor. If you received this, outage and recovery alerts will reach you here.</p><p style="color:#64748b;font-size:12px">Sent ${fmt(new Date())}. No action needed.</p>`,
     )
+    // Also verify the Slack channel end-to-end (no-op if SLACK_WEBHOOK_URL unset).
+    await notifySlack(`Test alert — KJST monitoring is wired to this channel. Outage, server-error, and health alerts will land here. Sent ${fmt(new Date())}. No action needed.`, { emoji: '✅' })
     return json({ test: true, email: r })
   }
 
