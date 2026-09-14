@@ -89,9 +89,13 @@ Deno.serve(async (req: Request) => {
     emailed = res.ok ? { ok: true } : { error: `resend ${res.status}` }
   }
 
-  // Mark these specific rows seen so they aren't reported again.
-  const ids = rows.map((r) => r.id)
-  await supabase.from("error_logs").update({ seen: true }).in("id", ids)
+  // Mark rows seen ONLY if the alert actually went out. If the send failed (or no
+  // Resend key), leave them unseen so the next run retries — otherwise a failed
+  // digest email would silently swallow a whole day's errors, permanently.
+  if ((emailed as any)?.ok === true) {
+    const ids = rows.map((r) => r.id)
+    await supabase.from("error_logs").update({ seen: true }).in("id", ids)
+  }
 
   return json({ ok: true, count: rows.length, unique: ordered.length, emailed })
 })

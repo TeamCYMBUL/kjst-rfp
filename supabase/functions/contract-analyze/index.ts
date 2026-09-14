@@ -1,6 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { ZipReader, Uint8ArrayReader, TextWriter } from 'jsr:@zip-js/zip-js@2.7.57'
+import { logServerError } from '../_shared/logError.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -319,6 +320,8 @@ Deno.serve(async (req: Request) => {
       await sb.from('contracts')
         .update({ analysis_status: 'error', analysis_error: msg, updated_at: new Date().toISOString() })
         .eq('id', contract.id)
+      // Also surface it to the daily digest / monitoring, not just the contract row.
+      await logServerError('contract-analyze', e, { contract_id: contract.id })
     }
   }
 

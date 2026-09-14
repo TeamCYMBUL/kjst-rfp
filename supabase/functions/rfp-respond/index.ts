@@ -1,6 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { rateLimited, tooManyRequests } from '../_shared/rateLimit.ts'
+import { logServerError } from '../_shared/logError.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -311,7 +312,16 @@ Deno.serve(async (req: Request) => {
   // Without this exception the fields look editable but every save returned 409.
   const reopenedForEdit = !!(inv as any).reopened_at &&
     (!(inv as any).submitted_at || new Date((inv as any).reopened_at).getTime() > new Date((inv as any).submitted_at).getTime())
-  if (inv.status === 'submitted' && !reopenedForEdit && !staffEntry) return json({ error: 'This RFP has already been submitted.' }, 409)
+  // A FINALIZED bid is locked unless staff reopened it (reopened_at newer than
+  // submitted_at) or a verified staffer is editing on the hotel's behalf. This
+  // must cover every terminal state, not just 'submitted' — an awarded, passed,
+  // declined, or unavailable bid must not be silently overwritten by anyone who
+  // still holds the token. Only the in-progress states ('sent'/'opened') stay
+  // freely editable so a hotel can save-and-resume before it finalizes.
+  const LOCKED_STATUSES = ['submitted', 'awarded', 'passed', 'declined', 'unavailable']
+  if (LOCKED_STATUSES.includes(inv.status) && !reopenedForEdit && !staffEntry) {
+    return json({ error: 'This RFP has already been submitted.' }, 409)
+  }
 
   // --- Upsert rfp_response ---
   const { data: existingResp } = await supabase
@@ -379,10 +389,13 @@ Deno.serve(async (req: Request) => {
   // --- If submitting, mark invitation submitted + fire emails ---
   if (submit) {
     const submittedAt = new Date().toISOString()
-    await supabase
+    const { error: statusErr } = await supabase
       .from('rfp_invitations')
       .update({ status: 'submitted', submitted_at: submittedAt })
       .eq('id', inv.id)
+    // If this write fails the bid won't show as submitted on the grid even though
+    // the hotel got a success. Surface it so we catch it, don't swallow it.
+    if (statusErr) await logServerError('rfp-respond', statusErr, { invitation_id: inv.id, where: 'mark-submitted' })
 
     // Capture the hotel's ORIGINAL submission exactly once (first-ever submit),
     // so later reopened updates can be flagged against it. Never overwrite it —
@@ -408,7 +421,12 @@ Deno.serve(async (req: Request) => {
     const notifyEmail = Deno.env.get('NOTIFY_EMAIL')
     const siteUrl = (Deno.env.get('SITE_URL') ?? '').replace(/\/$/, '')
 
-    if (resendKey && !staffEntry) {
+    // Send emails as a BACKGROUND task so a slow/failing Resend can't hold the
+    // request open (which used to leave the hotel seeing a timeout on a bid that
+    // actually saved, then hitting the submitted-lock 409 on retry). Failures are
+    // logged so a dropped confirmation or staff notification is never silent.
+    if (resendKey && !staffEntry) EdgeRuntime.waitUntil((async () => {
+     try {
       const trip = inv.trips as any
       const client = (trip as any)?.clients as any
       // Hotel-facing confirmation: show the team name only (strip our internal
@@ -463,11 +481,13 @@ Deno.serve(async (req: Request) => {
           answerSectionsHtml,
         })
         const subject = `RFP Submitted: ${teamName} – ${trip?.city ?? trip?.opponent_label ?? 'Road Trip'}`
-        await fetch('https://api.resend.com/emails', {
+        const cRes = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ from: fromAddress, to: [inv.hotel_contact_email], subject, html }),
+          signal: AbortSignal.timeout(20000),
         })
+        if (!cRes.ok) await logServerError('rfp-respond:confirmation', new Error(`Resend ${cRes.status}: ${(await cRes.text()).slice(0, 200)}`), { invitation_id: inv.id, to: inv.hotel_contact_email })
       }
 
       const notifyList = assignedManagers.map((m) => `${m.name} <${m.email}>`)
@@ -484,13 +504,18 @@ Deno.serve(async (req: Request) => {
           gridUrl,
         })
         const subject = `[KJST] RFP submitted: ${inv.hotel_name} – ${(inv.trips as any)?.clients?.team_name ?? ''} ${(inv.trips as any)?.city ?? (inv.trips as any)?.opponent_label ?? ''}`
-        await fetch('https://api.resend.com/emails', {
+        const sRes = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ from: fromAddress, to: staffRecipients, subject, html }),
+          signal: AbortSignal.timeout(20000),
         })
+        if (!sRes.ok) await logServerError('rfp-respond:staff-notify', new Error(`Resend ${sRes.status}: ${(await sRes.text()).slice(0, 200)}`), { invitation_id: inv.id })
       }
-    }
+     } catch (e) {
+       await logServerError('rfp-respond:email', e, { invitation_id: inv.id })
+     }
+    })())
   }
 
   return json({ ok: true, response_id: responseId, submitted: !!submit })
