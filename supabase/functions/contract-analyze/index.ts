@@ -264,7 +264,10 @@ Deno.serve(async (req: Request) => {
           headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
           body: JSON.stringify({
             model: 'claude-opus-5',
-            max_tokens: 16000,
+            // Room for BOTH the extended-thinking tokens (effort:high) and the
+            // full ~45-check JSON. At 16000 a long contract truncated the JSON and
+            // it failed to parse; the analysis itself is only ~6-9k tokens.
+            max_tokens: 32000,
             system,
             output_config: { effort: 'high', format: { type: 'json_schema', schema: ANALYSIS_SCHEMA } },
             messages: [{ role: 'user', content }],
@@ -283,8 +286,23 @@ Deno.serve(async (req: Request) => {
       const textBlock = (ai.content ?? []).find((b: any) => b.type === 'text')
       if (!textBlock?.text) throw new Error('The AI returned no analysis.')
 
+      // Parse tolerantly: strip any ```json fence, and fall back to the outermost
+      // {...} span. If it still won't parse and the model hit the token ceiling,
+      // say so plainly (a truncated JSON is the usual cause).
       let analysis: any
-      try { analysis = JSON.parse(textBlock.text) } catch { throw new Error('Could not parse the AI analysis.') }
+      const raw = String(textBlock.text).trim()
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+      try {
+        analysis = JSON.parse(cleaned)
+      } catch {
+        const s = cleaned.indexOf('{'); const e = cleaned.lastIndexOf('}')
+        if (s >= 0 && e > s) { try { analysis = JSON.parse(cleaned.slice(s, e + 1)) } catch { /* fall through */ } }
+      }
+      if (!analysis || typeof analysis !== 'object' || !Array.isArray(analysis.checks)) {
+        throw new Error(ai.stop_reason === 'max_tokens'
+          ? 'The analysis was too long to finish in one pass. Please run it again.'
+          : 'Could not parse the AI analysis.')
+      }
       analysis.model = 'claude-opus-5'
 
       const { error: uErr } = await sb
