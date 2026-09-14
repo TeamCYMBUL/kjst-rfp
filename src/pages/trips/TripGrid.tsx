@@ -219,16 +219,29 @@ function RateRow({
   invitations,
   getValue,
   highlight,
-  lowestRateId,
+  showLowest,
   declinedWhen,
 }: {
   label: string
   invitations: Invitation[]
   getValue: (r: Response | null) => string | null
   highlight?: boolean
-  lowestRateId?: string | null
+  showLowest?: boolean
   declinedWhen?: (inv: Invitation) => boolean
 }) {
+  // Green the genuinely lowest value IN THIS ROW (only when it's a room-rate row).
+  // Parse the formatted cell back to a number (strip $/commas); skip passed/
+  // unavailable hotels and non-numeric cells. Computing per-row is what stops the
+  // old bug where the lowest Stay-1 king got greened across suite/tax/notes rows.
+  let lowestId: string | null = null
+  if (showLowest) {
+    let min = Infinity
+    for (const inv of invitations) {
+      if (inv.status === 'passed' || inv.status === 'unavailable') continue
+      const n = Number(String(getValue(inv.rfp_responses ?? null) ?? '').replace(/[$,]/g, ''))
+      if (Number.isFinite(n) && n < min) { min = n; lowestId = inv.id }
+    }
+  }
   return (
     <tr className="border-b border-slate-100 hover:bg-slate-50">
       <td className="sticky left-0 w-64 bg-white px-4 py-2.5 text-xs font-medium text-slate-500">
@@ -251,7 +264,7 @@ function RateRow({
                 ? 'opacity-40 bg-slate-50'
                 : isAwarded
                   ? 'bg-amber-50'
-                  : inv.id === lowestRateId
+                  : inv.id === lowestId
                     ? 'bg-emerald-50'
                     : ''
             } ${highlight && val && !isDimmed ? 'font-medium text-slate-800' : 'text-slate-600'}`}
@@ -924,21 +937,20 @@ export default function TripGrid() {
                 invitations={invitations}
                 getValue={(r) => (r?.best_king_rate != null ? money(r.best_king_rate) : null)}
                 highlight
-                lowestRateId={lowestRateId}
+                showLowest
                 declinedWhen={(inv) => inv.visit1_declined}
               />
               <RateRow
                 label={trip?.stay2_arrival_date ? 'Selling Rate — Stay 1' : 'Current Selling Rate'}
                 invitations={invitations}
                 getValue={(r) => r?.current_selling_rate ?? null}
-                lowestRateId={lowestRateId}
                 declinedWhen={(inv) => inv.visit1_declined}
               />
               <RateRow
                 label={trip?.stay2_arrival_date ? 'Suite Rate — Stay 1' : 'Best Suite Rate'}
                 invitations={invitations}
                 getValue={(r) => (r?.best_suite_rate != null ? money(r.best_suite_rate) : null)}
-                lowestRateId={lowestRateId}
+                showLowest
                 declinedWhen={(inv) => inv.visit1_declined}
               />
 
@@ -952,7 +964,6 @@ export default function TripGrid() {
                     const cost = r.best_king_rate * trip.total_rooms_requested! * trip.nights!
                     return `$${cost.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
                   }}
-                  lowestRateId={lowestRateId}
                 />
               )}
 
@@ -1028,21 +1039,20 @@ export default function TripGrid() {
                       invitations={invitations}
                       getValue={(r) => (r?.stay2_king_rate != null ? money(r.stay2_king_rate) : null)}
                       highlight
-                      lowestRateId={lowestRateId}
+                      showLowest
                       declinedWhen={(inv) => inv.visit2_declined}
                     />
                     <RateRow
                       label="Selling Rate — Stay 2"
                       invitations={invitations}
                       getValue={(r) => r?.stay2_selling_rate ?? null}
-                      lowestRateId={lowestRateId}
                       declinedWhen={(inv) => inv.visit2_declined}
                     />
                     <RateRow
                       label="Suite Rate — Stay 2"
                       invitations={invitations}
                       getValue={(r) => (r?.stay2_suite_rate != null ? money(r.stay2_suite_rate) : null)}
-                      lowestRateId={lowestRateId}
+                      showLowest
                       declinedWhen={(inv) => inv.visit2_declined}
                     />
                     {trip.total_rooms_requested != null && stay2Nights != null && (
@@ -1054,7 +1064,6 @@ export default function TripGrid() {
                           const cost = r.stay2_king_rate * trip.total_rooms_requested! * stay2Nights
                           return `$${cost.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
                         }}
-                        lowestRateId={lowestRateId}
                       />
                     )}
                   </>
@@ -1123,13 +1132,11 @@ export default function TripGrid() {
                 label="Occupancy Tax"
                 invitations={invitations}
                 getValue={(r) => r?.occupancy_tax ?? null}
-                lowestRateId={lowestRateId}
               />
               <RateRow
                 label="Resort Fee"
                 invitations={invitations}
                 getValue={(r) => r?.resort_fee ?? null}
-                lowestRateId={lowestRateId}
               />
               {/* Date scenario availability */}
               {(trip?.date_scenarios?.length ?? 0) > 0 && (
@@ -1171,7 +1178,6 @@ export default function TripGrid() {
                   label="Rate Notes"
                   invitations={invitations}
                   getValue={(r) => r?.king_rate_notes ?? null}
-                  lowestRateId={lowestRateId}
                 />
               )}
 
@@ -1241,19 +1247,16 @@ export default function TripGrid() {
                 label="Meeting Space Type"
                 invitations={invitations}
                 getValue={(r) => meetingSpaceLabel(r?.meeting_space_type, r?.meeting_space_count)}
-                lowestRateId={lowestRateId}
               />
               <RateRow
                 label="Meeting Space Notes"
                 invitations={invitations}
                 getValue={(r) => formatMeetingSpaceNotes(r?.meeting_space_notes) || null}
-                lowestRateId={lowestRateId}
               />
               <RateRow
                 label="General Comments"
                 invitations={invitations}
                 getValue={(r) => r?.general_comments ?? null}
-                lowestRateId={lowestRateId}
               />
             </tbody>
           </table>
