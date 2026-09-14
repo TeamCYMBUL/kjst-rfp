@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "jsr:@supabase/supabase-js@2"
+import { logServerError } from '../_shared/logError.ts'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -221,6 +222,7 @@ Deno.serve(async (req: Request) => {
 
   if (!resendRes.ok) {
     const errText = await resendRes.text()
+    await logServerError('send-single-reminder', new Error(`Resend ${resendRes.status}: ${errText.slice(0, 200)}`), { invitation_id })
     return Response.json({ error: `Resend API error: ${errText}` }, { status: 500, headers: CORS })
   }
 

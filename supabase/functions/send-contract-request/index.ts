@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "jsr:@supabase/supabase-js@2"
+import { logServerError } from '../_shared/logError.ts'
 
 // Send the awarded hotel a contract-request email. Staff compose a fully editable
 // subject + message (prefilled from a template client-side); this delivers it as
@@ -266,6 +267,7 @@ Deno.serve(async (req: Request) => {
   })
   if (!resendRes.ok) {
     const errText = await resendRes.text()
+    await logServerError('send-contract-request', new Error(`Resend ${resendRes.status}: ${errText.slice(0, 200)}`))
     return Response.json({ error: `Resend API error: ${errText}` }, { status: 500, headers: CORS })
   }
 

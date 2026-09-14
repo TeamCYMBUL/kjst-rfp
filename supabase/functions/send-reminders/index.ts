@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "jsr:@supabase/supabase-js@2"
+import { logServerError } from "../_shared/logError.ts"
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -27,7 +28,10 @@ async function sendResend(payload: unknown, apiKey: string, maxAttempts = 4): Pr
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
-    if (res.status !== 429 || attempt >= maxAttempts) return res
+    if (res.status !== 429 || attempt >= maxAttempts) {
+      if (!res.ok) await logServerError('send-reminders:resend', new Error(`Resend ${res.status}: ${(await res.clone().text()).slice(0, 200)}`))
+      return res
+    }
     const retryAfter = Number(res.headers.get('Retry-After'))
     const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
       ? retryAfter * 1000
@@ -104,7 +108,11 @@ function buildReminderHtml(p: {
   contactEmail: string
 }): string {
   const greeting = p.contactName ? `Dear ${p.contactName},` : `To whom it may concern,`
-  const urgency = p.daysLeft <= 0
+  // daysLeft is a 999 sentinel when the trip has no response deadline — show a
+  // neutral nudge instead of "due in 999 days".
+  const urgency = p.daysLeft >= 900
+    ? `<strong style="color:#d97706">We'd appreciate your response at your earliest convenience.</strong>`
+    : p.daysLeft <= 0
     ? `<strong style="color:#dc2626">This proposal is now past due.</strong>`
     : p.daysLeft === 1
       ? `<strong style="color:#dc2626">Your response is due tomorrow.</strong>`
