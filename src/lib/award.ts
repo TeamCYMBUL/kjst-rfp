@@ -42,10 +42,12 @@ export async function awardStay(
 
   if (fullyAwarded) {
     // Pass only the submitted hotels that won NEITHER stay — never a winner,
-    // and never a declined/unavailable/already-passed hotel.
+    // and never a declined/unavailable/already-passed hotel. Mark them
+    // passed_by_award so "Undo award" can restore exactly these (and not the
+    // hotels a person passed manually).
     await supabase
       .from('rfp_invitations')
-      .update({ status: 'passed' })
+      .update({ status: 'passed', passed_by_award: true })
       .eq('trip_id', ctx.tripId)
       .eq('status', 'submitted')
       .eq('awarded_stay1', false)
@@ -83,6 +85,16 @@ export async function undoAwardStay(
     await supabase.from('rfp_invitations').update(patch).eq('id', inv.id).select('id'),
     'undo this award',
   )
+  // Restore the hotels the award auto-passed back to Submitted, so undoing a
+  // mistaken award doesn't strand the other bidders as "passed" (they never
+  // declined — the award passed them). Only rows flagged passed_by_award are
+  // touched; hotels a person passed manually keep their status.
+  await supabase
+    .from('rfp_invitations')
+    .update({ status: 'submitted', passed_by_award: false })
+    .eq('trip_id', ctx.tripId)
+    .eq('status', 'passed')
+    .eq('passed_by_award', true)
   assertSaved(
     await supabase.from('trips').update({ status: 'collecting' }).eq('id', ctx.tripId).select('id'),
     'reopen this trip',

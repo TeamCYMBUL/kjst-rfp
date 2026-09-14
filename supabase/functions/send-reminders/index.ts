@@ -220,6 +220,10 @@ Deno.serve(async (req: Request) => {
     // awarded/passed, DECLINED the RFP, or are marked unavailable. (Declined was
     // the gap — a declined hotel was still getting reminders.)
     .not('status', 'in', '("submitted","awarded","passed","declined","unavailable")')
+    // Never remind a hotel whose link is dead — a revoked or expired token lands
+    // the hotel on a 403 dead-end, which reads as KJST being broken.
+    .is('revoked_at', null)
+    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
 
   if (invErr || !invitations) return Response.json({ error: 'Failed to fetch invitations' }, { status: 500, headers: CORS })
 

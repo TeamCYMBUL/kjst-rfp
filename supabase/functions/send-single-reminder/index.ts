@@ -142,7 +142,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: inv, error: invErr } = await sb
     .from('rfp_invitations')
-    .select(`id, hotel_name, hotel_contact_name, hotel_contact_email, token, status, visit_scope,
+    .select(`id, hotel_name, hotel_contact_name, hotel_contact_email, token, status, visit_scope, revoked_at, expires_at,
       trips ( client_id, city, opponent_label, arrival_date, stay2_arrival_date, response_deadline,
         clients ( team_name, always_cc_enabled, always_cc_name, always_cc_email ) )`)
     .eq('id', invitation_id)
@@ -154,6 +154,13 @@ Deno.serve(async (req: Request) => {
   // or unavailable). Guards the single-send path the same way the bulk send does.
   if (['submitted', 'awarded', 'passed', 'declined', 'unavailable'].includes(inv.status)) {
     return Response.json({ error: `This hotel already ${inv.status === 'declined' ? 'declined' : 'responded to'} the RFP, so no reminder was sent.` }, { status: 400, headers: CORS })
+  }
+  // Don't send a reminder for a dead link — it lands the hotel on a 403 dead-end.
+  if ((inv as any).revoked_at) {
+    return Response.json({ error: 'This hotel’s link has been deactivated, so no reminder was sent. Restore the link first.' }, { status: 400, headers: CORS })
+  }
+  if ((inv as any).expires_at && new Date((inv as any).expires_at) < new Date()) {
+    return Response.json({ error: 'This hotel’s link has expired, so no reminder was sent. Issue a new link first.' }, { status: 400, headers: CORS })
   }
 
   const trip = inv.trips as any
