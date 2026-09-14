@@ -154,7 +154,12 @@ function confirmationHtml(p: {
   answerSectionsHtml: string
 }) {
   const greeting = p.contactName ? `Dear ${p.contactName},` : 'Dear Valued Partner,'
-  const dates = [p.arrivalDate, p.departureDate].filter(Boolean).join(' – ')
+  const fmtD = (d: string | null) => {
+    if (!d) return null
+    const dt = new Date(d.length <= 10 ? d + 'T00:00:00Z' : d)
+    return isNaN(dt.getTime()) ? d : dt.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric', year: 'numeric' })
+  }
+  const dates = [fmtD(p.arrivalDate), fmtD(p.departureDate)].filter(Boolean).join(' – ')
   const trip = [p.opponentLabel, p.city].filter(Boolean).join(' · ')
 
   const rateRows = [

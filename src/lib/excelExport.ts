@@ -247,16 +247,20 @@ export function exportComparisonXlsx(
   // date-derived night count. Fall back sensibly when a field is missing.
   const roomBlock = trip.total_rooms_requested ?? trip.king_rooms_requested ?? 0
   const nights = trip.nights ?? calcNights(trip.arrival_date, trip.departure_date)
+  // Rate fields are Postgres numeric, returned as STRINGS by PostgREST — write them
+  // as real numbers so the RATE columns are numeric cells (SUM/AVERAGE work, no
+  // "number stored as text" warning) instead of left-aligned text.
+  const numOr = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : ('—' as const) }
 
   // ── Rates ────────────────────────────────────────────────────────────────
   rows.push(['RATES'])
-  rows.push(row(`RATE (Best King)${s1}`, hotels.map((h) => h.best_king_rate ?? '—')))
+  rows.push(row(`RATE (Best King)${s1}`, hotels.map((h) => numOr(h.best_king_rate))))
   rows.push(row('KING RATE NOTES', hotels.map((h) => fmt(h.king_rate_notes))))
   rows.push(row('CURRENT SELLING RATE', hotels.map((h) => fmt(h.current_selling_rate))))
-  rows.push(row(`BEST SUITE RATE${s1}`, hotels.map((h) => h.best_suite_rate ?? '—')))
+  rows.push(row(`BEST SUITE RATE${s1}`, hotels.map((h) => numOr(h.best_suite_rate))))
   if (twoVisit) {
-    rows.push(row('RATE (Best King) — STAY 2', hotels.map((h) => h.stay2_king_rate ?? '—')))
-    rows.push(row('BEST SUITE RATE — STAY 2', hotels.map((h) => h.stay2_suite_rate ?? '—')))
+    rows.push(row('RATE (Best King) — STAY 2', hotels.map((h) => numOr(h.stay2_king_rate))))
+    rows.push(row('BEST SUITE RATE — STAY 2', hotels.map((h) => numOr(h.stay2_suite_rate))))
     rows.push(row('CURRENT SELLING RATE — STAY 2', hotels.map((h) => fmt(h.stay2_selling_rate))))
   }
   rows.push(row('TAXES & FEES', hotels.map((h) => fmt(h.occupancy_tax))))
@@ -284,7 +288,7 @@ export function exportComparisonXlsx(
     if (h.best_king_rate == null || roomBlock === 0) return '—' as const
     return h.best_king_rate * roomBlock * nights
   })
-  const adr = hotels.map((h) => h.best_king_rate ?? ('—' as const))
+  const adr = hotels.map((h) => numOr(h.best_king_rate))
 
   const revenueInclTaxRowIdx = rows.length
   rows.push(row('ROOM REVENUE (INCL. TAX)', revenueInclTax))
