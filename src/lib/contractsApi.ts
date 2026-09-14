@@ -169,6 +169,8 @@ export type ContractRow = {
   signed_at: string | null
   analysis: ContractAnalysis | null
   analyzed_at: string | null
+  analysis_status: 'running' | 'done' | 'error' | null
+  analysis_error: string | null
   staff_notes: string | null
 }
 
@@ -190,7 +192,7 @@ export async function listAwardedContracts(): Promise<AwardedContract[]> {
     .select(`
       id, hotel_name, hotel_contact_email, awarded_stay1, awarded_stay2,
       trips!inner ( id, city, opponent_label, stay2_arrival_date, clients ( id, team_name ) ),
-      contracts ( id, status, file_path, file_name, uploaded_at, signed_file_path, signed_file_name, signed_at, analysis, analyzed_at, staff_notes )
+      contracts ( id, status, file_path, file_name, uploaded_at, signed_file_path, signed_file_name, signed_at, analysis, analyzed_at, analysis_status, analysis_error, staff_notes )
     `)
     .eq('status', 'awarded')
     .order('hotel_name')
@@ -213,16 +215,35 @@ export async function listAwardedContracts(): Promise<AwardedContract[]> {
   })
 }
 
-// Run the AI fact-check: sends the uploaded contract + the bid to Claude and
-// stores the structured comparison on the contract row.
+// Run the AI fact-check. The analysis on a long agreement can take 2-3 minutes,
+// which is longer than an HTTP request can safely stay open, so the edge function
+// runs it as a BACKGROUND task and returns immediately. We then poll the contract
+// row until the background task records a result or an error. This is what fixed
+// the intermittent "Edge Function returned a non-2xx status code" (gateway timeout).
 export async function analyzeContract(contractId: string): Promise<ContractAnalysis> {
-  const { data, error } = await supabase.functions.invoke('contract-analyze', { body: { contract_id: contractId } })
+  // Kick off the background run (returns fast with { status: 'running' }).
+  const { error } = await supabase.functions.invoke('contract-analyze', { body: { contract_id: contractId } })
   if (error) {
     let msg = error.message
     try { const b = await (error as any).context?.json?.(); if (b?.error) msg = b.error } catch { /* ignore */ }
     throw new Error(msg ?? 'Fact-check failed')
   }
-  return (data as any).analysis as ContractAnalysis
+
+  // Poll for completion. The background task writes analysis_status = 'done' (with
+  // the analysis) or 'error' (with a message) when Claude finishes.
+  const deadlineMs = Date.now() + 6 * 60 * 1000 // give the 400s server budget room
+  while (Date.now() < deadlineMs) {
+    await new Promise((r) => setTimeout(r, 3000))
+    const { data, error: pErr } = await supabase
+      .from('contracts')
+      .select('analysis, analysis_status, analysis_error')
+      .eq('id', contractId)
+      .maybeSingle()
+    if (pErr) continue // transient read error — keep polling
+    if (data?.analysis_status === 'error') throw new Error(data.analysis_error || 'Fact-check failed')
+    if (data?.analysis_status === 'done' && data.analysis) return data.analysis as ContractAnalysis
+  }
+  throw new Error('The fact-check is taking longer than usual. It may still finish — reopen this panel in a minute to see the result.')
 }
 
 // A short-lived signed URL to view/download a private contract file.

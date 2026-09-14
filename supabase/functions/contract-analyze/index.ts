@@ -170,102 +170,136 @@ Deno.serve(async (req: Request) => {
 
   const { data: contract, error: cErr } = await sb
     .from('contracts')
-    .select('id, invitation_id, file_path, file_name')
+    .select('id, invitation_id, file_path, file_name, analysis_status, updated_at')
     .eq('id', body.contract_id)
     .single()
   if (cErr || !contract) return json({ error: 'Contract not found' }, 404)
   if (!contract.file_path) return json({ error: 'No uploaded agreement to analyze yet.' }, 400)
 
-  // Download the uploaded agreement.
-  const { data: file, error: dErr } = await sb.storage.from('contracts').download(contract.file_path)
-  if (dErr || !file) return json({ error: 'Could not read the contract file.' }, 500)
-  const bytes = new Uint8Array(await file.arrayBuffer())
-  const name = (contract.file_name || contract.file_path).toLowerCase()
+  // A previous run is still going (and hasn't gone stale) — don't start a second
+  // Claude call; the client polls the same row and picks up the result.
+  const runningRecently = contract.analysis_status === 'running' && contract.updated_at &&
+    (Date.now() - new Date(contract.updated_at as string).getTime()) < 6 * 60 * 1000
+  if (runningRecently) return json({ ok: true, status: 'running' }, 202)
 
-  // Build the model input: bid brief + the contract (PDF natively, Word as text).
-  const brief = await buildBidBrief(sb, contract.invitation_id)
-  const content: any[] = []
-  if (name.endsWith('.pdf')) {
-    let bin = ''
-    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
-    content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: btoa(bin) } })
-  } else if (name.endsWith('.docx')) {
-    const text = await docxToText(bytes)
-    if (!text) return json({ error: 'Could not read the Word document text.' }, 422)
-    content.push({ type: 'text', text: `CONTRACT (extracted from Word document):\n\n${text}` })
-  } else {
-    return json({ error: 'Only PDF and Word (.docx) contracts can be analyzed.' }, 415)
-  }
-  content.push({
-    type: 'text',
-    text: `WINNING BID TERMS (source of truth):\n\n${brief}\n\nCompare the uploaded contract above against these bid terms and return your structured findings.`,
-  })
-
-  const baseSystem =
-    "You are a contracts auditor for KJ Sports Travel. Compare a hotel's uploaded room agreement against the terms the hotel committed to in its winning bid. " +
-    'For each material term (king/suite/selling rates, occupancy tax and resort/other fees, room block counts, arrival/departure dates, and every concession the hotel agreed to), ' +
-    'decide whether the contract MATCHES the bid, MISMATCHES it (a conflicting value), is MISSING (the bid term is not addressed in the contract), or is EXTRA (a term the contract adds that was not in the bid). ' +
-    'Base contract_value only on what the document actually states; if a term is not addressed, use "—" and status "missing". Use the exact bid value for bid_value (or "—" if none). ' +
-    'The contract text is extracted from a Word document and TABLES are rendered as rows whose cells are separated by " | " (e.g. a room-block or rate table). Read those tables carefully to pull exact room counts, room types, and per-night rates. ' +
-    'Treat values that are economically equivalent as a MATCH even if phrased differently: e.g. a contract tax broken into "15% + 2% + $0.86" equals a bid "17% and .86"; suites given "at the contracted room rate" equal "at the king rate" when those rates are the same; a per-night rate stated with cents ("$450.00") equals the bid\'s "$450". Only call a MISMATCH when the actual value genuinely conflicts. ' +
-    'Keep note short (one clause) and only when it helps. Set overall to "issues" if any check is mismatch/missing/extra that a person should review, else "match". Write a one-sentence summary.'
-
-  // KJST-managed audit rules, edited in-app and stored in the DB, are appended to
-  // the base instructions so the team can add/change checks without a code deploy.
-  // Each rule is one of two kinds:
-  //   check    -> the model returns exactly ONE pass/fail line for it.
-  //   guidance -> folded into the instructions to shape judgment and coverage,
-  //               with NO check line of its own (principles, broad coverage notes).
-  const { data: ruleRows } = await sb
-    .from('contract_check_rules')
-    .select('rule_text, kind')
-    .eq('active', true)
-    .order('sort_order', { ascending: true })
-  const activeRules = (ruleRows ?? [])
-    .map((r: any) => ({ text: String(r.rule_text ?? '').trim(), kind: String(r.kind ?? 'check') }))
-    .filter((r) => r.text)
-  const checkRules = activeRules.filter((r) => r.kind !== 'guidance').map((r) => r.text)
-  const guidanceRules = activeRules.filter((r) => r.kind === 'guidance').map((r) => r.text)
-
-  const guidanceSection = guidanceRules.length
-    ? '\n\nREVIEW GUIDANCE set by KJ Sports Travel. This shapes how you judge and how thoroughly you cover the contract. Do NOT emit a separate check for any guidance item; apply it to every check instead:\n'
-      + guidanceRules.map((r, i) => `${i + 1}. ${r}`).join('\n')
-    : ''
-  const rulesSection = checkRules.length
-    ? '\n\nADDITIONAL MANDATORY RULES set by KJ Sports Travel. Evaluate EACH numbered rule below against the contract and include exactly ONE check per rule in your output: label = a short name for the rule; status = "mismatch" if the contract violates the rule or contains what the rule says to flag, otherwise "match"; contract_value = the specific offending text and where it appears (or "None found" / "Compliant"); bid_value = a short statement of what the rule requires. Rules:\n'
-      + checkRules.map((r, i) => `${i + 1}. ${r}`).join('\n')
-    : ''
-  const system = baseSystem + guidanceSection + rulesSection
-
-  const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-opus-5',
-      max_tokens: 16000,
-      system,
-      output_config: { effort: 'high', format: { type: 'json_schema', schema: ANALYSIS_SCHEMA } },
-      messages: [{ role: 'user', content }],
-    }),
-  })
-  if (!aiRes.ok) {
-    const errText = await aiRes.text()
-    return json({ error: `AI request failed: ${errText.slice(0, 300)}` }, 502)
-  }
-  const ai = await aiRes.json()
-  if (ai.stop_reason === 'refusal') return json({ error: 'The AI declined to analyze this document.' }, 422)
-  const textBlock = (ai.content ?? []).find((b: any) => b.type === 'text')
-  if (!textBlock?.text) return json({ error: 'The AI returned no analysis.' }, 502)
-
-  let analysis: any
-  try { analysis = JSON.parse(textBlock.text) } catch { return json({ error: 'Could not parse the AI analysis.' }, 502) }
-  analysis.model = 'claude-opus-5'
-
-  const { error: uErr } = await sb
-    .from('contracts')
-    .update({ analysis, analyzed_at: new Date().toISOString(), status: 'in_review', updated_at: new Date().toISOString() })
+  // The AI call on a long agreement can take 2-3 minutes — longer than an HTTP
+  // request may stay open, which is why this used to fail intermittently with a
+  // gateway timeout. Run it as a background task instead: mark the row 'running',
+  // return immediately, and write the result (or the error) when Claude finishes.
+  // The UI polls the contract row for completion.
+  await sb.from('contracts')
+    .update({ analysis_status: 'running', analysis_error: null, updated_at: new Date().toISOString() })
     .eq('id', contract.id)
-  if (uErr) return json({ error: 'Analysis done but failed to save: ' + uErr.message }, 500)
 
-  return json({ ok: true, analysis })
+  const runAnalysis = async () => {
+    try {
+      const { data: file, error: dErr } = await sb.storage.from('contracts').download(contract.file_path as string)
+      if (dErr || !file) throw new Error('Could not read the contract file.')
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      const name = (contract.file_name || contract.file_path || '').toLowerCase()
+
+      // Build the model input: bid brief + the contract (PDF natively, Word as text).
+      const brief = await buildBidBrief(sb, contract.invitation_id)
+      const content: any[] = []
+      if (name.endsWith('.pdf')) {
+        let bin = ''
+        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
+        content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: btoa(bin) } })
+      } else if (name.endsWith('.docx')) {
+        const text = await docxToText(bytes)
+        if (!text) throw new Error('Could not read the Word document text.')
+        content.push({ type: 'text', text: `CONTRACT (extracted from Word document):\n\n${text}` })
+      } else {
+        throw new Error('Only PDF and Word (.docx) contracts can be analyzed.')
+      }
+      content.push({
+        type: 'text',
+        text: `WINNING BID TERMS (source of truth):\n\n${brief}\n\nCompare the uploaded contract above against these bid terms and return your structured findings.`,
+      })
+
+      const baseSystem =
+        "You are a contracts auditor for KJ Sports Travel. Compare a hotel's uploaded room agreement against the terms the hotel committed to in its winning bid. " +
+        'For each material term (king/suite/selling rates, occupancy tax and resort/other fees, room block counts, arrival/departure dates, and every concession the hotel agreed to), ' +
+        'decide whether the contract MATCHES the bid, MISMATCHES it (a conflicting value), is MISSING (the bid term is not addressed in the contract), or is EXTRA (a term the contract adds that was not in the bid). ' +
+        'Base contract_value only on what the document actually states; if a term is not addressed, use "—" and status "missing". Use the exact bid value for bid_value (or "—" if none). ' +
+        'The contract text is extracted from a Word document and TABLES are rendered as rows whose cells are separated by " | " (e.g. a room-block or rate table). Read those tables carefully to pull exact room counts, room types, and per-night rates. ' +
+        'Treat values that are economically equivalent as a MATCH even if phrased differently: e.g. a contract tax broken into "15% + 2% + $0.86" equals a bid "17% and .86"; suites given "at the contracted room rate" equal "at the king rate" when those rates are the same; a per-night rate stated with cents ("$450.00") equals the bid\'s "$450". Only call a MISMATCH when the actual value genuinely conflicts. ' +
+        'Keep note short (one clause) and only when it helps. Set overall to "issues" if any check is mismatch/missing/extra that a person should review, else "match". Write a one-sentence summary.'
+
+      // KJST-managed audit rules, edited in-app and stored in the DB, are appended to
+      // the base instructions so the team can add/change checks without a code deploy.
+      // Each rule is one of two kinds:
+      //   check    -> the model returns exactly ONE pass/fail line for it.
+      //   guidance -> folded into the instructions to shape judgment and coverage,
+      //               with NO check line of its own (principles, broad coverage notes).
+      const { data: ruleRows } = await sb
+        .from('contract_check_rules')
+        .select('rule_text, kind')
+        .eq('active', true)
+        .order('sort_order', { ascending: true })
+      const activeRules = (ruleRows ?? [])
+        .map((r: any) => ({ text: String(r.rule_text ?? '').trim(), kind: String(r.kind ?? 'check') }))
+        .filter((r) => r.text)
+      const checkRules = activeRules.filter((r) => r.kind !== 'guidance').map((r) => r.text)
+      const guidanceRules = activeRules.filter((r) => r.kind === 'guidance').map((r) => r.text)
+
+      const guidanceSection = guidanceRules.length
+        ? '\n\nREVIEW GUIDANCE set by KJ Sports Travel. This shapes how you judge and how thoroughly you cover the contract. Do NOT emit a separate check for any guidance item; apply it to every check instead:\n'
+          + guidanceRules.map((r, i) => `${i + 1}. ${r}`).join('\n')
+        : ''
+      const rulesSection = checkRules.length
+        ? '\n\nADDITIONAL MANDATORY RULES set by KJ Sports Travel. Evaluate EACH numbered rule below against the contract and include exactly ONE check per rule in your output: label = a short name for the rule; status = "mismatch" if the contract violates the rule or contains what the rule says to flag, otherwise "match"; contract_value = the specific offending text and where it appears (or "None found" / "Compliant"); bid_value = a short statement of what the rule requires. Rules:\n'
+          + checkRules.map((r, i) => `${i + 1}. ${r}`).join('\n')
+        : ''
+      const system = baseSystem + guidanceSection + rulesSection
+
+      // Cap the AI call below the function's wall-clock budget so it fails cleanly
+      // (recorded as an error) rather than being hard-killed mid-run.
+      const ac = new AbortController()
+      const timer = setTimeout(() => ac.abort(), 360_000)
+      let aiRes: Response
+      try {
+        aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-opus-5',
+            max_tokens: 16000,
+            system,
+            output_config: { effort: 'high', format: { type: 'json_schema', schema: ANALYSIS_SCHEMA } },
+            messages: [{ role: 'user', content }],
+          }),
+          signal: ac.signal,
+        })
+      } finally {
+        clearTimeout(timer)
+      }
+      if (!aiRes.ok) {
+        const errText = await aiRes.text()
+        throw new Error(`AI request failed: ${errText.slice(0, 300)}`)
+      }
+      const ai = await aiRes.json()
+      if (ai.stop_reason === 'refusal') throw new Error('The AI declined to analyze this document.')
+      const textBlock = (ai.content ?? []).find((b: any) => b.type === 'text')
+      if (!textBlock?.text) throw new Error('The AI returned no analysis.')
+
+      let analysis: any
+      try { analysis = JSON.parse(textBlock.text) } catch { throw new Error('Could not parse the AI analysis.') }
+      analysis.model = 'claude-opus-5'
+
+      const { error: uErr } = await sb
+        .from('contracts')
+        .update({ analysis, analyzed_at: new Date().toISOString(), status: 'in_review', analysis_status: 'done', analysis_error: null, updated_at: new Date().toISOString() })
+        .eq('id', contract.id)
+      if (uErr) throw new Error('Analysis done but failed to save: ' + uErr.message)
+    } catch (e) {
+      const msg = String((e as Error)?.message ?? e).slice(0, 500)
+      await sb.from('contracts')
+        .update({ analysis_status: 'error', analysis_error: msg, updated_at: new Date().toISOString() })
+        .eq('id', contract.id)
+    }
+  }
+
+  EdgeRuntime.waitUntil(runAnalysis())
+  return json({ ok: true, status: 'running' }, 202)
 })

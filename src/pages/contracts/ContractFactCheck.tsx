@@ -98,6 +98,14 @@ export function ContractFactCheck({ row, onDone }: { row: AwardedContract; onDon
     return () => { alive = false }
   }, [row.invitation_id])
 
+  // If a background fact-check is already running (e.g. this panel was reopened, or
+  // another teammate started it), resume waiting for its result instead of showing
+  // an idle "Run" button. The server dedupes, so this won't start a second run.
+  useEffect(() => {
+    if (row.contract?.analysis_status === 'running' && !analysis && !running) runFactCheck()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   return (
     <div className="border-t border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/30 px-5 py-4">
       {/* AI result + run/re-run control */}
@@ -111,7 +119,7 @@ export function ContractFactCheck({ row, onDone }: { row: AwardedContract; onDon
           >
             {running ? 'Analyzing…' : analysis ? 'Re-run AI fact-check' : 'Run AI fact-check'}
           </button>
-          {running && <span className="text-xs text-slate-500 dark:text-slate-400">Reading the contract and comparing it to the bid…</span>}
+          {running && <span className="text-xs text-slate-500 dark:text-slate-400">Reading the contract and comparing it to the bid… this can take a minute or two on long agreements. You can keep working; the result saves when it finishes.</span>}
           {runError && <span className="text-xs text-red-600 dark:text-red-400">{runError}</span>}
           {!analysis && !running && !runError && (
             <span className="text-xs text-slate-500 dark:text-slate-400">Cross-checks the contract against the bid terms below and flags any discrepancies.</span>
