@@ -622,6 +622,7 @@ export type ConsolidatedHotel = {
   // Second-visit rates (when the trip covers two stays)
   stay2_king_rate: number | null
   stay2_suite_rate: number | null
+  stay2_selling_rate: string | null
   general_comments: string | null
   meeting_space_type: string | null
   meeting_space_count: number | null

@@ -257,6 +257,7 @@ function hotelBlock(h: DocxHotel, trip?: DocxTrip): (Paragraph | Table)[] {
     original_bid: h.inv.original_bid,
     best_king_rate: h.resp.best_king_rate, best_suite_rate: h.resp.best_suite_rate,
     stay2_king_rate: h.resp.stay2_king_rate, stay2_suite_rate: h.resp.stay2_suite_rate,
+    stay2_selling_rate: h.resp.stay2_selling_rate,
     current_selling_rate: h.resp.current_selling_rate, occupancy_tax: h.resp.occupancy_tax,
     resort_fee: h.resp.resort_fee,
     meeting_space_type: h.resp.meeting_space_type ?? null, meeting_space_count: h.resp.meeting_space_count ?? null,

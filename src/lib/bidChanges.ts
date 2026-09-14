@@ -46,6 +46,7 @@ export type HotelBidNow = {
   best_suite_rate?: number | null
   stay2_king_rate?: number | null
   stay2_suite_rate?: number | null
+  stay2_selling_rate?: string | null
   current_selling_rate?: string | null
   occupancy_tax?: string | null
   resort_fee?: string | null
@@ -61,6 +62,7 @@ const RESPONSE_FIELDS: { key: string; label: string; money?: boolean }[] = [
   { key: 'stay2_king_rate', label: 'King rate (Stay 2)', money: true },
   { key: 'stay2_suite_rate', label: 'Suite rate (Stay 2)', money: true },
   { key: 'current_selling_rate', label: 'Selling rate' },
+  { key: 'stay2_selling_rate', label: 'Selling rate (Stay 2)' },
   { key: 'occupancy_tax', label: 'Occupancy tax' },
   { key: 'resort_fee', label: 'Resort fee' },
 ]
@@ -112,9 +114,17 @@ export function diffBid(h: HotelBidNow, itemLabel: (id: string) => string): BidD
   const oAns = orig.answers ?? {}
   for (const [id, o] of Object.entries(oAns)) {
     const cur = h.answers?.[id]
-    if (norm(o.answer_yes_no) !== norm(cur?.answer_yes_no) || norm(o.answer_value) !== norm(cur?.answer_value)) {
+    const ynValChanged =
+      norm(o.answer_yes_no) !== norm(cur?.answer_yes_no) || norm(o.answer_value) !== norm(cur?.answer_value)
+    // The comment IS the counteroffer — the whole reason this platform exists — so a
+    // reworded counteroffer ("$340" -> "$325") must count as a change even when the
+    // Yes/No and value are unchanged.
+    const commentChanged = norm(o.comment) !== norm(cur?.comment)
+    if (ynValChanged || commentChanged) {
       changedAnswers.add(id)
-      summary.push(`${itemLabel(id)} ${ynOrVal(o)} → ${ynOrVal(cur)}`)
+      summary.push(ynValChanged
+        ? `${itemLabel(id)} ${ynOrVal(o)} → ${ynOrVal(cur)}`
+        : `${itemLabel(id)}: counteroffer updated`)
     }
   }
 

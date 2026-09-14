@@ -57,4 +57,20 @@ describe('diffBid', () => {
     expect(d.changedAnswers.has('itm_bfast')).toBe(false)
     expect(d.summary).toContain('Suite Upgrade 2 → 4')
   })
+
+  it('flags a counteroffer (comment) change even when Yes/No and value are unchanged', () => {
+    const d = diffBid({
+      original_bid: { response: {}, answers: { itm_fb: { answer_yes_no: false, answer_value: null, comment: 'we can do $340' } } },
+      answers: { itm_fb: { answer_yes_no: false, answer_value: null, comment: 'we can do $325' } },
+    }, label)
+    expect(d.changedAnswers.has('itm_fb')).toBe(true)
+  })
+
+  it('flags a changed Stay-2 selling rate', () => {
+    const d = diffBid({
+      original_bid: { response: { stay2_selling_rate: '970' }, answers: {} },
+      stay2_selling_rate: '999',
+    }, label)
+    expect(d.changedFields.has('stay2_selling_rate')).toBe(true)
+  })
 })

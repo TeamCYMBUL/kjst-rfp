@@ -47,7 +47,7 @@ export async function exportAllCitiesForClient(
         rfp_responses(
           best_king_rate, best_suite_rate, current_selling_rate, occupancy_tax, resort_fee,
           standard_checkin_time,
-          stay2_king_rate, stay2_suite_rate, general_comments,
+          stay2_king_rate, stay2_suite_rate, stay2_selling_rate, general_comments,
           meeting_space_type, meeting_space_count,
           concession_answers(concession_item_id, answer_yes_no, answer_value, comment)
         )
@@ -84,6 +84,7 @@ export async function exportAllCitiesForClient(
         standard_checkin_time: r?.standard_checkin_time ?? null,
         stay2_king_rate: r?.stay2_king_rate ?? null,
         stay2_suite_rate: r?.stay2_suite_rate ?? null,
+        stay2_selling_rate: r?.stay2_selling_rate ?? null,
         general_comments: r?.general_comments ?? null,
         meeting_space_type: r?.meeting_space_type ?? null,
         meeting_space_count: r?.meeting_space_count ?? null,
