@@ -131,8 +131,12 @@ export type GridHotel = {
   occupancy_tax: string | null
   resort_fee?: string | null
   meeting_space_notes: string | null
+  meeting_space_type?: string | null
+  meeting_space_count?: number | null
   general_comments: string | null
   menu_attachments?: { name: string }[] | null
+  visit1_declined?: boolean | null
+  visit2_declined?: boolean | null
   staff_notes: string | null
   answers: Record<
     string,
@@ -257,6 +261,13 @@ export function exportComparisonXlsx(
   }
   rows.push(row('TAXES & FEES', hotels.map((h) => fmt(h.occupancy_tax))))
   rows.push(row('RESORT FEE', hotels.map((h) => fmt(h.resort_fee ?? null))))
+  // Which visits (if any) a hotel declined, so a declined visit is not mistaken for
+  // an unanswered one (both otherwise show blank).
+  if (hotels.some((h) => h.visit1_declined || h.visit2_declined)) {
+    rows.push(row('DECLINED', hotels.map((h) =>
+      [h.visit1_declined && (twoVisit ? 'Visit 1' : 'Declined'), h.visit2_declined && 'Visit 2']
+        .filter(Boolean).join(' & ') || '—')))
+  }
 
   // Revenue per hotel (numeric where calculable, '—' otherwise). Incl-tax applies
   // the occupancy tax (percentage + any flat per-room-per-night component) AND the
@@ -308,6 +319,8 @@ export function exportComparisonXlsx(
 
   // ── Additional info ───────────────────────────────────────────────────────
   rows.push(['ADDITIONAL INFORMATION'])
+  rows.push(row('MEETING SPACE TYPE', hotels.map((h) => fmt(
+    h.meeting_space_type ? `${h.meeting_space_type}${h.meeting_space_count ? ` ×${h.meeting_space_count}` : ''}` : null))))
   rows.push(row('MEETING SPACE NOTES', hotels.map((h) => fmt(formatMeetingSpaceNotes(h.meeting_space_notes) || null))))
   rows.push(row('GENERAL COMMENTS', hotels.map((h) => fmt(h.general_comments))))
   rows.push(row('MENU ATTACHMENTS', hotels.map((h) => fmt((h.menu_attachments ?? []).map((m) => m?.name).filter(Boolean).join(', ') || null))))
@@ -1386,6 +1399,13 @@ export function exportSingleHotelXlsx(
   rows.push(row2('Current selling rate', hotel.current_selling_rate))
   rows.push(row2('Best suite rate', hotel.best_suite_rate))
   rows.push(row2('Occupancy tax', hotel.occupancy_tax))
+  rows.push(row2('Resort fee', hotel.resort_fee ?? null))
+  // Stay-2 rates on a two-visit trip (only shown when the hotel gave them).
+  if (hotel.stay2_king_rate != null) rows.push(row2('Best king rate — Stay 2', hotel.stay2_king_rate))
+  if (hotel.stay2_suite_rate != null) rows.push(row2('Best suite rate — Stay 2', hotel.stay2_suite_rate))
+  if (hotel.stay2_selling_rate) rows.push(row2('Current selling rate — Stay 2', hotel.stay2_selling_rate))
+  const menuNames = (hotel.menu_attachments ?? []).map((m) => m?.name).filter(Boolean).join(', ')
+  if (menuNames) rows.push(row2('Menu attachments', menuNames))
   rows.push([])
 
   // Concession items by section

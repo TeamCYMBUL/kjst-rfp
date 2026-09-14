@@ -570,8 +570,12 @@ export default function TripGrid() {
         occupancy_tax: resp?.occupancy_tax ?? null,
         resort_fee: resp?.resort_fee ?? null,
         meeting_space_notes: resp?.meeting_space_notes ?? null,
+        meeting_space_type: (resp as any)?.meeting_space_type ?? null,
+        meeting_space_count: (resp as any)?.meeting_space_count ?? null,
         general_comments: resp?.general_comments ?? null,
         menu_attachments: (resp as any)?.menu_attachments ?? null,
+        visit1_declined: inv.visit1_declined ?? null,
+        visit2_declined: inv.visit2_declined ?? null,
         staff_notes: staffNotes[inv.id] || inv.staff_notes || null,
         answers: answerMaps[inv.id] ?? {},
       }
