@@ -76,6 +76,12 @@ Deno.serve(async (req: Request) => {
       file_name: fname,
       uploaded_at: new Date().toISOString(),
       status: 'uploaded',
+      // A new file invalidates any prior fact-check — clear it so staff never see an
+      // old result computed against the replaced document.
+      analysis: null,
+      analyzed_at: null,
+      analysis_status: null,
+      analysis_error: null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', contract.id)

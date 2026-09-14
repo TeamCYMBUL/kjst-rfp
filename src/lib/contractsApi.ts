@@ -231,18 +231,25 @@ export async function analyzeContract(contractId: string): Promise<ContractAnaly
 
   // Poll for completion. The background task writes analysis_status = 'done' (with
   // the analysis) or 'error' (with a message) when Claude finishes.
-  const deadlineMs = Date.now() + 6 * 60 * 1000 // give the 400s server budget room
+  // Deadline MUST exceed the server's own budget (360s AI abort + parse/save), or a
+  // run finishing near the edge is reported as a false timeout while the result
+  // actually saved. 8 minutes gives headroom past the ~400s server cap.
+  const readRow = async () => (await supabase
+    .from('contracts')
+    .select('analysis, analysis_status, analysis_error')
+    .eq('id', contractId)
+    .maybeSingle()).data
+  const deadlineMs = Date.now() + 8 * 60 * 1000
   while (Date.now() < deadlineMs) {
     await new Promise((r) => setTimeout(r, 3000))
-    const { data, error: pErr } = await supabase
-      .from('contracts')
-      .select('analysis, analysis_status, analysis_error')
-      .eq('id', contractId)
-      .maybeSingle()
-    if (pErr) continue // transient read error — keep polling
+    const data = await readRow()
     if (data?.analysis_status === 'error') throw new Error(data.analysis_error || 'Fact-check failed')
     if (data?.analysis_status === 'done' && data.analysis) return data.analysis as ContractAnalysis
   }
+  // Final read before giving up — the run may have completed right at the boundary.
+  const final = await readRow()
+  if (final?.analysis_status === 'done' && final.analysis) return final.analysis as ContractAnalysis
+  if (final?.analysis_status === 'error') throw new Error(final.analysis_error || 'Fact-check failed')
   throw new Error('The fact-check is taking longer than usual. It may still finish — reopen this panel in a minute to see the result.')
 }
 
@@ -326,6 +333,12 @@ export async function uploadContractStaff(
       file_name: safe,
       uploaded_at: new Date().toISOString(),
       status: 'uploaded',
+      // A new file invalidates any prior fact-check — clear it so the panel never
+      // shows an old "matches the bid" result computed against a replaced document.
+      analysis: null,
+      analyzed_at: null,
+      analysis_status: null,
+      analysis_error: null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', c.id)
@@ -353,6 +366,8 @@ export async function removeContractFile(contractId: string): Promise<void> {
       uploaded_at: null,
       analysis: null,
       analyzed_at: null,
+      analysis_status: null,
+      analysis_error: null,
       status: 'requested',
       updated_at: new Date().toISOString(),
     })
