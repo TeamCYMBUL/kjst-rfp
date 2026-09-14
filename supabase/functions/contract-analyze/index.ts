@@ -264,12 +264,16 @@ Deno.serve(async (req: Request) => {
           headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
           body: JSON.stringify({
             model: 'claude-opus-5',
-            // Room for BOTH the extended-thinking tokens (effort:high) and the
-            // full ~45-check JSON. At 16000 a long contract truncated the JSON and
-            // it failed to parse; the analysis itself is only ~6-9k tokens.
+            // Room for BOTH the extended-thinking tokens and the full ~45-check
+            // JSON. At 16000 a long contract truncated the JSON and it failed to
+            // parse; the analysis itself is only ~6-9k tokens.
             max_tokens: 32000,
             system,
-            output_config: { effort: 'high', format: { type: 'json_schema', schema: ANALYSIS_SCHEMA } },
+            // effort:medium roughly halves latency vs high (~90s vs ~170s on long
+            // contracts) with strong quality — the structured table preprocessing
+            // does the heavy lifting on accuracy. Bump back to 'high' if audits
+            // start missing things.
+            output_config: { effort: 'medium', format: { type: 'json_schema', schema: ANALYSIS_SCHEMA } },
             messages: [{ role: 'user', content }],
           }),
           signal: ac.signal,
