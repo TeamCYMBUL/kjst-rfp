@@ -1323,8 +1323,41 @@ export default function RfpForm() {
       setSaveStatus('saving')
       const ok = await doSave(false)
       setSaveStatus(ok ? 'saved' : 'error')
-      dirty.current = false
+      if (ok) {
+        dirty.current = false
+      } else {
+        // Keep it dirty and auto-retry once after a short delay, so a transient
+        // failure heals itself even if the hotel makes no further edits (the old
+        // code cleared dirty and only retried on the next keystroke).
+        if (saveTimer.current) clearTimeout(saveTimer.current)
+        saveTimer.current = setTimeout(async () => {
+          setSaveStatus('saving')
+          const ok2 = await doSave(false)
+          setSaveStatus(ok2 ? 'saved' : 'error')
+          if (ok2) dirty.current = false
+        }, 8000)
+      }
     }, 1500)
+  }, [doSave, submitted])
+
+  // Flush a pending debounced save when the tab is hidden/closed or the form
+  // unmounts (SPA navigation). Without this, the last edit made within the 1.5s
+  // debounce window before leaving was silently lost for save-and-resume.
+  useEffect(() => {
+    const flush = () => {
+      if (!dirty.current || submitted) return
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      void doSave(false) // best-effort immediate save
+    }
+    const onHide = () => flush()
+    const onVis = () => { if (document.visibilityState === 'hidden') flush() }
+    window.addEventListener('pagehide', onHide)
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.removeEventListener('pagehide', onHide)
+      document.removeEventListener('visibilitychange', onVis)
+      flush()
+    }
   }, [doSave, submitted])
 
   // Upload menu / F&B pricing files straight to the private rfp-menus bucket,
