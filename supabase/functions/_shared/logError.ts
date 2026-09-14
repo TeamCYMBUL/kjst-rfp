@@ -11,6 +11,7 @@
 //  - Uses the service role (RLS-exempt) so it works from any function context.
 //  - Caps field sizes so a giant stack can't bloat the table.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { notifySlack } from './notifySlack.ts'
 
 const cap = (v: unknown, n: number): string | null => {
   if (v == null) return null
@@ -38,6 +39,9 @@ export async function logServerError(
       app_version: 'edge',
       context: context && typeof context === 'object' ? context : null,
     })
+    // Real-time Slack alert (in addition to the daily digest) so a failed email or
+    // fact-check reaches us immediately, not up to 24h later. No-op if Slack unset.
+    await notifySlack(`Server error in *${fn}*: ${message}`, { emoji: '🚨' })
   } catch {
     // Best-effort only — never let logging break the caller.
   }

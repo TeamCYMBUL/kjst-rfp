@@ -7,6 +7,7 @@
 // source of truth shared with the in-app /status page. Secret-gated, verify_jwt=false.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "jsr:@supabase/supabase-js@2"
+import { notifySlack } from "../_shared/notifySlack.ts"
 
 const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? ""
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? ""
@@ -94,6 +95,15 @@ Deno.serve(async (req: Request) => {
   const subject = sb.overall_ok
     ? "KJST monitoring: all clear"
     : `KJST monitoring: ${failing.length} issue${failing.length === 1 ? "" : "s"} need attention`
+
+  // Slack (in addition to the daily email) only when something needs attention, to
+  // keep the channel high-signal. No-op if SLACK_WEBHOOK_URL isn't set.
+  if (!sb.overall_ok) {
+    await notifySlack(
+      `KJST health check: ${failing.length} issue${failing.length === 1 ? '' : 's'} — ${failing.map((c) => `${c.label}: ${c.value}`).join('; ')}`,
+      { emoji: '⚠️' },
+    )
+  }
 
   let emailed: unknown = { skipped: "no_resend_key" }
   if (RESEND_API_KEY) {

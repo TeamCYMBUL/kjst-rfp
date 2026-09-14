@@ -13,6 +13,7 @@
 //   SUPABASE_SERVICE_ROLE_KEY   - auto-injected (bypasses RLS to write checks)
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "jsr:@supabase/supabase-js@2"
+import { notifySlack } from "../_shared/notifySlack.ts"
 
 const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? ""
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? ""
@@ -116,6 +117,7 @@ Deno.serve(async (req: Request) => {
     await supabase.from("uptime_state").update({
       is_down: true, since: now.toISOString(), last_alert_at: now.toISOString(),
     }).eq("id", 1)
+    await notifySlack(`KJST portal appears DOWN — failed ${ATTEMPTS} checks as of ${fmt(now)}. Last error: ${result.error ?? `HTTP ${result.status}`}`, { emoji: '🔴' })
     emailed = await sendEmail(
       "ALERT: KJST portal appears DOWN",
       `<h2 style="color:#b91c1c;margin:0 0 8px">The KJST portal is not responding</h2>
@@ -130,6 +132,7 @@ Deno.serve(async (req: Request) => {
     await supabase.from("uptime_state").update({
       is_down: false, since: null, last_alert_at: now.toISOString(),
     }).eq("id", 1)
+    await notifySlack(`KJST portal RECOVERED — responding normally as of ${fmt(now)}${mins != null ? ` (down ~${mins} min)` : ''}.`, { emoji: '🟢' })
     emailed = await sendEmail(
       "RESOLVED: KJST portal is back up",
       `<h2 style="color:#047857;margin:0 0 8px">The KJST portal has recovered</h2>
