@@ -262,10 +262,12 @@ export async function contractFileBytes(path: string): Promise<ArrayBuffer | nul
 }
 
 export async function updateContractStatus(id: string, status: ContractStatus): Promise<void> {
-  const { error } = await supabase
-    .from('contracts')
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq('id', id)
+  // "Signed" is a manual status marker the team logs — a separately-uploaded signed
+  // copy is NOT required. Stamp signed_at when they first mark it signed so the
+  // Contracts print/summary shows a real "signed" date for the marker.
+  const patch: Record<string, unknown> = { status, updated_at: new Date().toISOString() }
+  if (status === 'signed') patch.signed_at = new Date().toISOString()
+  const { error } = await supabase.from('contracts').update(patch).eq('id', id)
   if (error) throw error
 }
 
