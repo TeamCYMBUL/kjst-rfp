@@ -194,7 +194,7 @@ Deno.serve(async (req: Request) => {
   let body: { trip_id?: string; base_url?: string }
   try { body = await req.json() } catch { return Response.json({ error: 'Invalid JSON body' }, { status: 400, headers: CORS }) }
 
-  const { trip_id, base_url = Deno.env.get('SITE_URL') ?? 'https://kjst-rfp.vercel.app' } = body
+  const { trip_id, base_url = Deno.env.get('SITE_URL') ?? 'https://rfp.kjsportstravel.com' } = body
   if (!trip_id) return Response.json({ error: 'trip_id is required' }, { status: 400, headers: CORS })
 
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)

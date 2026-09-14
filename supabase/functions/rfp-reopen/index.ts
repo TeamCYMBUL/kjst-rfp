@@ -136,7 +136,7 @@ Deno.serve(async (req: Request) => {
 
   const {
     invitation_id,
-    base_url = Deno.env.get('SITE_URL') ?? 'https://kjst-rfp.vercel.app',
+    base_url = Deno.env.get('SITE_URL') ?? 'https://rfp.kjsportstravel.com',
     notify = true,
   } = body
   // Accept `message` (new, personalized) or legacy `note`.
