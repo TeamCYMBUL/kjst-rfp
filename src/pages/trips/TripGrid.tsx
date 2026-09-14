@@ -442,14 +442,17 @@ export default function TripGrid() {
     return { invited, responded, opened, pending, awarded, passed, unavailable }
   }, [invitations])
 
-  // Find lowest king rate — only consider submitted/awarded hotels, ignore passed/unavailable
+  // Find lowest king rate — only consider submitted/awarded hotels, ignore passed/unavailable.
+  // best_king_rate is a Postgres numeric, which PostgREST returns as a STRING, so it MUST be
+  // coerced to a number before comparison — otherwise "95" < "105" is false (lexicographic)
+  // and the more expensive hotel gets flagged as the cheapest.
   const lowestRateId = useMemo(() => {
     let min: number | null = null
     let minId: string | null = null
     for (const inv of invitations) {
       if (['passed', 'unavailable'].includes(inv.status)) continue
-      const rate = inv.rfp_responses?.best_king_rate
-      if (rate != null && (min === null || rate < min)) {
+      const rate = Number(inv.rfp_responses?.best_king_rate)
+      if (Number.isFinite(rate) && (min === null || rate < min)) {
         min = rate
         minId = inv.id
       }
@@ -565,6 +568,7 @@ export default function TripGrid() {
         stay2_suite_rate: (resp as any)?.stay2_suite_rate ?? null,
         stay2_selling_rate: (resp as any)?.stay2_selling_rate ?? null,
         occupancy_tax: resp?.occupancy_tax ?? null,
+        resort_fee: resp?.resort_fee ?? null,
         meeting_space_notes: resp?.meeting_space_notes ?? null,
         general_comments: resp?.general_comments ?? null,
         menu_attachments: (resp as any)?.menu_attachments ?? null,

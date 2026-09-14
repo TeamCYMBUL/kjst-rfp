@@ -1546,15 +1546,40 @@ export default function RfpForm() {
       return
     }
 
-    // Hard block: every concession question must be answered before submitting
+    // Hard block: every VISIBLE, required concession question must be answered.
+    // Two classes must be EXCLUDED or the hotel gets stuck with no field to fix:
+    //  1. In simple/sponsor-block meeting-space mode the meeting-space / function-space
+    //     / furniture-removal Yes/No items are hidden (render is gated on
+    //     !simpleFunctionSpace), so requiring an answer blocks submit with nothing to
+    //     click. This mirrors the named-function-space guard above.
+    //  2. Commission and rebate are optional by design — the form explicitly tells the
+    //     hotel to leave them blank if not applicable (and 0% commission is confirmed
+    //     separately), so a blank must not block submit.
+    const labelOf = (item: ConcessionItem) => (item.label ?? '').toLowerCase()
+    const isHiddenMeetingSpaceItem = (item: ConcessionItem) => {
+      if (!simpleSpace) return false
+      const l = labelOf(item)
+      const msYesNo = item.answer_type === 'yes_no' && l.includes('complimentary meeting space')
+      const namedFn = item.answer_type === 'yes_no' && l.includes('function space') && !l.includes('complimentary meeting space')
+      const furniture = item.answer_type === 'yes_no' && !msYesNo && l.includes('furniture removal')
+      return msYesNo || namedFn || furniture
+    }
+    const isOptionalValueItem = (item: ConcessionItem) => {
+      const l = labelOf(item)
+      const commission = item.answer_type === 'percent' && (l.includes('commission') || l.includes('commissionable'))
+      return commission || l.includes('rebate')
+    }
     const unansweredYesNo = (data?.items ?? []).filter(
-      (item) => !(item as any).optional && item.answer_type === 'yes_no' && answers[item.id]?.answer_yes_no === null,
+      (item) => !(item as any).optional && item.answer_type === 'yes_no' && answers[item.id]?.answer_yes_no === null
+        && !isHiddenMeetingSpaceItem(item),
     )
     const unansweredValue = (data?.items ?? []).filter(
       (item) =>
         !(item as any).optional &&
         item.answer_type !== 'yes_no' &&
         !item.label.includes('(if applicable)') &&
+        !isOptionalValueItem(item) &&
+        !isHiddenMeetingSpaceItem(item) &&
         !answers[item.id]?.answer_value?.trim(),
     )
     // Items where a "No" must be explained (attrition %, F&B minimum $) — a bare

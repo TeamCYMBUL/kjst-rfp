@@ -129,6 +129,7 @@ export type GridHotel = {
   stay2_suite_rate?: number | null
   stay2_selling_rate?: string | null
   occupancy_tax: string | null
+  resort_fee?: string | null
   meeting_space_notes: string | null
   general_comments: string | null
   menu_attachments?: { name: string }[] | null
@@ -255,13 +256,18 @@ export function exportComparisonXlsx(
     rows.push(row('CURRENT SELLING RATE — STAY 2', hotels.map((h) => fmt(h.stay2_selling_rate))))
   }
   rows.push(row('TAXES & FEES', hotels.map((h) => fmt(h.occupancy_tax))))
+  rows.push(row('RESORT FEE', hotels.map((h) => fmt(h.resort_fee ?? null))))
 
   // Revenue per hotel (numeric where calculable, '—' otherwise). Incl-tax applies
-  // the percentage AND any flat per-room-per-night fee the hotel quoted.
+  // the occupancy tax (percentage + any flat per-room-per-night component) AND the
+  // resort/destination fee (parsed the same way) — otherwise a hotel that quotes a
+  // nightly resort fee looks cheaper than one that doesn't.
   const revenueInclTax = hotels.map((h) => {
     if (h.best_king_rate == null || roomBlock === 0) return '—' as const
     const { pct, flat } = parseTaxComponents(h.occupancy_tax)
+    const r = parseTaxComponents(h.resort_fee ?? null)
     return h.best_king_rate * roomBlock * nights * (1 + pct) + flat * roomBlock * nights
+      + (h.best_king_rate * r.pct + r.flat) * roomBlock * nights
   })
   const revenueExclTax = hotels.map((h) => {
     if (h.best_king_rate == null || roomBlock === 0) return '—' as const
@@ -312,7 +318,17 @@ export function exportComparisonXlsx(
   const grandTotalValues = hotels.map((h) => {
     if (h.best_king_rate == null || roomBlock === 0) return '—' as const
     const { pct, flat } = parseTaxComponents(h.occupancy_tax)
-    return h.best_king_rate * roomBlock * nights * (1 + pct) + flat * roomBlock * nights
+    const r = parseTaxComponents(h.resort_fee ?? null)
+    const stayCost = (rate: number, nts: number) =>
+      rate * roomBlock * nts * (1 + pct) + flat * roomBlock * nts
+      + (rate * r.pct + r.flat) * roomBlock * nts
+    let total = stayCost(h.best_king_rate, nights)
+    // Two-visit trips: add the Stay-2 room cost so the grand total isn't ~half.
+    if (twoVisit && h.stay2_king_rate != null) {
+      const nights2 = calcNights(trip.stay2_arrival_date, trip.stay2_departure_date)
+      total += stayCost(Number(h.stay2_king_rate), nights2)
+    }
+    return total
   })
   const grandTotalRowIdx = rows.length
   const grandTotalRow = ['GRAND TOTAL', ...grandTotalValues.map((v) => (v === '—' ? '—' : v))]
