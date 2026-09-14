@@ -169,6 +169,15 @@ Deno.serve(async (req: Request) => {
 
   const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
 
+  // Defense in depth: this kicks off an expensive AI run, so require a real signed-in
+  // KJST staffer — not just a valid anon JWT — instead of relying only on the
+  // dashboard verify_jwt setting. The app always invokes this with the staff session.
+  const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
+  const { data: { user: caller } } = await sb.auth.getUser(jwt)
+  if (!caller) return json({ error: 'Not authenticated' }, 401)
+  const { data: callerStaff } = await sb.from('staff_profiles').select('id').eq('id', caller.id).maybeSingle()
+  if (!callerStaff) return json({ error: 'Not authorized' }, 403)
+
   const { data: contract, error: cErr } = await sb
     .from('contracts')
     .select('id, invitation_id, file_path, file_name, analysis_status, updated_at')

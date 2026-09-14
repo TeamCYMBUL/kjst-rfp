@@ -156,6 +156,9 @@ Deno.serve(async (req: Request) => {
     .select('display_name, title, phone')
     .eq('id', user.id)
     .maybeSingle()
+  // Reopening unlocks a finalized bid and emails the hotel a live link — a
+  // privileged action. Require an actual KJST staff profile, not just any valid JWT.
+  if (!profile) return Response.json({ error: 'Not authorized' }, { status: 403, headers: CORS })
   const senderName = profile?.display_name ?? FROM_NAME
   const senderTitle = profile?.title ?? 'Travel Manager'
   const senderPhone = profile?.phone ?? null
