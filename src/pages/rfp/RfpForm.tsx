@@ -961,6 +961,11 @@ function RfpHeader({ data, resp, setResp, isReadOnly, dateScenarios, scenarioAva
 
 // ── Main form ─────────────────────────────────────────────────────────────────
 
+// Statuses where the hotel's bid is finalized and the form must be read-only with
+// autosave OFF. Mirrors LOCKED_STATUSES in the rfp-respond edge function so the
+// client never shows an editable form for a bid the server will reject.
+const FINALIZED_STATUSES = ['submitted', 'awarded', 'passed', 'unavailable']
+
 export default function RfpForm() {
   const { token } = useParams<{ token: string }>()
   const [searchParams] = useSearchParams()
@@ -1079,7 +1084,12 @@ export default function RfpForm() {
         // Staff editing on the hotel's behalf (?entry=staff) can always edit a
         // submitted bid in place — e.g. a rate renegotiated offline — without
         // reopening it to the hotel or sending any email.
-        if (d.invitation.status === 'submitted' && !reopenedForEdit && !staffEntry) setSubmitted(true)
+        // A FINALIZED bid (submitted/awarded/passed/unavailable) locks the form so
+        // it renders read-only AND autosave never fires — the server rejects saves
+        // to any of these, so an editable form would just autosave-loop into 409s
+        // (e.g. opening an awarded bid via a decline link). Must match the server's
+        // LOCKED_STATUSES in rfp-respond. 'declined' has its own view below.
+        if (FINALIZED_STATUSES.includes(d.invitation.status) && !reopenedForEdit && !staffEntry) setSubmitted(true)
         if (d.invitation.status === 'declined' && !staffEntry) setDeclined(true)
         if (d.invitation.visit1_declined) setVisit1Declined(true)
         if (d.invitation.visit2_declined) setVisit2Declined(true)
@@ -1809,7 +1819,7 @@ export default function RfpForm() {
     !!data.invitation.reopened_at &&
     !!data.invitation.submitted_at &&
     new Date(data.invitation.reopened_at).getTime() > new Date(data.invitation.submitted_at).getTime()
-  const isReadOnly = data.invitation.status === 'submitted' && !reopenedForEdit && !staffEntry
+  const isReadOnly = FINALIZED_STATUSES.includes(data.invitation.status) && !reopenedForEdit && !staffEntry
   const hasStay2 = Boolean(data.invitation.trips.stay2_arrival_date) && (data.invitation.visit_scope ?? 'both') !== 'stay1'
 
   // Substitute [TEAM NAME], [ROOMS], [SUITES], [KINGS] placeholders with real trip data
